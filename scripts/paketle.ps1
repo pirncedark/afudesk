@@ -21,6 +21,7 @@ Copy-Item -Recurse $kaynak $gecici
 Compress-Archive -Path $gecici -DestinationPath $zip
 Remove-Item -Recurse -Force $gecici
 $sha = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
-"$sha  AfuDesk-windows-x64.zip" | Set-Content -Encoding ascii (Join-Path $cikti 'AfuDesk-windows-x64.zip.sha256')
+# LF satır sonu: `sha256sum -c` CRLF'de dosya adını okuyamaz.
+[IO.File]::WriteAllText((Join-Path $cikti 'AfuDesk-windows-x64.zip.sha256'), "$sha  AfuDesk-windows-x64.zip`n")
 "Paket: $zip"
 "SHA-256: $sha"
