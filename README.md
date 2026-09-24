@@ -4,7 +4,7 @@
 
 AfuDesk is an open-source remote desktop app that connects two computers **without any server**. The device that shares its screen opens its own connection point and puts its addresses into a single password-encrypted code. The other side enters the code and the password and connects directly. There is no server, no account and no fee in between.
 
-![Home screen](docs/ekranlar/1_ana_masaustu.png)
+![Home screen](docs/ekranlar/1_ana_masaustu.png) ![Phone](docs/ekranlar/10_telefon_ana.png)
 
 ## How to use
 
@@ -27,6 +27,8 @@ AfuDesk is an open-source remote desktop app that connects two computers **witho
 Download `AfuDesk-windows-x64.zip` from [GitHub Releases](https://github.com/pirncedark/afudesk/releases), extract it to a folder and run `afudesk.exe`. Requires Windows 10/11 (64-bit). There is no installer; deleting the folder removes the app.
 
 On first launch Windows Firewall may ask for permission: allow **Private networks**.
+
+**Android (viewer):** download `AfuDesk-android.apk` from the same page and install it (allow "install unknown apps" for your browser or file manager). Android 7.0+. On the phone you can connect to a computer: tap = left click, long press = right click, drag = drag, two fingers = scroll; the **Keyboard** button opens the phone keyboard. Sharing the phone's own screen is not available yet.
 
 ## When does it work?
 
@@ -92,6 +94,8 @@ AfuDesk, iki bilgisayarı **hiçbir sunucu olmadan** birbirine bağlayan açık 
 [GitHub Releases](https://github.com/pirncedark/afudesk/releases) sayfasından `AfuDesk-windows-x64.zip` dosyasını indir, bir klasöre çıkar ve `afudesk.exe`'yi çalıştır. Windows 10/11 (64 bit) gerekir. Kurulum yoktur; klasörü silmek kaldırmak için yeterlidir.
 
 İlk açılışta Windows Güvenlik Duvarı izin isteyebilir: **Özel ağlar** için izin ver.
+
+**Android (izleyici):** aynı sayfadan `AfuDesk-android.apk` dosyasını indirip kur (tarayıcına ya da dosya yöneticine "bilinmeyen uygulamaları yükle" izni ver). Android 7.0 ve üzeri. Telefondan bir bilgisayara bağlanabilirsin: dokun = sol tık, uzun bas = sağ tık, sürükle = sürükleme, iki parmak = kaydırma; **Klavye** düğmesi telefon klavyesini açar. Telefonun kendi ekranını paylaşmak henüz yok.
 
 ## Hangi durumda çalışır?
 
