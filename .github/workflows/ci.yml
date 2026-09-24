@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.9
+          channel: stable
+      - name: Rust çekirdek testleri
+        working-directory: rust
+        # Gerçek ekran/girdi testleri CI'da (ekransız oturum) atlanır.
+        run: cargo test --release -- --skip gercek_
+      - name: Flutter analiz + arayüz testleri
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+      - name: Windows derleme
+        working-directory: app
+        run: flutter build windows --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AfuDesk-windows-x64
+          path: app/build/windows/x64/runner/Release/

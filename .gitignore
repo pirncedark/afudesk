@@ -4,3 +4,4 @@
 /app/.flutter-plugins*
 /app/windows/flutter/ephemeral/
 *.log
+/dist/
