@@ -32,6 +32,10 @@ rayon = "1"
 [target.'cfg(not(target_os = "android"))'.dependencies]
 xcap = "0.9"
 enigo = "0.6"
+gilrs = "0.11"
+
+[target.'cfg(windows)'.dependencies]
+vigem-client = "0.1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

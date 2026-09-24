@@ -110,7 +110,7 @@ void main() {
           parola = o.parola;
           hazir.complete();
         }
-        if (o.tur == 'istek') RustMotor().hostKabul(kontrol: true);
+        if (o.tur == 'istek') RustMotor().hostKabul(kontrol: true, oyunKolu: true);
       });
       await hazir.future.timeout(const Duration(seconds: 20));
     });

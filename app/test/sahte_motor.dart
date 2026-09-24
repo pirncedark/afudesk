@@ -26,7 +26,7 @@ class SahteMotor implements Motor {
   }
 
   @override
-  Future<void> hostKabul({required bool kontrol}) async => cagrilar.add('kabul:$kontrol');
+  Future<void> hostKabul({required bool kontrol, required bool oyunKolu}) async => cagrilar.add('kabul:$kontrol:$oyunKolu');
   @override
   Future<void> hostRed() async => cagrilar.add('red');
   @override

@@ -206,11 +206,12 @@ fn wire__crate__api__afudesk__host_kabul_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_kontrol = <bool>::sse_decode(&mut deserializer);
+            let api_oyun_kolu = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
                     let output_ok = Ok::<_, ()>({
-                        crate::api::afudesk::host_kabul(api_kontrol);
+                        crate::api::afudesk::host_kabul(api_kontrol, api_oyun_kolu);
                     })?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -647,6 +648,7 @@ impl SseDecode for crate::api::afudesk::HostOlayi {
         let mut var_ad = <String>::sse_decode(deserializer);
         let mut var_metin = <String>::sse_decode(deserializer);
         let mut var_kontrol = <bool>::sse_decode(deserializer);
+        let mut var_oyunKolu = <bool>::sse_decode(deserializer);
         return crate::api::afudesk::HostOlayi {
             tur: var_tur,
             kod: var_kod,
@@ -656,6 +658,7 @@ impl SseDecode for crate::api::afudesk::HostOlayi {
             ad: var_ad,
             metin: var_metin,
             kontrol: var_kontrol,
+            oyun_kolu: var_oyunKolu,
         };
     }
 }
@@ -822,6 +825,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::afudesk::HostOlayi {
             self.ad.into_into_dart().into_dart(),
             self.metin.into_into_dart().into_dart(),
             self.kontrol.into_into_dart().into_dart(),
+            self.oyun_kolu.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -937,6 +941,7 @@ impl SseEncode for crate::api::afudesk::HostOlayi {
         <String>::sse_encode(self.ad, serializer);
         <String>::sse_encode(self.metin, serializer);
         <bool>::sse_encode(self.kontrol, serializer);
+        <bool>::sse_encode(self.oyun_kolu, serializer);
     }
 }
 

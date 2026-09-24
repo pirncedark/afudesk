@@ -27,12 +27,28 @@ pub enum Girdi {
     Tus { ad: String, basili: bool },
     /// Doğrudan metin yazma (mobil klavye için).
     Metin(String),
+    Kol(KolDurumu),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct KolDurumu {
+    pub slot: u8,
+    pub sira: u32,
+    pub dugmeler: u16,
+    pub sol_x: i16,
+    pub sol_y: i16,
+    pub sag_x: i16,
+    pub sag_y: i16,
+    pub sol_tetik: u8,
+    pub sag_tetik: u8,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Izinler {
     pub kontrol: bool,
     pub pano: bool,
+    #[serde(default)]
+    pub oyun_kolu: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -45,6 +61,7 @@ pub enum Kontrol {
     Girdi(Girdi),
     Pano(String),
     Kapat(String),
+    Titresim { slot: u8, buyuk: u8, kucuk: u8 },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

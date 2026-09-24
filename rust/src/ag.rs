@@ -36,6 +36,7 @@ fn saglayici() -> Arc<CryptoProvider> {
 
 fn tasima() -> Arc<quinn::TransportConfig> {
     let mut t = quinn::TransportConfig::default();
+    t.datagram_receive_buffer_size(Some(64 * 1024));
     t.keep_alive_interval(Some(Duration::from_secs(5)));
     t.max_idle_timeout(Some(Duration::from_secs(20).try_into().expect("süre")));
     Arc::new(t)

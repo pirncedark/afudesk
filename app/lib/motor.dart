@@ -14,13 +14,15 @@ class HostOlay {
   final String ad;
   final String metin;
   final bool kontrol;
+  final bool oyunKolu;
   const HostOlay(this.tur,
       {this.kod = '',
       this.parola = '',
       this.erisim = '',
       this.ad = '',
       this.metin = '',
-      this.kontrol = false});
+      this.kontrol = false,
+      this.oyunKolu = false});
 }
 
 /// İzleyici tarafı olayı.
@@ -73,7 +75,7 @@ abstract class Motor {
   /// Dokunmatik kontrol kipi (telefon/tablet).
   bool get dokunmatik;
   Stream<HostOlay> hostBaslat({required String ad, String parola = '', bool upnp = true});
-  Future<void> hostKabul({required bool kontrol});
+  Future<void> hostKabul({required bool kontrol, required bool oyunKolu});
   Future<void> hostRed();
   Future<void> hostKes();
   Future<void> hostDurdur();
@@ -101,10 +103,11 @@ class RustMotor implements Motor {
           erisim: o.erisim,
           ad: o.ad,
           metin: o.metin,
-          kontrol: o.kontrol));
+          kontrol: o.kontrol,
+          oyunKolu: o.oyunKolu));
 
   @override
-  Future<void> hostKabul({required bool kontrol}) => rust.hostKabul(kontrol: kontrol);
+  Future<void> hostKabul({required bool kontrol, required bool oyunKolu}) => rust.hostKabul(kontrol: kontrol, oyunKolu: oyunKolu);
   @override
   Future<void> hostRed() => rust.hostRed();
   @override

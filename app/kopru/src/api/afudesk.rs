@@ -40,6 +40,7 @@ pub struct HostOlayi {
     pub ad: String,
     pub metin: String,
     pub kontrol: bool,
+    pub oyun_kolu: bool,
 }
 
 /// İzleyici olayı. `tur`: bekliyor | kabul | kare | istatistik | koptu | hata.
@@ -76,8 +77,8 @@ fn host_dto(o: HostOlay) -> HostOlayi {
             HostOlayi { tur: "hazir".into(), kod, parola, adresler, erisim, ..Default::default() }
         }
         HostOlay::Istek { ad } => HostOlayi { tur: "istek".into(), ad, ..Default::default() },
-        HostOlay::Baglandi { ad, izinler } => {
-            HostOlayi { tur: "baglandi".into(), ad, kontrol: izinler.kontrol, ..Default::default() }
+            HostOlay::Baglandi { ad, izinler } => {
+            HostOlayi { tur: "baglandi".into(), ad, kontrol: izinler.kontrol, oyun_kolu: izinler.oyun_kolu, ..Default::default() }
         }
         HostOlay::Koptu { sebep } => HostOlayi { tur: "koptu".into(), metin: sebep, ..Default::default() },
         HostOlay::Hata(m) => HostOlayi { tur: "hata".into(), metin: m, ..Default::default() },
@@ -139,8 +140,8 @@ fn host_komut(k: HostKomut) {
     }
 }
 
-pub fn host_kabul(kontrol: bool) {
-    host_komut(HostKomut::Kabul(Izinler { kontrol, pano: false }));
+pub fn host_kabul(kontrol: bool, oyun_kolu: bool) {
+    host_komut(HostKomut::Kabul(Izinler { kontrol, pano: false, oyun_kolu }));
 }
 
 pub fn host_red() {
@@ -192,6 +193,7 @@ pub fn izleyici_baglan(kod: String, parola: String, ad: String, olaylar: StreamS
                     IzleyiciOlayi { tur: "istatistik".into(), rtt_ms, fps, ..Default::default() }
                 }
                 IzleyiciOlay::Koptu { sebep } => IzleyiciOlayi { tur: "koptu".into(), metin: sebep, ..Default::default() },
+                IzleyiciOlay::KolAlgilandi => IzleyiciOlayi { tur: "kol".into(), ..Default::default() },
             };
             if olaylar.add(dto).is_err() {
                 break;

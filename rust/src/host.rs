@@ -403,6 +403,7 @@ async fn oturum(
     });
 
     let mut enjektor = if izinler.kontrol { fabrika.enjektor().ok() } else { None };
+    let mut kol_siralari = std::collections::HashMap::<u8, u32>::new();
     let sonuc = loop {
         tokio::select! {
             _ = &mut *durdur => { c.close(0u32.into(), b"durdu"); break Oturum::Durdur; }
@@ -418,6 +419,10 @@ async fn oturum(
             },
             m = protokol::oku::<_, Kontrol>(&mut r) => match m {
                 Ok(Some(Kontrol::Girdi(g))) => {
+                    if let protokol::Girdi::Kol(k) = &g {
+                        if !izinler.oyun_kolu || !sira_yeni(kol_siralari.get(&k.slot).copied(), k.sira) { continue; }
+                        kol_siralari.insert(k.slot, k.sira);
+                    }
                     if let Some(e) = enjektor.as_mut() {
                         let _ = tokio::task::block_in_place(|| e.uygula(&g));
                     }
@@ -425,11 +430,37 @@ async fn oturum(
                 Ok(Some(Kontrol::Kapat(_))) | Ok(None) | Err(_) => break Oturum::Bitti("İzleyici bağlantıyı kapattı.".into()),
                 Ok(Some(_)) => {}
             },
+            d = c.read_datagram() => match d {
+                Ok(b) => if let Ok(k) = bincode::deserialize::<protokol::KolDurumu>(&b) {
+                    if izinler.oyun_kolu && sira_yeni(kol_siralari.get(&k.slot).copied(), k.sira) {
+                        kol_siralari.insert(k.slot, k.sira);
+                    }
+                },
+                Err(_) => {}
+            },
         }
     };
     yayin_dur.store(true, std::sync::atomic::Ordering::Relaxed);
     yayin.abort();
     sonuc
+}
+
+/// RFC 1982 benzeri karşılaştırma; farkın yarı uzayı geçmediği varsayılır.
+pub fn sira_yeni(eski: Option<u32>, yeni: u32) -> bool {
+    eski.map(|e| yeni != e && yeni.wrapping_sub(e) < (1u32 << 31)).unwrap_or(true)
+}
+
+#[cfg(test)]
+mod sira_testleri {
+    use super::sira_yeni;
+    #[test]
+    fn sira_sarmali_ve_eski_paket() {
+        assert!(sira_yeni(None, u32::MAX - 1));
+        assert!(sira_yeni(Some(u32::MAX - 1), 1));
+        assert!(!sira_yeni(Some(1), u32::MAX - 1));
+        assert!(!sira_yeni(Some(7), 7));
+        assert!(sira_yeni(Some(7), 8));
+    }
 }
 
 #[cfg(test)]

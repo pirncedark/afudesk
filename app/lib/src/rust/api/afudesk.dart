@@ -25,8 +25,11 @@ Stream<HostOlayi> hostBaslat({
   upnp: upnp,
 );
 
-Future<void> hostKabul({required bool kontrol}) =>
-    RustLib.instance.api.crateApiAfudeskHostKabul(kontrol: kontrol);
+Future<void> hostKabul({required bool kontrol, required bool oyunKolu}) =>
+    RustLib.instance.api.crateApiAfudeskHostKabul(
+      kontrol: kontrol,
+      oyunKolu: oyunKolu,
+    );
 
 Future<void> hostRed() => RustLib.instance.api.crateApiAfudeskHostRed();
 
@@ -119,6 +122,7 @@ class HostOlayi {
   final String ad;
   final String metin;
   final bool kontrol;
+  final bool oyunKolu;
 
   const HostOlayi({
     required this.tur,
@@ -129,6 +133,7 @@ class HostOlayi {
     required this.ad,
     required this.metin,
     required this.kontrol,
+    required this.oyunKolu,
   });
 
   static Future<HostOlayi> default_() =>
@@ -143,7 +148,8 @@ class HostOlayi {
       adresler.hashCode ^
       ad.hashCode ^
       metin.hashCode ^
-      kontrol.hashCode;
+      kontrol.hashCode ^
+      oyunKolu.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -157,7 +163,8 @@ class HostOlayi {
           adresler == other.adresler &&
           ad == other.ad &&
           metin == other.metin &&
-          kontrol == other.kontrol;
+          kontrol == other.kontrol &&
+          oyunKolu == other.oyunKolu;
 }
 
 /// İzleyici olayı. `tur`: bekliyor | kabul | kare | istatistik | koptu | hata.

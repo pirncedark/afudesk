@@ -63,7 +63,7 @@ async fn tam_akis_goruntu_ve_girdi() {
         HostOlay::Istek { ad } => assert_eq!(ad, "Veli"),
         _ => unreachable!(),
     }
-    h.komut(HostKomut::Kabul(Izinler { kontrol: true, pano: false })).await;
+    h.komut(HostKomut::Kabul(Izinler { kontrol: true, pano: false, oyun_kolu: true })).await;
     match iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Kabul { .. })).await {
         IzleyiciOlay::Kabul { genislik, yukseklik, izinler } => {
             assert_eq!((genislik, yukseklik), (160, 100));
@@ -116,7 +116,7 @@ async fn kontrol_izni_yoksa_girdi_uygulanmaz() {
     let (kod, parola) = hazir(&mut h).await;
     let mut i = izleyici::baglan(&kod, &parola, "Veli").await.unwrap();
     olay_bekle(&mut h, |o| matches!(o, HostOlay::Istek { .. })).await;
-    h.komut(HostKomut::Kabul(Izinler { kontrol: false, pano: false })).await;
+    h.komut(HostKomut::Kabul(Izinler { kontrol: false, pano: false, oyun_kolu: false })).await;
     iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Kare { .. })).await;
     i.gonder(Girdi::FareTus { tus: FareTusu::Sol, basili: true }).await;
     tokio::time::sleep(Duration::from_millis(800)).await;

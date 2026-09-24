@@ -126,7 +126,7 @@ void main() {
       expect(find.text('Veli bağlanmak istiyor'), findsOneWidget);
       await t.tap(find.byKey(const Key('istek_kabul')));
       await gec(t);
-      expect(m.cagrilar, contains('kabul:true'));
+      expect(m.cagrilar, contains('kabul:true:true'));
       m.host.add(const HostOlay('baglandi', ad: 'Veli', kontrol: true));
       await t.pump();
       expect(find.text('Veli ekranını görüyor'), findsOneWidget);
@@ -143,7 +143,7 @@ void main() {
       await t.pump();
       await t.tap(find.byKey(const Key('istek_kabul')));
       await gec(t);
-      expect(m.cagrilar, contains('kabul:false'));
+      expect(m.cagrilar, contains('kabul:false:true'));
     });
 
     testWidgets('gelen istek: reddet', (t) async {
@@ -286,6 +286,16 @@ void main() {
       await kareBekle(t, m);
       expect(find.byKey(const Key('oturum_kare')), findsOneWidget);
       expect(m.kareOnayi, 1, reason: 'kare çizilince çekirdeğe haber verilmeli');
+    });
+
+    testWidgets('uzak kol algılanınca oturum başlığında P2 çipi görünür', (t) async {
+      final m = await oturumAc(t);
+      m.izleyici.add(IzleyiciOlay('kabul', kontrol: true, genislik: 20, yukseklik: 10));
+      await t.pump();
+      expect(find.byKey(const Key('oturum_p2')), findsNothing);
+      m.izleyici.add(IzleyiciOlay('kol'));
+      await t.pump();
+      expect(find.text('🎮 P2'), findsOneWidget);
     });
 
     Future<Rect> goruntuAlani(WidgetTester t, SahteMotor m, {bool kontrol = true}) async {

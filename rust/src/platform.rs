@@ -150,6 +150,7 @@ pub mod masaustu {
                         self.e.text(m)?;
                     }
                 }
+                Girdi::Kol(_) => {}
             }
             Ok(())
         }
