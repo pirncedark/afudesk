@@ -42,6 +42,7 @@ dependencies = [
  "sha2",
  "thiserror",
  "tokio",
+ "windows-capture",
  "xcap",
 ]
 
@@ -3473,6 +3474,19 @@ dependencies = [
  "windows-core 0.62.2",
  "windows-future 0.3.2",
  "windows-numerics 0.3.1",
+]
+
+[[package]]
+name = "windows-capture"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09046acbe9b6d039cde50e8c8178d95bb0f9b33ed7feccc4465dadc5404b31b4"
+dependencies = [
+ "parking_lot",
+ "rayon",
+ "thiserror",
+ "windows 0.62.2",
+ "windows-future 0.3.2",
 ]
 
 [[package]]

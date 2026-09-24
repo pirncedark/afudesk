@@ -636,18 +636,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   IzleyiciOlayi dco_decode_izleyici_olayi(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return IzleyiciOlayi(
       tur: dco_decode_String(arr[0]),
       rttMs: dco_decode_u_32(arr[1]),
       fps: dco_decode_u_32(arr[2]),
-      ad: dco_decode_String(arr[3]),
-      metin: dco_decode_String(arr[4]),
-      kontrol: dco_decode_bool(arr[5]),
-      genislik: dco_decode_u_32(arr[6]),
-      yukseklik: dco_decode_u_32(arr[7]),
-      rgba: dco_decode_list_prim_u_8_strict(arr[8]),
+      gecikmeMs: dco_decode_u_32(arr[3]),
+      ad: dco_decode_String(arr[4]),
+      metin: dco_decode_String(arr[5]),
+      kontrol: dco_decode_bool(arr[6]),
+      genislik: dco_decode_u_32(arr[7]),
+      yukseklik: dco_decode_u_32(arr[8]),
+      rgba: dco_decode_list_prim_u_8_strict(arr[9]),
     );
   }
 
@@ -787,6 +788,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_tur = sse_decode_String(deserializer);
     var var_rttMs = sse_decode_u_32(deserializer);
     var var_fps = sse_decode_u_32(deserializer);
+    var var_gecikmeMs = sse_decode_u_32(deserializer);
     var var_ad = sse_decode_String(deserializer);
     var var_metin = sse_decode_String(deserializer);
     var var_kontrol = sse_decode_bool(deserializer);
@@ -797,6 +799,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       tur: var_tur,
       rttMs: var_rttMs,
       fps: var_fps,
+      gecikmeMs: var_gecikmeMs,
       ad: var_ad,
       metin: var_metin,
       kontrol: var_kontrol,
@@ -950,6 +953,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.tur, serializer);
     sse_encode_u_32(self.rttMs, serializer);
     sse_encode_u_32(self.fps, serializer);
+    sse_encode_u_32(self.gecikmeMs, serializer);
     sse_encode_String(self.ad, serializer);
     sse_encode_String(self.metin, serializer);
     sse_encode_bool(self.kontrol, serializer);

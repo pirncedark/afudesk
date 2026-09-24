@@ -112,7 +112,7 @@ impl Kodlayici {
             return Ok(None);
         }
         self.sira += 1;
-        Ok(Some(Kare { sira: self.sira, genislik: g.genislik, yukseklik: g.yukseklik, tam, dosemeler }))
+        Ok(Some(Kare { sira: self.sira, genislik: g.genislik, yukseklik: g.yukseklik, tam, dosemeler, yakalama_ms: 0 }))
     }
 }
 

@@ -165,6 +165,7 @@ class IzleyiciOlayi {
   final String tur;
   final int rttMs;
   final int fps;
+  final int gecikmeMs;
   final String ad;
   final String metin;
   final bool kontrol;
@@ -176,6 +177,7 @@ class IzleyiciOlayi {
     required this.tur,
     required this.rttMs,
     required this.fps,
+    required this.gecikmeMs,
     required this.ad,
     required this.metin,
     required this.kontrol,
@@ -192,6 +194,7 @@ class IzleyiciOlayi {
       tur.hashCode ^
       rttMs.hashCode ^
       fps.hashCode ^
+      gecikmeMs.hashCode ^
       ad.hashCode ^
       metin.hashCode ^
       kontrol.hashCode ^
@@ -207,6 +210,7 @@ class IzleyiciOlayi {
           tur == other.tur &&
           rttMs == other.rttMs &&
           fps == other.fps &&
+          gecikmeMs == other.gecikmeMs &&
           ad == other.ad &&
           metin == other.metin &&
           kontrol == other.kontrol &&

@@ -33,5 +33,8 @@ rayon = "1"
 xcap = "0.9"
 enigo = "0.6"
 
+[target.'cfg(windows)'.dependencies]
+windows-capture = "2.0.1"
+
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
