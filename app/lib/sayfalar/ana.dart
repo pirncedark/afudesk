@@ -52,11 +52,14 @@ class AnaSayfa extends StatelessWidget {
                   ];
                   return dar
                       ? Column(children: [kartlar[0], const SizedBox(height: 14), kartlar[1]])
-                      : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Expanded(child: kartlar[0]),
-                          const SizedBox(width: 14),
-                          Expanded(child: kartlar[1]),
-                        ]);
+                      // Yan yana kartlar aynı yükseklikte.
+                      : IntrinsicHeight(
+                          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                            Expanded(child: kartlar[0]),
+                            const SizedBox(width: 14),
+                            Expanded(child: kartlar[1]),
+                          ]),
+                        );
                 }),
                 const SizedBox(height: 28),
                 const AfuUygulamalar(),

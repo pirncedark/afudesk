@@ -290,7 +290,8 @@ class _IstekPenceresiDurum extends State<IstekPenceresi> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('${widget.ad} bağlanmak istiyor', key: const Key('istek_baslik')),
+      title: Text('${widget.ad} bağlanmak istiyor',
+          key: const Key('istek_baslik'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
       content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('Kabul edersen ekranını görebilecek.'),
         const SizedBox(height: 10),

@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.afu" "\0"
-            VALUE "FileDescription", "afudesk" "\0"
+            VALUE "CompanyName", "Afu" "\0"
+            VALUE "FileDescription", "AfuDesk — sunucusuz uzak masaüstü" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "afudesk" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.afu. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Afu. MIT lisansı." "\0"
             VALUE "OriginalFilename", "afudesk.exe" "\0"
-            VALUE "ProductName", "afudesk" "\0"
+            VALUE "ProductName", "AfuDesk" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
