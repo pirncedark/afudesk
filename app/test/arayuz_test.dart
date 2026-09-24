@@ -146,6 +146,29 @@ void main() {
       expect(m.cagrilar, contains('kabul:false:true'));
     });
 
+    testWidgets('oyun kolu izin kutusu', (t) async {
+      final m = await verAc(t);
+      m.host.add(const HostOlay('istek', ad: 'Veli'));
+      await gec(t);
+      final kutu = find.byKey(const Key('istek_oyun_kolu'));
+      expect(t.widget<CheckboxListTile>(kutu).value, isTrue);
+      await t.tap(kutu);
+      await t.pump();
+      expect(t.widget<CheckboxListTile>(kutu).value, isFalse);
+      await t.tap(find.byKey(const Key('istek_kabul')));
+      await gec(t);
+      expect(m.cagrilar, contains('kabul:true:false'));
+    });
+
+    testWidgets('oyun kolu sürücü uyarısı', (t) async {
+      final m = await verAc(t);
+      m.host.add(const HostOlay('baglandi', ad: 'Veli', oyunKolu: true));
+      await t.pump();
+      m.host.add(const HostOlay('uyari', metin: 'Oyun kolu sürücüsü gerekli'));
+      await t.pump();
+      expect(find.text('Oyun kolu sürücüsü gerekli'), findsOneWidget);
+    });
+
     testWidgets('gelen istek: reddet', (t) async {
       final m = await verAc(t);
       m.host.add(const HostOlay('istek', ad: 'Veli'));

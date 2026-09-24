@@ -1,6 +1,7 @@
 //! Bağlanan taraf: kodu çözer, doğrudan bağlanır, onayı bekler, kareleri birleştirir.
 use crate::{
-    ag, goruntu::Birlestirici,
+    ag,
+    goruntu::Birlestirici,
     kod,
     protokol::{self, Girdi, Izinler, Kare, Kontrol, SURUM},
 };
@@ -11,15 +12,34 @@ use tokio::sync::mpsc;
 #[derive(Debug, Clone, PartialEq)]
 pub enum IzleyiciOlay {
     /// Bağlandı, karşı tarafın onayı bekleniyor.
-    OnayBekleniyor { karsi_ad: String },
-    Kabul { izinler: Izinler, genislik: u32, yukseklik: u32 },
+    OnayBekleniyor {
+        karsi_ad: String,
+    },
+    Kabul {
+        izinler: Izinler,
+        genislik: u32,
+        yukseklik: u32,
+    },
     /// Birleştirilmiş tam ekran (RGBA).
-    Kare { genislik: u32, yukseklik: u32, rgba: Vec<u8> },
+    Kare {
+        genislik: u32,
+        yukseklik: u32,
+        rgba: Vec<u8>,
+    },
     /// Saniyede bir: bağlantı gidiş-dönüş süresi ve ekrana gelen kare hızı.
-    Istatistik { rtt_ms: u32, fps: u32 },
-    Koptu { sebep: String },
+    Istatistik {
+        rtt_ms: u32,
+        fps: u32,
+    },
+    Koptu {
+        sebep: String,
+    },
     KolAlgilandi,
-    Titresim { slot: u8, buyuk: u8, kucuk: u8 },
+    Titresim {
+        slot: u8,
+        buyuk: u8,
+        kucuk: u8,
+    },
 }
 
 pub struct Izleyici {
@@ -46,25 +66,53 @@ pub async fn baglan(kod_metni: &str, parola: &str, ad: &str) -> Result<Izleyici>
     let d = kod::coz(kod_metni, parola, kod::simdi())?;
     let c = ag::baglan(&d.adresler, &d.parmak_izi, Duration::from_secs(6)).await?;
     let (mut w, mut r) = c.open_bi().await?;
-    protokol::yaz(&mut w, &Kontrol::Merhaba { surum: SURUM, bilet: d.bilet.clone(), ad: ad.to_owned() }).await?;
+    protokol::yaz(
+        &mut w,
+        &Kontrol::Merhaba {
+            surum: SURUM,
+            bilet: d.bilet.clone(),
+            ad: ad.to_owned(),
+        },
+    )
+    .await?;
     let (olay_tx, olaylar) = mpsc::channel(4);
     let (girdi, mut girdi_rx) = mpsc::channel::<Girdi>(256);
     let (kol_olay_tx, mut kol_olay_rx) = mpsc::unbounded_channel();
+    let (titresim_tx, titresim_rx) = std::sync::mpsc::channel::<(u8, u8)>();
     #[cfg(all(not(target_os = "android"), not(test)))]
     {
         let tx = girdi.clone();
-        std::thread::spawn(move || crate::kol::oku(tx, kol_olay_tx));
+        std::thread::spawn(move || crate::kol::oku(tx, kol_olay_tx, titresim_rx));
     }
     #[cfg(any(target_os = "android", test))]
     drop(kol_olay_tx);
-    let _ = olay_tx.send(IzleyiciOlay::OnayBekleniyor { karsi_ad: d.ad.clone() }).await;
+    #[cfg(any(target_os = "android", test))]
+    drop(titresim_rx);
+    let _ = olay_tx
+        .send(IzleyiciOlay::OnayBekleniyor {
+            karsi_ad: d.ad.clone(),
+        })
+        .await;
     let c2 = c.clone();
     tokio::spawn(async move {
-        let sebep = calis(&c2, &mut w, &mut r, &olay_tx, &mut girdi_rx, &mut kol_olay_rx).await;
+        let sebep = calis(
+            &c2,
+            &mut w,
+            &mut r,
+            &olay_tx,
+            &mut girdi_rx,
+            &mut kol_olay_rx,
+            titresim_tx,
+        )
+        .await;
         c2.close(0u32.into(), b"bitti");
         let _ = olay_tx.send(IzleyiciOlay::Koptu { sebep }).await;
     });
-    Ok(Izleyici { olaylar, girdi, baglanti: c })
+    Ok(Izleyici {
+        olaylar,
+        girdi,
+        baglanti: c,
+    })
 }
 
 async fn calis(
@@ -74,12 +122,23 @@ async fn calis(
     olay: &mpsc::Sender<IzleyiciOlay>,
     girdi: &mut mpsc::Receiver<Girdi>,
     kol_olay: &mut mpsc::UnboundedReceiver<()>,
+    titresim: std::sync::mpsc::Sender<(u8, u8)>,
 ) -> String {
     // Onay: karşı taraf 60 sn içinde karar verir.
     let ilk = tokio::time::timeout(Duration::from_secs(75), protokol::oku::<_, Kontrol>(r)).await;
     let izinler = match ilk {
-        Ok(Ok(Some(Kontrol::Kabul { izinler, genislik, yukseklik }))) => {
-            let _ = olay.send(IzleyiciOlay::Kabul { izinler: izinler.clone(), genislik, yukseklik }).await;
+        Ok(Ok(Some(Kontrol::Kabul {
+            izinler,
+            genislik,
+            yukseklik,
+        }))) => {
+            let _ = olay
+                .send(IzleyiciOlay::Kabul {
+                    izinler: izinler.clone(),
+                    genislik,
+                    yukseklik,
+                })
+                .await;
             izinler
         }
         Ok(Ok(Some(Kontrol::Red(s)))) => return s,
@@ -134,8 +193,8 @@ async fn calis(
             }
             g = girdi.recv() => match g {
                 Some(g) => {
-                    if !izinler.kontrol { continue; }
                     if let Girdi::Kol(k) = &g {
+                        if !izinler.oyun_kolu { continue; }
                         son_kol = Some(g.clone());
                         let mut paket = Vec::with_capacity(32);
                         if let Ok(b) = bincode::serialize(k) {
@@ -143,13 +202,14 @@ async fn calis(
                         }
                         if !paket.is_empty() && c.send_datagram(paket.into()).is_ok() { continue; }
                     }
+                    if !izinler.kontrol { continue; }
                     if protokol::yaz(w, &Kontrol::Girdi(g)).await.is_err() { return "Bağlantı koptu.".into(); }
                 }
                 None => return "Bağlantı kapandı.".into(),
             },
             Some(()) = kol_olay.recv() => { let _ = olay.send(IzleyiciOlay::KolAlgilandi).await; }
             _ = kol_yenile.tick() => {
-                if izinler.kontrol {
+                if izinler.oyun_kolu {
                     if let Some(g) = son_kol.clone() {
                         if protokol::yaz(w, &Kontrol::Girdi(g)).await.is_err() { return "Bağlantı koptu.".into(); }
                     }
@@ -157,7 +217,7 @@ async fn calis(
             }
             m = protokol::oku::<_, Kontrol>(r) => match m {
                 Ok(Some(Kontrol::Kapat(s))) => return s,
-                Ok(Some(Kontrol::Titresim { slot, buyuk, kucuk })) => { let _ = olay.send(IzleyiciOlay::Titresim { slot, buyuk, kucuk }).await; }
+                Ok(Some(Kontrol::Titresim { slot, buyuk, kucuk })) => { let _ = titresim.send((buyuk, kucuk)); let _ = olay.send(IzleyiciOlay::Titresim { slot, buyuk, kucuk }).await; }
                 Ok(Some(_)) => {}
                 _ => return "Bağlantı koptu.".into(),
             },
