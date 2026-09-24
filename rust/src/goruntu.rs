@@ -45,6 +45,8 @@ pub struct Goruntu {
 
 pub struct Kodlayici {
     onceki: Option<Goruntu>,
+    /// Ulaşmadan iptal edilen karelerin döşemeleri: değişmeseler de yeniden gönderilir.
+    zorunlu: std::collections::HashSet<(u32, u32)>,
     kalite: u8,
     sira: u64,
     /// Bu kadar karede bir tam kare gönder (paket kaybı/yeni izleyici için).
@@ -53,11 +55,20 @@ pub struct Kodlayici {
 
 impl Kodlayici {
     pub fn new(kalite: u8) -> Self {
-        Self { onceki: None, kalite, sira: 0, tam_aralik: 150 }
+        Self { onceki: None, zorunlu: Default::default(), kalite, sira: 0, tam_aralik: 150 }
     }
 
     pub fn kalite_ayarla(&mut self, k: u8) {
         self.kalite = k.clamp(20, 95);
+    }
+
+    pub fn kalite(&self) -> u8 {
+        self.kalite
+    }
+
+    /// İptal edilen bir karenin döşemelerini bir sonraki karede yeniden gönder.
+    pub fn yeniden_gonder(&mut self, konumlar: impl IntoIterator<Item = (u32, u32)>) {
+        self.zorunlu.extend(konumlar);
     }
 
     pub fn tam_kare_iste(&mut self) {
@@ -83,7 +94,7 @@ impl Kodlayici {
             let mut x = 0;
             while x < g.genislik {
                 let gen = DOSEME.min(g.genislik - x);
-                if tam || self.onceki.as_ref().map_or(true, |o| farkli(o, g, x, y, gen, yuk)) {
+                if tam || self.zorunlu.contains(&(x, y)) || self.onceki.as_ref().map_or(true, |o| farkli(o, g, x, y, gen, yuk)) {
                     konumlar.push((x, y, gen, yuk));
                 }
                 x += DOSEME;
@@ -96,6 +107,7 @@ impl Kodlayici {
             .map(|(x, y, gen, yuk)| Ok(Doseme { x, y, gen, yuk, jpeg: jpeg_kodla(g, x, y, gen, yuk, kalite)? }))
             .collect::<anyhow::Result<Vec<_>>>()?;
         self.onceki = Some(g.clone());
+        self.zorunlu.clear();
         if dosemeler.is_empty() {
             return Ok(None);
         }
@@ -133,11 +145,14 @@ fn jpeg_kodla(g: &Goruntu, x: u32, y: u32, gen: u32, yuk: u32, kalite: u8) -> an
 /// İzleyici: gelen kareleri birleştirir.
 pub struct Birlestirici {
     pub goruntu: Goruntu,
+    /// Her döşemeye en son uygulanan kare sırası: kareler bağımsız akışlardan
+    /// sırasız gelebilir; eski kare yeni içeriğin üstüne yazamaz.
+    doseme_sira: std::collections::HashMap<(u32, u32), u64>,
 }
 
 impl Default for Birlestirici {
     fn default() -> Self {
-        Self { goruntu: Goruntu { genislik: 0, yukseklik: 0, rgba: Vec::new() } }
+        Self { goruntu: Goruntu { genislik: 0, yukseklik: 0, rgba: Vec::new() }, doseme_sira: Default::default() }
     }
 }
 
@@ -150,6 +165,7 @@ impl Birlestirici {
                 yukseklik: k.yukseklik,
                 rgba: vec![0; (k.genislik * k.yukseklik * 4) as usize],
             };
+            self.doseme_sira.clear();
         }
         let satir = (k.genislik * 4) as usize;
         for d in &k.dosemeler {
@@ -157,6 +173,11 @@ impl Birlestirici {
                 d.gen > 0 && d.yuk > 0 && d.x + d.gen <= k.genislik && d.y + d.yuk <= k.yukseklik,
                 "döşeme ekran dışında"
             );
+            let son = self.doseme_sira.entry((d.x, d.y)).or_insert(0);
+            if *son >= k.sira {
+                continue; // bu döşemenin daha yeni hali zaten ekranda
+            }
+            *son = k.sira;
             let coz = image::codecs::jpeg::JpegDecoder::new(std::io::Cursor::new(&d.jpeg))?;
             let (gw, gh) = coz.dimensions();
             anyhow::ensure!(gw == d.gen && gh == d.yuk, "döşeme boyutu uyuşmuyor");
@@ -276,6 +297,32 @@ mod testler {
         let mut kare3 = kare2.clone();
         kare3.genislik = 0;
         assert!(b.uygula(&kare3).is_err());
+    }
+
+    #[test]
+    fn sirasiz_gelen_eski_kare_yeniyi_ezmez() {
+        let mut k = Kodlayici::new(90);
+        let siyah = Goruntu { genislik: 64, yukseklik: 64, rgba: [0, 0, 0, 255].repeat(64 * 64) };
+        let beyaz = Goruntu { genislik: 64, yukseklik: 64, rgba: [255, 255, 255, 255].repeat(64 * 64) };
+        let k1 = k.kodla(&siyah).unwrap().unwrap();
+        let k2 = k.kodla(&beyaz).unwrap().unwrap();
+        let mut b = Birlestirici::default();
+        b.uygula(&k2).unwrap(); // yeni önce geldi
+        b.uygula(&k1).unwrap(); // eski geç geldi: yok sayılmalı
+        assert!(b.goruntu.rgba[0] > 240, "beyaz kalmalı, {}", b.goruntu.rgba[0]);
+    }
+
+    #[test]
+    fn iptal_edilen_kare_dosemeleri_yeniden_gider() {
+        let g = deneme_goruntu(128, 64, 0);
+        let mut k = Kodlayici::new(80);
+        k.kodla(&g).unwrap();
+        assert!(k.kodla(&g).unwrap().is_none(), "değişiklik yok");
+        k.yeniden_gonder([(64, 0)]);
+        let kare = k.kodla(&g).unwrap().unwrap();
+        assert_eq!(kare.dosemeler.len(), 1);
+        assert_eq!((kare.dosemeler[0].x, kare.dosemeler[0].y), (64, 0));
+        assert!(k.kodla(&g).unwrap().is_none(), "zorunlu liste temizlenmeli");
     }
 
     #[test]

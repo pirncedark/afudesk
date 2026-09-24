@@ -25,7 +25,9 @@ class HostOlay {
 
 /// İzleyici tarafı olayı.
 class IzleyiciOlay {
-  final String tur; // bekliyor | kabul | kare | koptu
+  final String tur; // bekliyor | kabul | kare | istatistik | koptu | hata
+  final int rttMs;
+  final int fps;
   final String ad;
   final String metin;
   final bool kontrol;
@@ -33,7 +35,9 @@ class IzleyiciOlay {
   final int yukseklik;
   final Uint8List rgba;
   IzleyiciOlay(this.tur,
-      {this.ad = '',
+      {this.rttMs = 0,
+      this.fps = 0,
+      this.ad = '',
       this.metin = '',
       this.kontrol = false,
       this.genislik = 0,
@@ -116,6 +120,8 @@ class RustMotor implements Motor {
           kontrol: o.kontrol,
           genislik: o.genislik,
           yukseklik: o.yukseklik,
+          rttMs: o.rttMs,
+          fps: o.fps,
           rgba: o.rgba));
 
   @override

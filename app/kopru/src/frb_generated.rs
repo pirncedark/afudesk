@@ -671,6 +671,8 @@ impl SseDecode for crate::api::afudesk::IzleyiciOlayi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_tur = <String>::sse_decode(deserializer);
+        let mut var_rttMs = <u32>::sse_decode(deserializer);
+        let mut var_fps = <u32>::sse_decode(deserializer);
         let mut var_ad = <String>::sse_decode(deserializer);
         let mut var_metin = <String>::sse_decode(deserializer);
         let mut var_kontrol = <bool>::sse_decode(deserializer);
@@ -679,6 +681,8 @@ impl SseDecode for crate::api::afudesk::IzleyiciOlayi {
         let mut var_rgba = <Vec<u8>>::sse_decode(deserializer);
         return crate::api::afudesk::IzleyiciOlayi {
             tur: var_tur,
+            rtt_ms: var_rttMs,
+            fps: var_fps,
             ad: var_ad,
             metin: var_metin,
             kontrol: var_kontrol,
@@ -838,6 +842,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::afudesk::IzleyiciOlayi {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.tur.into_into_dart().into_dart(),
+            self.rtt_ms.into_into_dart().into_dart(),
+            self.fps.into_into_dart().into_dart(),
             self.ad.into_into_dart().into_dart(),
             self.metin.into_into_dart().into_dart(),
             self.kontrol.into_into_dart().into_dart(),
@@ -945,6 +951,8 @@ impl SseEncode for crate::api::afudesk::IzleyiciOlayi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.tur, serializer);
+        <u32>::sse_encode(self.rtt_ms, serializer);
+        <u32>::sse_encode(self.fps, serializer);
         <String>::sse_encode(self.ad, serializer);
         <String>::sse_encode(self.metin, serializer);
         <bool>::sse_encode(self.kontrol, serializer);

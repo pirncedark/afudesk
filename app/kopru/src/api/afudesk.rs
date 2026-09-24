@@ -42,10 +42,12 @@ pub struct HostOlayi {
     pub kontrol: bool,
 }
 
-/// İzleyici olayı. `tur`: bekliyor | kabul | kare | koptu.
+/// İzleyici olayı. `tur`: bekliyor | kabul | kare | istatistik | koptu | hata.
 #[derive(Debug, Clone, Default)]
 pub struct IzleyiciOlayi {
     pub tur: String,
+    pub rtt_ms: u32,
+    pub fps: u32,
     pub ad: String,
     pub metin: String,
     pub kontrol: bool,
@@ -185,6 +187,9 @@ pub fn izleyici_baglan(kod: String, parola: String, ad: String, olaylar: StreamS
                         continue;
                     }
                     IzleyiciOlayi { tur: "kare".into(), genislik, yukseklik, rgba, ..Default::default() }
+                }
+                IzleyiciOlay::Istatistik { rtt_ms, fps } => {
+                    IzleyiciOlayi { tur: "istatistik".into(), rtt_ms, fps, ..Default::default() }
                 }
                 IzleyiciOlay::Koptu { sebep } => IzleyiciOlayi { tur: "koptu".into(), metin: sebep, ..Default::default() },
             };

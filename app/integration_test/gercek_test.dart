@@ -128,8 +128,10 @@ void main() {
     expect(resim.width, greaterThan(300));
     debugPrint('ÇİZİLEN ${resim.width}x${resim.height}');
 
-    // Birkaç kare daha gelsin (akış sürüyor mu).
+    // Saniyede bir istatistik gelmeli (gerçek RTT ve FPS).
+    await bekle(t, () => find.byKey(const Key('oturum_istatistik')).evaluate().isNotEmpty, ne: 'istatistik gelmedi');
     await t.pump(const Duration(seconds: 2));
+    debugPrint('ISTATISTIK ${t.widget<Text>(find.byKey(const Key('oturum_istatistik'))).data}');
     expect(find.byKey(const Key('oturum_kare')), findsOneWidget);
 
     // Kes → ana akışa dönüş.

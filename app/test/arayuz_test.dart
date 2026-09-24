@@ -4,6 +4,7 @@ import 'package:afudesk/klavye.dart';
 import 'package:afudesk/main.dart';
 import 'package:afudesk/motor.dart';
 import 'package:afudesk/sayfalar/baglanti_ver.dart';
+import 'package:afudesk/tema.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -350,6 +351,20 @@ void main() {
       await t.tapAt(alan.center, kind: PointerDeviceKind.mouse);
       await t.sendKeyEvent(LogicalKeyboardKey.enter);
       expect(m.girdiler, isEmpty);
+    });
+
+    testWidgets('gecikme göstergesi: renk ağ durumuna göre', (t) async {
+      final m = await oturumAc(t);
+      await goruntuAlani(t, m);
+      expect(find.byKey(const Key('oturum_istatistik')), findsNothing, reason: 'ölçüm gelmeden gösterilmez');
+      m.izleyici.add(IzleyiciOlay('istatistik', rttMs: 23, fps: 15));
+      await t.pump();
+      final y = t.widget<Text>(find.byKey(const Key('oturum_istatistik')));
+      expect(y.data, '23 ms · 15 fps');
+      expect(y.style!.color, Renk.basari);
+      m.izleyici.add(IzleyiciOlay('istatistik', rttMs: 350, fps: 8));
+      await t.pump();
+      expect(t.widget<Text>(find.byKey(const Key('oturum_istatistik'))).style!.color, Renk.tehlike);
     });
 
     testWidgets('karşı taraf reddederse sebep gösterilir', (t) async {

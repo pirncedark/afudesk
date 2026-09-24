@@ -4,7 +4,6 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
-
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `host_dto`, `host_komut`, `rt`
@@ -161,9 +160,11 @@ class HostOlayi {
           kontrol == other.kontrol;
 }
 
-/// İzleyici olayı. `tur`: bekliyor | kabul | kare | koptu.
+/// İzleyici olayı. `tur`: bekliyor | kabul | kare | istatistik | koptu | hata.
 class IzleyiciOlayi {
   final String tur;
+  final int rttMs;
+  final int fps;
   final String ad;
   final String metin;
   final bool kontrol;
@@ -173,6 +174,8 @@ class IzleyiciOlayi {
 
   const IzleyiciOlayi({
     required this.tur,
+    required this.rttMs,
+    required this.fps,
     required this.ad,
     required this.metin,
     required this.kontrol,
@@ -187,6 +190,8 @@ class IzleyiciOlayi {
   @override
   int get hashCode =>
       tur.hashCode ^
+      rttMs.hashCode ^
+      fps.hashCode ^
       ad.hashCode ^
       metin.hashCode ^
       kontrol.hashCode ^
@@ -200,6 +205,8 @@ class IzleyiciOlayi {
       other is IzleyiciOlayi &&
           runtimeType == other.runtimeType &&
           tur == other.tur &&
+          rttMs == other.rttMs &&
+          fps == other.fps &&
           ad == other.ad &&
           metin == other.metin &&
           kontrol == other.kontrol &&

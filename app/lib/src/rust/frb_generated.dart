@@ -4,14 +4,11 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'api/afudesk.dart';
-
 import 'dart:async';
 import 'dart:convert';
-
 import 'frb_generated.dart';
 import 'frb_generated.io.dart'
     if (dart.library.js_interop) 'frb_generated.web.dart';
-
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 /// Main entrypoint of the Rust API
@@ -639,16 +636,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   IzleyiciOlayi dco_decode_izleyici_olayi(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return IzleyiciOlayi(
       tur: dco_decode_String(arr[0]),
-      ad: dco_decode_String(arr[1]),
-      metin: dco_decode_String(arr[2]),
-      kontrol: dco_decode_bool(arr[3]),
-      genislik: dco_decode_u_32(arr[4]),
-      yukseklik: dco_decode_u_32(arr[5]),
-      rgba: dco_decode_list_prim_u_8_strict(arr[6]),
+      rttMs: dco_decode_u_32(arr[1]),
+      fps: dco_decode_u_32(arr[2]),
+      ad: dco_decode_String(arr[3]),
+      metin: dco_decode_String(arr[4]),
+      kontrol: dco_decode_bool(arr[5]),
+      genislik: dco_decode_u_32(arr[6]),
+      yukseklik: dco_decode_u_32(arr[7]),
+      rgba: dco_decode_list_prim_u_8_strict(arr[8]),
     );
   }
 
@@ -786,6 +785,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   IzleyiciOlayi sse_decode_izleyici_olayi(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_tur = sse_decode_String(deserializer);
+    var var_rttMs = sse_decode_u_32(deserializer);
+    var var_fps = sse_decode_u_32(deserializer);
     var var_ad = sse_decode_String(deserializer);
     var var_metin = sse_decode_String(deserializer);
     var var_kontrol = sse_decode_bool(deserializer);
@@ -794,6 +795,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_rgba = sse_decode_list_prim_u_8_strict(deserializer);
     return IzleyiciOlayi(
       tur: var_tur,
+      rttMs: var_rttMs,
+      fps: var_fps,
       ad: var_ad,
       metin: var_metin,
       kontrol: var_kontrol,
@@ -945,6 +948,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_izleyici_olayi(IzleyiciOlayi self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.tur, serializer);
+    sse_encode_u_32(self.rttMs, serializer);
+    sse_encode_u_32(self.fps, serializer);
     sse_encode_String(self.ad, serializer);
     sse_encode_String(self.metin, serializer);
     sse_encode_bool(self.kontrol, serializer);

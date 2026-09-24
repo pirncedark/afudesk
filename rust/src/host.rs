@@ -15,6 +15,26 @@ pub const VARSAYILAN_PORT: u16 = 47_470;
 /// Kullanıcı bağlantı isteğine bu sürede yanıt vermezse istek reddedilir.
 pub const ONAY_SURESI: Duration = Duration::from_secs(60);
 pub const HEDEF_FPS: u64 = 15;
+/// Aynı anda yolda olabilecek kare sayısı; aşılırsa en eski kare iptal edilir.
+pub const AZAMI_UCUSTA: usize = 3;
+
+/// Yayın ayarı: otomatik kalite döngüsü yazar, kodlayıcı iş parçacığı okur.
+struct YayinAyari {
+    kalite: std::sync::atomic::AtomicU8,
+    fps: std::sync::atomic::AtomicU32,
+}
+
+/// Ağ durumuna göre kalite/FPS kararı (saf fonksiyon, test edilir).
+/// `iptal`: son ölçüm aralığında yetişmediği için iptal edilen kare sayısı.
+pub fn uyarla(kalite: u8, fps: u32, rtt_ms: u32, iptal: u32) -> (u8, u32) {
+    if iptal > 0 || rtt_ms > 200 {
+        (kalite.saturating_sub(10).max(35), fps.saturating_sub(3).max(8))
+    } else if rtt_ms < 80 {
+        ((kalite + 5).min(80), (fps + 2).min(24))
+    } else {
+        (kalite, fps)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum HostOlay {
@@ -258,6 +278,12 @@ async fn oturum(
     };
     // Görüntü: yakalayıcı kendi iş parçacığında oluşturulur (platform tutamaçları Send değil).
     let (kare_tx, mut kare_rx) = mpsc::channel(2);
+    let ayar = Arc::new(YayinAyari {
+        kalite: std::sync::atomic::AtomicU8::new(70),
+        fps: std::sync::atomic::AtomicU32::new(HEDEF_FPS as u32),
+    });
+    let ayar2 = ayar.clone();
+    let (iptal_tx, iptal_rx) = std::sync::mpsc::channel::<Vec<(u32, u32)>>();
     let (boyut_tx, boyut_rx) = oneshot::channel::<Result<(u32, u32), String>>();
     let yayin_dur = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let dur2 = yayin_dur.clone();
@@ -273,10 +299,15 @@ async fn oturum(
         };
         let _ = boyut_tx.send(Ok((ilk.genislik, ilk.yukseklik)));
         let mut kodlayici = Kodlayici::new(70);
-        let aralik = Duration::from_millis(1000 / HEDEF_FPS);
         let mut g = Some(ilk);
         while !dur2.load(std::sync::atomic::Ordering::Relaxed) {
             let t0 = std::time::Instant::now();
+            let fps = ayar2.fps.load(std::sync::atomic::Ordering::Relaxed).max(1) as u64;
+            let aralik = Duration::from_millis(1000 / fps);
+            kodlayici.kalite_ayarla(ayar2.kalite.load(std::sync::atomic::Ordering::Relaxed));
+            while let Ok(konumlar) = iptal_rx.try_recv() {
+                kodlayici.yeniden_gonder(konumlar);
+            }
             let goruntu = match g.take() {
                 Some(x) => x,
                 None => match yakalayici.yakala() {
@@ -314,11 +345,59 @@ async fn oturum(
     }
     let _ = olay.send(HostOlay::Baglandi { ad, izinler: izinler.clone() }).await;
 
+    // Her kare kendi tek yönlü akışında: bir karenin kaybı sonrakileri bekletmez.
+    // Yolda çok kare birikirse en eskisi iptal edilir, döşemeleri yeniden gönderilir.
     let c2 = c.clone();
     let yayin = tokio::spawn(async move {
-        let mut akis = c2.open_uni().await?;
-        while let Some(k) = kare_rx.recv().await {
-            protokol::yaz(&mut akis, &k).await?;
+        struct Ucusta {
+            konumlar: Vec<(u32, u32)>,
+            iptal: Option<oneshot::Sender<()>>,
+            gorev: tokio::task::JoinHandle<()>,
+        }
+        let mut ucusta: std::collections::VecDeque<Ucusta> = Default::default();
+        let mut iptal_sayisi = 0u32;
+        let mut olcum = tokio::time::interval(Duration::from_secs(1));
+        olcum.tick().await;
+        loop {
+            tokio::select! {
+                k = kare_rx.recv() => {
+                    let Some(k) = k else { break };
+                    ucusta.retain(|u| !u.gorev.is_finished());
+                    while ucusta.len() >= AZAMI_UCUSTA {
+                        let mut eski = ucusta.pop_front().expect("dolu");
+                        if let Some(i) = eski.iptal.take() {
+                            let _ = i.send(());
+                        }
+                        iptal_sayisi += 1;
+                        let _ = iptal_tx.send(eski.konumlar);
+                    }
+                    let konumlar = k.dosemeler.iter().map(|d| (d.x, d.y)).collect();
+                    let mut akis = c2.open_uni().await?;
+                    let (iptal, mut iptal_al) = oneshot::channel::<()>();
+                    let gorev = tokio::spawn(async move {
+                        tokio::select! {
+                            r = async { protokol::yaz(&mut akis, &k).await?; akis.finish()?; Ok::<_, anyhow::Error>(()) } => { let _ = r; }
+                            _ = &mut iptal_al => { let _ = akis.reset(0u32.into()); }
+                        }
+                    });
+                    ucusta.push_back(Ucusta { konumlar, iptal: Some(iptal), gorev });
+                }
+                _ = olcum.tick() => {
+                    let rtt = c2.rtt().as_millis().min(u32::MAX as u128) as u32;
+                    let (k, f) = uyarla(
+                        ayar.kalite.load(std::sync::atomic::Ordering::Relaxed),
+                        ayar.fps.load(std::sync::atomic::Ordering::Relaxed),
+                        rtt,
+                        iptal_sayisi,
+                    );
+                    ayar.kalite.store(k, std::sync::atomic::Ordering::Relaxed);
+                    ayar.fps.store(f, std::sync::atomic::Ordering::Relaxed);
+                    iptal_sayisi = 0;
+                }
+            }
+        }
+        for u in ucusta {
+            u.gorev.abort();
         }
         Ok::<_, anyhow::Error>(())
     });
@@ -351,4 +430,28 @@ async fn oturum(
     yayin_dur.store(true, std::sync::atomic::Ordering::Relaxed);
     yayin.abort();
     sonuc
+}
+
+#[cfg(test)]
+mod uyarlama_testleri {
+    use super::uyarla;
+
+    #[test]
+    fn kotu_agda_kalite_ve_fps_duser_sinirlarda_durur() {
+        assert_eq!(uyarla(70, 15, 250, 0), (60, 12));
+        assert_eq!(uyarla(70, 15, 30, 2), (60, 12), "iptal varsa düşer");
+        assert_eq!(uyarla(36, 9, 300, 5), (35, 8), "alt sınır");
+    }
+
+    #[test]
+    fn iyi_agda_yukselir_ust_sinirda_durur() {
+        assert_eq!(uyarla(70, 15, 20, 0), (75, 17));
+        assert_eq!(uyarla(79, 23, 20, 0), (80, 24));
+        assert_eq!(uyarla(80, 24, 20, 0), (80, 24));
+    }
+
+    #[test]
+    fn orta_agda_sabit() {
+        assert_eq!(uyarla(60, 12, 120, 0), (60, 12));
+    }
 }

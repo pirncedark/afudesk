@@ -15,6 +15,8 @@ pub enum IzleyiciOlay {
     Kabul { izinler: Izinler, genislik: u32, yukseklik: u32 },
     /// Birleştirilmiş tam ekran (RGBA).
     Kare { genislik: u32, yukseklik: u32, rgba: Vec<u8> },
+    /// Saniyede bir: bağlantı gidiş-dönüş süresi ve ekrana gelen kare hızı.
+    Istatistik { rtt_ms: u32, fps: u32 },
     Koptu { sebep: String },
 }
 
@@ -76,16 +78,38 @@ async fn calis(
     let c2 = c.clone();
     let olay2 = olay.clone();
     let mut goruntu = tokio::spawn(async move {
-        let mut akis = c2.accept_uni().await?;
+        // Her kare ayrı akışta gelir; akışlar paralel okunur, birleştirici sırayı korur.
+        let (kare_tx, mut kare_rx) = mpsc::channel::<Kare>(8);
+        let c3 = c2.clone();
+        tokio::spawn(async move {
+            while let Ok(mut akis) = c3.accept_uni().await {
+                let tx = kare_tx.clone();
+                tokio::spawn(async move {
+                    if let Ok(Some(k)) = protokol::oku::<_, Kare>(&mut akis).await {
+                        let _ = tx.send(k).await;
+                    }
+                });
+            }
+        });
         let mut b = Birlestirici::default();
-        while let Some(k) = protokol::oku::<_, Kare>(&mut akis).await? {
+        let mut sayac = 0u32;
+        let mut son = std::time::Instant::now();
+        while let Some(k) = kare_rx.recv().await {
             b.uygula(&k)?;
+            sayac += 1;
             // Arayüz yavaşsa kare düşür (en yenisi önemli).
             let _ = olay2.try_send(IzleyiciOlay::Kare {
                 genislik: b.goruntu.genislik,
                 yukseklik: b.goruntu.yukseklik,
                 rgba: b.goruntu.rgba.clone(),
             });
+            if son.elapsed() >= Duration::from_secs(1) {
+                let fps = (sayac as f64 / son.elapsed().as_secs_f64()).round() as u32;
+                let rtt_ms = c2.rtt().as_millis().min(u32::MAX as u128) as u32;
+                let _ = olay2.send(IzleyiciOlay::Istatistik { rtt_ms, fps }).await;
+                sayac = 0;
+                son = std::time::Instant::now();
+            }
         }
         Ok::<_, anyhow::Error>(())
     });

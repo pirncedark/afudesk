@@ -29,6 +29,7 @@ class _OturumDurum extends State<OturumSayfasi> {
   String _karsiAd = '';
   String _mesaj = '';
   bool _kontrol = false;
+  int _rtt = -1, _fps = 0;
   ui.Image? _kare;
   final _odak = FocusNode();
   // Dokunmatik kip
@@ -95,6 +96,11 @@ class _OturumDurum extends State<OturumSayfasi> {
             eski?.dispose();
             widget.motor.kareCizildi();
           });
+        });
+      case 'istatistik':
+        setState(() {
+          _rtt = o.rttMs;
+          _fps = o.fps;
         });
       case 'koptu':
       case 'hata':
@@ -334,6 +340,19 @@ class _OturumDurum extends State<OturumSayfasi> {
         toolbarHeight: widget.motor.dokunmatik ? 44 : null,
         title: Text(_karsiAd.isEmpty ? 'Uzak ekran' : _karsiAd, overflow: TextOverflow.ellipsis),
         actions: [
+          if (_asama == _Asama.bagli && _rtt >= 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Tooltip(
+                message: 'Gecikme (gidiş-dönüş) ve saniyedeki kare',
+                child: Text('$_rtt ms · $_fps fps',
+                    key: const Key('oturum_istatistik'),
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                        color: _rtt < 80 ? Renk.basari : (_rtt < 200 ? Renk.soluk : Renk.tehlike))),
+              ),
+            ),
           if (_asama == _Asama.bagli)
             Padding(
               padding: const EdgeInsets.only(right: 8),
