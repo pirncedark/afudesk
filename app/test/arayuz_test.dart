@@ -1,0 +1,390 @@
+// UI/UX testleri: her ekran, her düğme, hata ve kenar durumları (sahte motorla).
+import 'package:afudesk/bilesenler/afu_uygulamalar.dart';
+import 'package:afudesk/klavye.dart';
+import 'package:afudesk/main.dart';
+import 'package:afudesk/motor.dart';
+import 'package:afudesk/sayfalar/baglanti_ver.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'sahte_motor.dart';
+
+const ornekKod = 'AFU2.abcdefghijklmnopqrstuvwxyz0123456789';
+
+Future<SahteMotor> ac(WidgetTester t, {Size boyut = const Size(1200, 800)}) async {
+  t.view.physicalSize = boyut;
+  t.view.devicePixelRatio = 1;
+  addTearDown(t.view.reset);
+  final m = SahteMotor();
+  await t.pumpWidget(AfuDeskUygulama(motor: m));
+  return m;
+}
+
+/// Animasyonlar (ilerleme göstergesi sonsuz döner) yüzünden pumpAndSettle yerine sabit adımlar.
+Future<void> gec(WidgetTester t) async {
+  for (var i = 0; i < 4; i++) {
+    await t.pump(const Duration(milliseconds: 250));
+  }
+}
+
+/// Gerçek görüntü çözme asenkron: gerçek zamanda bekle, her adımda kare pompala.
+Future<void> kareBekle(WidgetTester t, SahteMotor m) async {
+  await t.runAsync(() async {
+    m.izleyici.add(IzleyiciOlay('kare', genislik: 200, yukseklik: 100, rgba: gri(200, 100)));
+  });
+  for (var i = 0; i < 200 && !_kareVar(t); i++) {
+    await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+    await t.pump();
+  }
+  await t.pump();
+}
+
+bool _kareVar(WidgetTester t) => find.byKey(const Key('oturum_kare')).evaluate().isNotEmpty;
+
+Uint8List gri(int g, int y) => Uint8List.fromList(List.filled(g * y * 4, 128));
+
+void main() {
+  group('Ana ekran', () {
+    testWidgets('iki seçenek ve Afu uygulamaları görünür', (t) async {
+      await ac(t);
+      expect(find.text('AfuDesk'), findsOneWidget);
+      expect(find.text('Bağlantı ver'), findsOneWidget);
+      expect(find.text('Bağlan'), findsOneWidget);
+      for (final u in afuUygulamalari) {
+        expect(find.byKey(Key('afu_${u.ad}')), findsOneWidget);
+      }
+    });
+
+    testWidgets('dar ekranda (telefon) kartlar alt alta, taşma yok', (t) async {
+      await ac(t, boyut: const Size(380, 800));
+      expect(t.takeException(), isNull);
+      final ver = t.getTopLeft(find.byKey(const Key('secenek_ver')));
+      final bag = t.getTopLeft(find.byKey(const Key('secenek_baglan')));
+      expect(bag.dy, greaterThan(ver.dy), reason: 'dar ekranda alt alta olmalı');
+    });
+
+    testWidgets('geniş ekranda kartlar yan yana', (t) async {
+      await ac(t);
+      final ver = t.getTopLeft(find.byKey(const Key('secenek_ver')));
+      final bag = t.getTopLeft(find.byKey(const Key('secenek_baglan')));
+      expect(bag.dx, greaterThan(ver.dx));
+      expect(bag.dy, ver.dy);
+    });
+
+    testWidgets('Afu uygulama çipi doğru adresi açar', (t) async {
+      final acilan = <String>[];
+      await t.pumpWidget(MaterialApp(home: Scaffold(body: AfuUygulamalar(ac: acilan.add))));
+      await t.tap(find.byKey(const Key('afu_AfuDM')));
+      expect(acilan.single, contains('pirncedark/AfuDM'));
+    });
+  });
+
+  group('Bağlantı ver', () {
+    Future<SahteMotor> verAc(WidgetTester t) async {
+      final m = await ac(t);
+      await t.tap(find.byKey(const Key('secenek_ver')));
+      await gec(t);
+      return m;
+    }
+
+    testWidgets('hazırlanıyor → kod ve parola gösterilir', (t) async {
+      final m = await verAc(t);
+      expect(find.text('Bağlantı hazırlanıyor…'), findsOneWidget);
+      expect(m.cagrilar, contains('hostBaslat:TEST-PC'));
+      m.host.add(const HostOlay('hazir', kod: ornekKod, parola: '482913', erisim: 'İnternetten ulaşılabilir (1.2.3.4:47470)'));
+      await t.pump();
+      expect(find.text(ornekKod), findsOneWidget);
+      expect(find.text('482913'), findsOneWidget);
+      expect(find.textContaining('İnternetten'), findsOneWidget);
+      expect(find.textContaining('içinde yenilenecek'), findsOneWidget);
+    });
+
+    testWidgets('kopyala düğmeleri panoya yazar', (t) async {
+      final m = await verAc(t);
+      final pano = <String>[];
+      t.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (c) async {
+        if (c.method == 'Clipboard.setData') pano.add((c.arguments as Map)['text'] as String);
+        return null;
+      });
+      m.host.add(const HostOlay('hazir', kod: ornekKod, parola: '482913', erisim: 'x'));
+      await t.pump();
+      await t.tap(find.byKey(const Key('ver_kod_kopyala')));
+      await t.tap(find.byKey(const Key('ver_parola_kopyala')));
+      await t.pump();
+      expect(pano, [ornekKod, '482913']);
+      expect(find.text('Parola kopyalandı'), findsOneWidget);
+    });
+
+    testWidgets('gelen istek: kabul (kontrol izniyle)', (t) async {
+      final m = await verAc(t);
+      m.host.add(const HostOlay('hazir', kod: ornekKod, parola: '1', erisim: 'x'));
+      m.host.add(const HostOlay('istek', ad: 'Veli'));
+      await gec(t);
+      expect(find.text('Veli bağlanmak istiyor'), findsOneWidget);
+      await t.tap(find.byKey(const Key('istek_kabul')));
+      await gec(t);
+      expect(m.cagrilar, contains('kabul:true'));
+      m.host.add(const HostOlay('baglandi', ad: 'Veli', kontrol: true));
+      await t.pump();
+      expect(find.text('Veli ekranını görüyor'), findsOneWidget);
+      expect(find.text('Fare ve klavyeyi kullanabiliyor.'), findsOneWidget);
+      await t.tap(find.byKey(const Key('ver_kes')));
+      expect(m.cagrilar, contains('kes'));
+    });
+
+    testWidgets('gelen istek: kontrol izni kaldırılarak kabul', (t) async {
+      final m = await verAc(t);
+      m.host.add(const HostOlay('istek', ad: 'Veli'));
+      await gec(t);
+      await t.tap(find.byKey(const Key('istek_kontrol')));
+      await t.pump();
+      await t.tap(find.byKey(const Key('istek_kabul')));
+      await gec(t);
+      expect(m.cagrilar, contains('kabul:false'));
+    });
+
+    testWidgets('gelen istek: reddet', (t) async {
+      final m = await verAc(t);
+      m.host.add(const HostOlay('istek', ad: 'Veli'));
+      await gec(t);
+      await t.tap(find.byKey(const Key('istek_red')));
+      await gec(t);
+      expect(m.cagrilar, contains('red'));
+      expect(m.cagrilar.where((c) => c.startsWith('kabul')), isEmpty);
+    });
+
+    testWidgets('istek penceresi süre dolunca kendiliğinden reddeder', (t) async {
+      String? sonuc = 'bos';
+      await t.pumpWidget(MaterialApp(
+        home: Builder(
+          builder: (c) => TextButton(
+            onPressed: () async {
+              final r = await showDialog<bool?>(context: c, builder: (_) => const IstekPenceresi(ad: 'X', sure: Duration(seconds: 3)));
+              sonuc = r?.toString();
+            },
+            child: const Text('aç'),
+          ),
+        ),
+      ));
+      await t.tap(find.text('aç'));
+      await t.pump();
+      expect(find.textContaining('3 sn'), findsOneWidget);
+      await t.pump(const Duration(seconds: 1));
+      await t.pump(const Duration(seconds: 1));
+      await t.pump(const Duration(seconds: 1));
+      await gec(t);
+      expect(find.text('X bağlanmak istiyor'), findsNothing);
+      expect(sonuc, isNull);
+    });
+
+    testWidgets('bağlantı kopunca mesaj gösterilir ve yeni kod beklenir', (t) async {
+      final m = await verAc(t);
+      m.host.add(const HostOlay('baglandi', ad: 'Veli'));
+      await t.pump();
+      m.host.add(const HostOlay('koptu', metin: 'İzleyici bağlantıyı kapattı.'));
+      await t.pump();
+      expect(find.text('İzleyici bağlantıyı kapattı.'), findsOneWidget);
+      expect(find.text('Bağlantı hazırlanıyor…'), findsOneWidget);
+    });
+
+    testWidgets('hata durumunda "Tekrar dene" yeniden başlatır', (t) async {
+      final m = await verAc(t);
+      m.host.addError(Exception('Ağ bağlantısı bulunamadı.'));
+      await t.pump();
+      expect(find.text('Ağ bağlantısı bulunamadı.'), findsOneWidget);
+      await t.tap(find.text('Tekrar dene'));
+      await t.pump();
+      expect(m.cagrilar.where((c) => c.startsWith('hostBaslat')).length, 2);
+    });
+
+    testWidgets('sayfadan çıkınca host durdurulur', (t) async {
+      final m = await verAc(t);
+      await t.pageBack();
+      await gec(t);
+      expect(m.cagrilar, contains('durdur'));
+    });
+  });
+
+  group('Bağlan', () {
+    Future<SahteMotor> baglanAc(WidgetTester t) async {
+      final m = await ac(t);
+      await t.tap(find.byKey(const Key('secenek_baglan')));
+      await gec(t);
+      return m;
+    }
+
+    testWidgets('boş alanlar uyarı verir, bağlanmaz', (t) async {
+      final m = await baglanAc(t);
+      await t.tap(find.byKey(const Key('baglan_dugme')));
+      await t.pump();
+      expect(find.text('Bağlantı kodunu yapıştır.'), findsOneWidget);
+      expect(find.text('Parolayı yaz.'), findsOneWidget);
+      expect(m.cagrilar, isNot(contains('baglan')));
+    });
+
+    testWidgets('AfuDesk kodu olmayan metin reddedilir', (t) async {
+      final m = await baglanAc(t);
+      await t.enterText(find.byKey(const Key('baglan_kod')), 'merhaba dünya');
+      await t.enterText(find.byKey(const Key('baglan_parola')), '123456');
+      await t.tap(find.byKey(const Key('baglan_dugme')));
+      await t.pump();
+      expect(find.textContaining('AfuDesk kodu değil'), findsOneWidget);
+      expect(m.cagrilar, isNot(contains('baglan')));
+    });
+
+    testWidgets('yapıştır düğmesi panodan alır; boşluklar temizlenir', (t) async {
+      final m = await baglanAc(t);
+      t.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (c) async {
+        if (c.method == 'Clipboard.getData') return {'text': '  AFU2.abc\ndef  '};
+        return null;
+      });
+      await t.tap(find.byKey(const Key('baglan_yapistir')));
+      await t.pump();
+      await t.enterText(find.byKey(const Key('baglan_parola')), ' 123456 ');
+      await t.tap(find.byKey(const Key('baglan_dugme')));
+      await gec(t);
+      expect(m.sonKod, 'AFU2.abcdef');
+      expect(m.sonParola, '123456');
+    });
+
+    testWidgets('yanlış parola hatası anlaşılır biçimde gösterilir', (t) async {
+      final m = await baglanAc(t);
+      m.baglanHatasi = Exception('Parola yanlış.');
+      await t.enterText(find.byKey(const Key('baglan_kod')), ornekKod);
+      await t.enterText(find.byKey(const Key('baglan_parola')), '000000');
+      await t.tap(find.byKey(const Key('baglan_dugme')));
+      await gec(t);
+      expect(find.text('Parola yanlış.'), findsOneWidget);
+      expect(find.text('Geri dön'), findsOneWidget);
+    });
+  });
+
+  group('Oturum', () {
+    Future<SahteMotor> oturumAc(WidgetTester t) async {
+      final m = await ac(t);
+      await t.tap(find.byKey(const Key('secenek_baglan')));
+      await gec(t);
+      await t.enterText(find.byKey(const Key('baglan_kod')), ornekKod);
+      await t.enterText(find.byKey(const Key('baglan_parola')), '123456');
+      await t.tap(find.byKey(const Key('baglan_dugme')));
+      await gec(t);
+      return m;
+    }
+
+    testWidgets('bağlanıyor → onay bekleniyor → görüntü', (t) async {
+      final m = await oturumAc(t);
+      expect(find.byKey(const Key('oturum_baglaniyor')), findsOneWidget);
+      m.izleyici.add(IzleyiciOlay('bekliyor', ad: 'Ali PC'));
+      await t.pump();
+      expect(find.textContaining('Ali PC onayı bekleniyor'), findsOneWidget);
+      m.izleyici.add(IzleyiciOlay('kabul', kontrol: true, genislik: 200, yukseklik: 100));
+      await t.pump();
+      expect(find.text('Kontrol açık'), findsOneWidget);
+      await kareBekle(t, m);
+      expect(find.byKey(const Key('oturum_kare')), findsOneWidget);
+      expect(m.kareOnayi, 1, reason: 'kare çizilince çekirdeğe haber verilmeli');
+    });
+
+    Future<Rect> goruntuAlani(WidgetTester t, SahteMotor m, {bool kontrol = true}) async {
+      m.izleyici.add(IzleyiciOlay('kabul', kontrol: kontrol, genislik: 200, yukseklik: 100));
+      await t.pump();
+      await kareBekle(t, m);
+      return t.getRect(find.byKey(const Key('oturum_ekran')));
+    }
+
+    testWidgets('fare konumu en-boy oranına göre normalize edilir, siyah bant dışı yok sayılır', (t) async {
+      final m = await oturumAc(t);
+      final alan = await goruntuAlani(t, m);
+      // 2:1 görüntü, alan daha "uzun" → üst/alt siyah bant. Merkez = (0.5, 0.5).
+      final fare = await t.createGesture(kind: PointerDeviceKind.mouse);
+      await fare.addPointer(location: alan.center);
+      await fare.moveTo(alan.center + const Offset(1, 0));
+      await t.pump();
+      final k = m.girdiler.lastWhere((g) => g.tur == 'konum');
+      expect(k.x, closeTo(0.5, 0.01));
+      expect(k.y, closeTo(0.5, 0.01));
+      final once = m.girdiler.length;
+      await fare.moveTo(Offset(alan.center.dx, alan.top + 2)); // üst siyah bant
+      await t.pump();
+      expect(m.girdiler.skip(once).where((g) => g.tur == 'konum'), isEmpty);
+      await fare.removePointer();
+    });
+
+    testWidgets('sol ve sağ tık basılı/bırakıldı olarak gider', (t) async {
+      final m = await oturumAc(t);
+      final alan = await goruntuAlani(t, m);
+      await t.tapAt(alan.center, buttons: kPrimaryMouseButton, kind: PointerDeviceKind.mouse);
+      await t.tapAt(alan.center, buttons: kSecondaryMouseButton, kind: PointerDeviceKind.mouse);
+      final f = m.girdiler.where((g) => g.tur == 'fare').map((g) => '${g.ad}:${g.basili}').toList();
+      expect(f, ['sol:true', 'sol:false', 'sag:true', 'sag:false']);
+    });
+
+    testWidgets('tekerlek kaydırma gider', (t) async {
+      final m = await oturumAc(t);
+      final alan = await goruntuAlani(t, m);
+      final p = TestPointer(7, PointerDeviceKind.mouse);
+      await t.sendEventToBinding(p.hover(alan.center));
+      await t.sendEventToBinding(p.scroll(const Offset(0, 120)));
+      await t.sendEventToBinding(p.scroll(const Offset(0, -120)));
+      await t.pump();
+      expect(m.girdiler.where((g) => g.tur == 'kaydir').map((g) => g.dy).toList(), [1, -1]);
+    });
+
+    testWidgets('klavye: tuş basma/bırakma ve Türkçe harf', (t) async {
+      final m = await oturumAc(t);
+      await goruntuAlani(t, m);
+      await t.sendKeyEvent(LogicalKeyboardKey.enter);
+      await t.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await t.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await t.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      final tuslar = m.girdiler.where((g) => g.tur == 'tus').map((g) => '${g.ad}:${g.basili}').toList();
+      expect(tuslar, ['Enter:true', 'Enter:false', 'Ctrl:true', 'c:true', 'c:false', 'Ctrl:false']);
+    });
+
+    testWidgets('yalnız izleme izninde hiçbir girdi gönderilmez', (t) async {
+      final m = await oturumAc(t);
+      final alan = await goruntuAlani(t, m, kontrol: false);
+      expect(find.text('Yalnız izleme'), findsOneWidget);
+      await t.tapAt(alan.center, kind: PointerDeviceKind.mouse);
+      await t.sendKeyEvent(LogicalKeyboardKey.enter);
+      expect(m.girdiler, isEmpty);
+    });
+
+    testWidgets('karşı taraf reddederse sebep gösterilir', (t) async {
+      final m = await oturumAc(t);
+      m.izleyici.add(IzleyiciOlay('koptu', metin: 'Karşı taraf bağlantıyı reddetti.'));
+      await t.pump();
+      expect(find.text('Karşı taraf bağlantıyı reddetti.'), findsOneWidget);
+      await t.tap(find.text('Geri dön'));
+      await gec(t);
+      expect(m.cagrilar, contains('izleyiciKapat'));
+    });
+
+    testWidgets('Kes düğmesi oturumu kapatır', (t) async {
+      final m = await oturumAc(t);
+      m.izleyici.add(IzleyiciOlay('kabul', genislik: 10, yukseklik: 10));
+      await t.pump();
+      await t.tap(find.byKey(const Key('oturum_kes')));
+      await gec(t);
+      expect(m.cagrilar, contains('izleyiciKapat'));
+      expect(find.byKey(const Key('baglan_dugme')), findsOneWidget);
+    });
+  });
+
+  group('Yardımcılar', () {
+    test('tuş adları', () {
+      expect(tusAdi(LogicalKeyboardKey.enter), 'Enter');
+      expect(tusAdi(LogicalKeyboardKey.arrowLeft), 'ArrowLeft');
+      expect(tusAdi(LogicalKeyboardKey.keyA), 'a');
+      expect(tusAdi(LogicalKeyboardKey.digit5), '5');
+      expect(tusAdi(LogicalKeyboardKey.mediaPlay), isNull);
+    });
+
+    test('hata metni temizlenir', () {
+      expect(hataMetni(Exception('Parola yanlış.')), 'Parola yanlış.');
+      expect(hataMetni('AnyhowException(Karşı tarafa ulaşılamadı.\n\nCaused by: x)'), 'Karşı tarafa ulaşılamadı.');
+    });
+  });
+}

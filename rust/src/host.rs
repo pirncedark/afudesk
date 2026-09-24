@@ -52,6 +52,10 @@ impl Host {
     pub async fn komut(&self, k: HostKomut) {
         let _ = self.komut.send(k).await;
     }
+    /// Olay alıcısından bağımsız komut göndermek için (arayüz köprüsü).
+    pub fn komut_gonderici(&self) -> mpsc::Sender<HostKomut> {
+        self.komut.clone()
+    }
     pub fn durdur(&mut self) {
         if let Some(d) = self.durdur.take() {
             let _ = d.send(());
