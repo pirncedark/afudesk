@@ -1,0 +1,30 @@
+GOREV: AfuDesk icin GitHub/crates.io/pub.dev ARASTIRMASI (salt arastirma, KOD YAZMA)
+
+BAGLAM: AfuDesk = sifirdan yazilan uzak masaustu. Dil: Rust cekirdek + Flutter arayuz.
+Merkezi sunucu YOK: baglanti veren cihaz kendisi dinler (QUIC), UPnP ile modemde port acar,
+LAN/IPv6/genel IP adreslerini sifreli tek bir koda koyar; karsi taraf kodu girip dogrudan baglanir.
+Hedef platform: once Windows 10/11 x64 (host + viewer), sonra Android (viewer).
+RustDesk kodu KULLANILMAYACAK (lisans + "kendi sistemimiz" karari); yalniz fikir icin incelenebilir.
+
+ARASTIR (her madde icin: repo/crate linki, son surum, son commit tarihi, lisans, KISA ornek kod):
+1. Flutter + Rust ile yazilmis acik kaynak uzak masaustu / ekran paylasim projeleri (RustDesk DISINDA).
+2. Rust'ta uretilen RGBA/BGRA karelerini Flutter Windows'ta VERIMLI gostermek:
+   irondash_texture, texture_rgba_renderer (pub.dev), flutter_rust_bridge ile Uint8List + RawImage,
+   ui.decodeImageFromPixels. Hangisi 1080p@30fps icin uygun? Kurulum adimlari.
+3. flutter_rust_bridge v2: Windows desktop kurulumu (cargokit), StreamSink ile Rust->Dart kare akisi,
+   `flutter_rust_bridge_codegen create/integrate` komutlari, guncel surum.
+4. Rust Windows ekran yakalama: xcap, windows-capture, scap, win_desktop_duplication — fps, API ornegi.
+5. Rust H.264/VP8 kodlama-cozme: openh264 crate (Cisco binary lisansi dahil), alternatifler.
+   Basit baslangic icin JPEG + degisen doseme (dirty tile) yaklasimi ornegi var mi?
+6. quinn 0.11 + rustls: kendinden imzali sertifika (rcgen) ve SERTIFIKA PARMAK IZI SABITLEME
+   (custom ServerCertVerifier) ornegi — calisir kod parcasi.
+7. igd-next 0.17: UPnP ile UDP port acma (add_port / add_any_port), dis IP alma, kapatma ornegi.
+8. enigo 0.6: fare hareket/tik/kaydirma, klavye tus basma API ornegi; Windows'ta UAC/izin notlari.
+9. Yerel IP/IPv6 adresleri listeleme: local-ip-address / if-addrs.
+
+SINIR: Hicbir dosya DEGISTIRME, hicbir sey KURMA, git komutu calistirma. Yalniz asagidaki rapor dosyasini yaz.
+ONAY BEKLEME — ETKILESIMSIZ CALISIYORSUN: Sana cevap verecek kimse YOK. Soru sorma, dogrudan arastir ve yaz.
+UYDURMA YASAK: dogrulamadigin surum/API'yi yazma; emin degilsen "dogrulanmadi" de.
+
+BITINCE: Raporu docs/arastirma.md dosyasina Turkce yaz. Her madde sonunda "ONERI:" satiri olsun.
+En sonda "SECILEN YIGIN" basligi ile tek tablo: katman | crate/paket | surum | neden.

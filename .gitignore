@@ -1,0 +1,6 @@
+/rust/target/
+/app/build/
+/app/.dart_tool/
+/app/.flutter-plugins*
+/app/windows/flutter/ephemeral/
+*.log
