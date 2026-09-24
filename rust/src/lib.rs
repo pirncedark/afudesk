@@ -6,6 +6,7 @@ pub mod goruntu;
 pub mod host;
 pub mod izleyici;
 pub mod kod;
+pub mod pano;
 pub mod platform;
 pub mod protokol;
 

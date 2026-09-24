@@ -102,6 +102,13 @@ class _OturumDurum extends State<OturumSayfasi> {
           _rtt = o.rttMs;
           _fps = o.fps;
         });
+      case 'pano':
+        // Masaüstünde çekirdek panoya zaten yazdı; dokunmatik cihazda (Android) çekirdeğin
+        // pano erişimi yok, metni arayüz yazar.
+        if (widget.motor.dokunmatik) Clipboard.setData(ClipboardData(text: o.metin));
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(content: Text('Pano güncellendi'), duration: Duration(seconds: 1)));
       case 'koptu':
       case 'hata':
         _bitir(o.metin);

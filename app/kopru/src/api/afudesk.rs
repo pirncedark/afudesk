@@ -40,9 +40,10 @@ pub struct HostOlayi {
     pub ad: String,
     pub metin: String,
     pub kontrol: bool,
+    pub pano: bool,
 }
 
-/// İzleyici olayı. `tur`: bekliyor | kabul | kare | istatistik | koptu | hata.
+/// İzleyici olayı. `tur`: bekliyor | kabul | kare | istatistik | koptu | hata | pano.
 #[derive(Debug, Clone, Default)]
 pub struct IzleyiciOlayi {
     pub tur: String,
@@ -51,6 +52,7 @@ pub struct IzleyiciOlayi {
     pub ad: String,
     pub metin: String,
     pub kontrol: bool,
+    pub pano: bool,
     pub genislik: u32,
     pub yukseklik: u32,
     pub rgba: Vec<u8>,
@@ -77,7 +79,7 @@ fn host_dto(o: HostOlay) -> HostOlayi {
         }
         HostOlay::Istek { ad } => HostOlayi { tur: "istek".into(), ad, ..Default::default() },
         HostOlay::Baglandi { ad, izinler } => {
-            HostOlayi { tur: "baglandi".into(), ad, kontrol: izinler.kontrol, ..Default::default() }
+            HostOlayi { tur: "baglandi".into(), ad, kontrol: izinler.kontrol, pano: izinler.pano, ..Default::default() }
         }
         HostOlay::Koptu { sebep } => HostOlayi { tur: "koptu".into(), metin: sebep, ..Default::default() },
         HostOlay::Hata(m) => HostOlayi { tur: "hata".into(), metin: m, ..Default::default() },
@@ -139,8 +141,8 @@ fn host_komut(k: HostKomut) {
     }
 }
 
-pub fn host_kabul(kontrol: bool) {
-    host_komut(HostKomut::Kabul(Izinler { kontrol, pano: false }));
+pub fn host_kabul(kontrol: bool, pano: bool) {
+    host_komut(HostKomut::Kabul(Izinler { kontrol, pano }));
 }
 
 pub fn host_red() {
@@ -163,7 +165,14 @@ pub fn host_durdur() {
 /// bu yüzden hata olay olarak yazılır.
 pub fn izleyici_baglan(kod: String, parola: String, ad: String, olaylar: StreamSink<IzleyiciOlayi>) {
     izleyici_kapat();
-    let mut iz = match rt().block_on(izleyici::baglan(&kod, &parola, &ad)) {
+    // Masaüstünde izleyici panosu arboard; Android'de yok (gelen metni Dart panoya yazar).
+    #[cfg(not(target_os = "android"))]
+    let pano = afudesk_core::pano::ArboardPano::new()
+        .ok()
+        .map(|p| Box::new(p) as Box<dyn afudesk_core::pano::Pano>);
+    #[cfg(target_os = "android")]
+    let pano: Option<Box<dyn afudesk_core::pano::Pano>> = None;
+    let mut iz = match rt().block_on(izleyici::baglan_panolu(&kod, &parola, &ad, pano)) {
         Ok(i) => i,
         Err(e) => {
             let _ = olaylar.add(IzleyiciOlayi { tur: "hata".into(), metin: e.to_string(), ..Default::default() });
@@ -179,7 +188,7 @@ pub fn izleyici_baglan(kod: String, parola: String, ad: String, olaylar: StreamS
             let dto = match o {
                 IzleyiciOlay::OnayBekleniyor { karsi_ad } => IzleyiciOlayi { tur: "bekliyor".into(), ad: karsi_ad, ..Default::default() },
                 IzleyiciOlay::Kabul { izinler, genislik, yukseklik } => {
-                    IzleyiciOlayi { tur: "kabul".into(), kontrol: izinler.kontrol, genislik, yukseklik, ..Default::default() }
+                    IzleyiciOlayi { tur: "kabul".into(), kontrol: izinler.kontrol, pano: izinler.pano, genislik, yukseklik, ..Default::default() }
                 }
                 IzleyiciOlay::Kare { genislik, yukseklik, rgba } => {
                     // Dart önceki kareyi çizmediyse bunu atla; sıradaki daha yeni olacak.
@@ -192,6 +201,7 @@ pub fn izleyici_baglan(kod: String, parola: String, ad: String, olaylar: StreamS
                     IzleyiciOlayi { tur: "istatistik".into(), rtt_ms, fps, ..Default::default() }
                 }
                 IzleyiciOlay::Koptu { sebep } => IzleyiciOlayi { tur: "koptu".into(), metin: sebep, ..Default::default() },
+                IzleyiciOlay::Pano(metin) => IzleyiciOlayi { tur: "pano".into(), metin, ..Default::default() },
             };
             if olaylar.add(dto).is_err() {
                 break;

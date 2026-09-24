@@ -2,6 +2,7 @@
 use crate::{
     ag, goruntu::Birlestirici,
     kod,
+    pano::{self, Esitleyici, Pano, PANO_ARALIGI},
     protokol::{self, Girdi, Izinler, Kare, Kontrol, SURUM},
 };
 use anyhow::Result;
@@ -18,6 +19,8 @@ pub enum IzleyiciOlay {
     /// Saniyede bir: bağlantı gidiş-dönüş süresi ve ekrana gelen kare hızı.
     Istatistik { rtt_ms: u32, fps: u32 },
     Koptu { sebep: String },
+    /// Karşı taraftan pano metni geldi (izleyicinin panosu varsa oraya da yazıldı).
+    Pano(String),
 }
 
 pub struct Izleyici {
@@ -41,16 +44,22 @@ impl Izleyici {
 }
 
 pub async fn baglan(kod_metni: &str, parola: &str, ad: &str) -> Result<Izleyici> {
+    baglan_panolu(kod_metni, parola, ad, None).await
+}
+
+/// `pano`: izleyicinin kendi panosu. `None` (ör. Android) ise yalnız host → izleyici yönü
+/// çalışır; gelen metin `IzleyiciOlay::Pano` ile arayüze bildirilir.
+pub async fn baglan_panolu(kod_metni: &str, parola: &str, ad: &str, pano: Option<Box<dyn Pano>>) -> Result<Izleyici> {
     let d = kod::coz(kod_metni, parola, kod::simdi())?;
     let c = ag::baglan(&d.adresler, &d.parmak_izi, Duration::from_secs(6)).await?;
-    let (mut w, mut r) = c.open_bi().await?;
+    let (mut w, r) = c.open_bi().await?;
     protokol::yaz(&mut w, &Kontrol::Merhaba { surum: SURUM, bilet: d.bilet.clone(), ad: ad.to_owned() }).await?;
     let (olay_tx, olaylar) = mpsc::channel(4);
     let (girdi, mut girdi_rx) = mpsc::channel::<Girdi>(256);
     let _ = olay_tx.send(IzleyiciOlay::OnayBekleniyor { karsi_ad: d.ad.clone() }).await;
     let c2 = c.clone();
     tokio::spawn(async move {
-        let sebep = calis(&c2, &mut w, &mut r, &olay_tx, &mut girdi_rx).await;
+        let sebep = calis(&c2, &mut w, r, &olay_tx, &mut girdi_rx, pano).await;
         c2.close(0u32.into(), b"bitti");
         let _ = olay_tx.send(IzleyiciOlay::Koptu { sebep }).await;
     });
@@ -60,12 +69,13 @@ pub async fn baglan(kod_metni: &str, parola: &str, ad: &str) -> Result<Izleyici>
 async fn calis(
     c: &quinn::Connection,
     w: &mut quinn::SendStream,
-    r: &mut quinn::RecvStream,
+    mut r: quinn::RecvStream,
     olay: &mpsc::Sender<IzleyiciOlay>,
     girdi: &mut mpsc::Receiver<Girdi>,
+    pano: Option<Box<dyn Pano>>,
 ) -> String {
     // Onay: karşı taraf 60 sn içinde karar verir.
-    let ilk = tokio::time::timeout(Duration::from_secs(75), protokol::oku::<_, Kontrol>(r)).await;
+    let ilk = tokio::time::timeout(Duration::from_secs(75), protokol::oku::<_, Kontrol>(&mut r)).await;
     let izinler = match ilk {
         Ok(Ok(Some(Kontrol::Kabul { izinler, genislik, yukseklik }))) => {
             let _ = olay.send(IzleyiciOlay::Kabul { izinler: izinler.clone(), genislik, yukseklik }).await;
@@ -113,9 +123,42 @@ async fn calis(
         }
         Ok::<_, anyhow::Error>(())
     });
+    // Kontrol akışı ayrı görevde okunur: `oku` iptale dayanıklı değil, select! içindeki
+    // girdi/zamanlayıcı dalları yarım kalan bir okumayı kesip akışı bozmamalı.
+    let (gelen_tx, mut gelen_rx) = mpsc::channel::<Kontrol>(16);
+    let okuyucu = tokio::spawn(async move {
+        while let Ok(Some(m)) = protokol::oku::<_, Kontrol>(&mut r).await {
+            if gelen_tx.send(m).await.is_err() {
+                break;
+            }
+        }
+    });
+    let sonuc = dongu(c, w, olay, girdi, &izinler, pano, &mut goruntu, &mut gelen_rx).await;
+    okuyucu.abort();
+    sonuc
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn dongu(
+    c: &quinn::Connection,
+    w: &mut quinn::SendStream,
+    olay: &mpsc::Sender<IzleyiciOlay>,
+    girdi: &mut mpsc::Receiver<Girdi>,
+    izinler: &Izinler,
+    pano: Option<Box<dyn Pano>>,
+    goruntu: &mut tokio::task::JoinHandle<Result<()>>,
+    gelen: &mut mpsc::Receiver<Kontrol>,
+) -> String {
+    // Pano yalnız izin verildiyse; izleyicinin panosu yoksa yalnız gelen metin bildirilir.
+    let mut pano = match pano {
+        Some(p) if izinler.pano => Some(tokio::task::block_in_place(|| Esitleyici::new(p))),
+        _ => None,
+    };
+    let mut pano_saat = tokio::time::interval(PANO_ARALIGI);
+    pano_saat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         tokio::select! {
-            s = &mut goruntu => {
+            s = &mut *goruntu => {
                 return match s { Ok(Err(e)) => format!("Görüntü akışı kesildi: {e}"), _ => "Bağlantı kapandı.".into() };
             }
             g = girdi.recv() => match g {
@@ -125,11 +168,24 @@ async fn calis(
                 }
                 None => return "Bağlantı kapandı.".into(),
             },
-            m = protokol::oku::<_, Kontrol>(r) => match m {
-                Ok(Some(Kontrol::Kapat(s))) => return s,
-                Ok(Some(_)) => {}
-                _ => return "Bağlantı koptu.".into(),
+            m = gelen.recv() => match m {
+                Some(Kontrol::Kapat(s)) => return s,
+                Some(Kontrol::Pano(metin)) => {
+                    if !izinler.pano || metin.is_empty() || !pano::sinir_icinde(&metin) { continue; }
+                    if let Some(p) = pano.as_mut() {
+                        let _ = tokio::task::block_in_place(|| p.gelen(&metin));
+                    }
+                    let _ = olay.send(IzleyiciOlay::Pano(metin)).await;
+                }
+                Some(_) => {}
+                None => return "Bağlantı koptu.".into(),
             },
+            _ = pano_saat.tick(), if pano.is_some() => {
+                let yeni = pano.as_mut().and_then(|p| tokio::task::block_in_place(|| p.yokla()));
+                if let Some(metin) = yeni {
+                    if protokol::yaz(w, &Kontrol::Pano(metin)).await.is_err() { return "Bağlantı koptu.".into(); }
+                }
+            }
             _ = c.closed() => return "Bağlantı kapandı.".into(),
         }
     }

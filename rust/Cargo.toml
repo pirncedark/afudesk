@@ -32,6 +32,7 @@ rayon = "1"
 [target.'cfg(not(target_os = "android"))'.dependencies]
 xcap = "0.9"
 enigo = "0.6"
+arboard = { version = "3", default-features = false }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

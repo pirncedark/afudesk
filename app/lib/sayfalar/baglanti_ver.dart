@@ -28,6 +28,7 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
   String _hata = '';
   String _bagliAd = '';
   bool _bagliKontrol = false;
+  bool _bagliPano = false;
   DateTime _bitis = DateTime.now();
   Timer? _sayac;
   bool _istekAcik = false;
@@ -74,6 +75,7 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
           _asama = _Asama.bagli;
           _bagliAd = o.ad;
           _bagliKontrol = o.kontrol;
+          _bagliPano = o.pano;
         });
       case 'koptu':
         _mesaj(o.metin);
@@ -90,7 +92,7 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
   Future<void> _istekGoster(String ad) async {
     if (_istekAcik) return;
     _istekAcik = true;
-    final sonuc = await showDialog<bool?>(
+    final sonuc = await showDialog<IstekKarari?>(
       context: context,
       barrierDismissible: false,
       builder: (_) => IstekPenceresi(ad: ad),
@@ -99,7 +101,7 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
     if (sonuc == null) {
       await widget.motor.hostRed();
     } else {
-      await widget.motor.hostKabul(kontrol: sonuc);
+      await widget.motor.hostKabul(kontrol: sonuc.kontrol, pano: sonuc.pano);
     }
   }
 
@@ -168,6 +170,11 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
               const SizedBox(height: 6),
               Text(_bagliKontrol ? 'Fare ve klavyeyi kullanabiliyor.' : 'Yalnız izliyor; kontrol edemez.',
                   style: const TextStyle(color: Renk.soluk)),
+              if (_bagliPano)
+                const Padding(
+                  padding: EdgeInsets.only(top: 4),
+                  child: Text('Pano paylaşılıyor.', key: Key('ver_pano'), style: TextStyle(color: Renk.soluk)),
+                ),
               const SizedBox(height: 18),
               FilledButton.icon(
                 key: const Key('ver_kes'),
@@ -253,7 +260,14 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
   }
 }
 
-/// Gelen bağlantı isteği. Sonuç: null = reddet, true/false = kabul (+kontrol izni).
+/// Kabul kararı: verilen izinler.
+class IstekKarari {
+  final bool kontrol;
+  final bool pano;
+  const IstekKarari({required this.kontrol, required this.pano});
+}
+
+/// Gelen bağlantı isteği. Sonuç: null = reddet, [IstekKarari] = kabul (+izinler).
 class IstekPenceresi extends StatefulWidget {
   final String ad;
   final Duration sure;
@@ -265,6 +279,8 @@ class IstekPenceresi extends StatefulWidget {
 
 class _IstekPenceresiDurum extends State<IstekPenceresi> {
   bool _kontrol = true;
+  /// Gizlilik: pano paylaşımı varsayılan KAPALI.
+  bool _pano = false;
   late int _kalan = widget.sure.inSeconds;
   Timer? _t;
 
@@ -302,12 +318,21 @@ class _IstekPenceresiDurum extends State<IstekPenceresi> {
           onChanged: (v) => setState(() => _kontrol = v ?? false),
           title: const Text('Fare ve klavye kontrolüne izin ver'),
         ),
+        CheckboxListTile(
+          key: const Key('istek_pano'),
+          contentPadding: EdgeInsets.zero,
+          value: _pano,
+          onChanged: (v) => setState(() => _pano = v ?? false),
+          title: const Text('Pano paylaşımı'),
+          subtitle: const Text('Kopyalanan metinler iki yönde paylaşılır.', style: TextStyle(fontSize: 12)),
+        ),
         Text('$_kalan sn içinde yanıt vermezsen reddedilir.', style: const TextStyle(color: Renk.soluk, fontSize: 12)),
       ]),
       actions: [
         TextButton(key: const Key('istek_red'), onPressed: () => Navigator.pop(context, null), child: const Text('Reddet')),
         FilledButton(
-            key: const Key('istek_kabul'), onPressed: () => Navigator.pop(context, _kontrol), child: const Text('Kabul et')),
+            key: const Key('istek_kabul'), onPressed: () => Navigator.pop(context, IstekKarari(kontrol: _kontrol, pano: _pano)),
+            child: const Text('Kabul et')),
       ],
     );
   }

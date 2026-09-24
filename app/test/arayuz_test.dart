@@ -127,6 +127,7 @@ void main() {
       await t.tap(find.byKey(const Key('istek_kabul')));
       await gec(t);
       expect(m.cagrilar, contains('kabul:true'));
+      expect(m.sonPano, isFalse, reason: 'pano kutusu işaretlenmeden izin verilmez');
       m.host.add(const HostOlay('baglandi', ad: 'Veli', kontrol: true));
       await t.pump();
       expect(find.text('Veli ekranını görüyor'), findsOneWidget);
@@ -144,6 +145,27 @@ void main() {
       await t.tap(find.byKey(const Key('istek_kabul')));
       await gec(t);
       expect(m.cagrilar, contains('kabul:false'));
+      expect(m.sonPano, isFalse);
+    });
+
+    testWidgets('pano izin kutusu varsayılan kapalı', (t) async {
+      final m = await verAc(t);
+      m.host.add(const HostOlay('istek', ad: 'Veli'));
+      await gec(t);
+      final kutu = find.byKey(const Key('istek_pano'));
+      expect(kutu, findsOneWidget);
+      expect(find.text('Pano paylaşımı'), findsOneWidget);
+      expect(t.widget<CheckboxListTile>(kutu).value, isFalse, reason: 'gizlilik: varsayılan kapalı');
+      await t.tap(kutu);
+      await t.pump();
+      expect(t.widget<CheckboxListTile>(kutu).value, isTrue);
+      await t.tap(find.byKey(const Key('istek_kabul')));
+      await gec(t);
+      expect(m.cagrilar, contains('kabul:true'));
+      expect(m.sonPano, isTrue);
+      m.host.add(const HostOlay('baglandi', ad: 'Veli', kontrol: true, pano: true));
+      await t.pump();
+      expect(find.byKey(const Key('ver_pano')), findsOneWidget);
     });
 
     testWidgets('gelen istek: reddet', (t) async {
@@ -162,7 +184,7 @@ void main() {
         home: Builder(
           builder: (c) => TextButton(
             onPressed: () async {
-              final r = await showDialog<bool?>(context: c, builder: (_) => const IstekPenceresi(ad: 'X', sure: Duration(seconds: 3)));
+              final r = await showDialog<IstekKarari?>(context: c, builder: (_) => const IstekPenceresi(ad: 'X', sure: Duration(seconds: 3)));
               sonuc = r?.toString();
             },
             child: const Text('aç'),
@@ -365,6 +387,14 @@ void main() {
       m.izleyici.add(IzleyiciOlay('istatistik', rttMs: 350, fps: 8));
       await t.pump();
       expect(t.widget<Text>(find.byKey(const Key('oturum_istatistik'))).style!.color, Renk.tehlike);
+    });
+
+    testWidgets('karşıdan pano gelince kısa bildirim gösterilir', (t) async {
+      final m = await oturumAc(t);
+      await goruntuAlani(t, m);
+      m.izleyici.add(IzleyiciOlay('pano', metin: 'kopyalanan'));
+      await t.pump();
+      expect(find.text('Pano güncellendi'), findsOneWidget);
     });
 
     testWidgets('karşı taraf reddederse sebep gösterilir', (t) async {
