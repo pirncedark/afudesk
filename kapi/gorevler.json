@@ -254,13 +254,37 @@
           "kanit": [
             [
               "rust/src/pano.rs",
-              "fn "
+              "pub trait Pano"
+            ],
+            [
+              "app/lib/sayfalar/baglanti_ver.dart",
+              "(?i)pano paylaşımı"
             ]
           ],
           "testler": [
             [
               "cargo",
-              "pano"
+              "pano::testler::degisiklik_algilanir"
+            ],
+            [
+              "cargo",
+              "pano::testler::buyuk_metin_reddedilir"
+            ],
+            [
+              "cargo",
+              "uctan_uca::pano_iki_yonlu_gider"
+            ],
+            [
+              "cargo",
+              "uctan_uca::pano_izni_yoksa_gitmez"
+            ],
+            [
+              "cargo",
+              "uctan_uca::pano_dongu_yapmaz"
+            ],
+            [
+              "flutter",
+              "pano izin kutusu varsayılan kapalı"
             ]
           ]
         },
@@ -269,13 +293,45 @@
           "kanit": [
             [
               "rust/src/dosya.rs",
-              "fn "
+              "fn guvenli_ad"
+            ],
+            [
+              "app/lib/sayfalar/oturum.dart",
+              "(?i)dosya gönder"
             ]
           ],
           "testler": [
             [
               "cargo",
-              "dosya"
+              "dosya::testler::guvenli_ad_temizler"
+            ],
+            [
+              "cargo",
+              "dosya::testler::cakismada_numara_eklenir"
+            ],
+            [
+              "cargo",
+              "uctan_uca::dosya_aktarilir"
+            ],
+            [
+              "cargo",
+              "uctan_uca::dosya_kaldigi_yerden_devam"
+            ],
+            [
+              "cargo",
+              "uctan_uca::dosya_izni_yoksa_reddedilir"
+            ],
+            [
+              "cargo",
+              "uctan_uca::dosya_bozulursa_hata"
+            ],
+            [
+              "flutter",
+              "dosya alma izin kutusu varsayılan kapalı"
+            ],
+            [
+              "flutter",
+              "dosya gönderme ilerlemesi gösterilir"
             ]
           ]
         },
