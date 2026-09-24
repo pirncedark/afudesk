@@ -1,10 +1,79 @@
 # AfuDesk
 
-**Türkçe** · [English](#english)
+**English** · [Türkçe](#türkçe)
 
-AfuDesk, iki bilgisayarı **hiçbir sunucu olmadan** birbirine bağlayan açık kaynak bir uzak masaüstü uygulamasıdır. Bağlantı veren cihaz kendi bağlantı noktasını açar; adreslerini parolayla şifrelenmiş tek bir koda koyar. Karşı taraf bu kodu ve parolayı girip doğrudan bağlanır. Arada kimsenin sunucusu, hesabı ya da ücreti yoktur.
+AfuDesk is an open-source remote desktop app that connects two computers **without any server**. The device that shares its screen opens its own connection point and puts its addresses into a single password-encrypted code. The other side enters the code and the password and connects directly. There is no server, no account and no fee in between.
 
-![Ana ekran](docs/ekranlar/1_ana_masaustu.png)
+![Home screen](docs/ekranlar/1_ana_masaustu.png)
+
+## How to use
+
+**The person sharing the screen**
+1. Open AfuDesk and choose **Bağlantı ver** (Give access).
+2. Send the **code** and the **password** to the other person (for example on WhatsApp).
+3. When they try to connect, a dialog appears. Turn off mouse/keyboard control if you like, then choose **Kabul et** (Accept).
+
+**The person connecting**
+1. Open AfuDesk and choose **Bağlan** (Connect).
+2. Paste the code, type the password and choose **Bağlan**.
+3. Once the other side accepts, you see their screen; if control was allowed, you can use the mouse and keyboard.
+
+| Give access | Incoming request | Remote screen |
+|---|---|---|
+| ![](docs/ekranlar/3_baglanti_ver.png) | ![](docs/ekranlar/4_istek_penceresi.png) | ![](docs/ekranlar/8_oturum.png) |
+
+## Install
+
+Download `AfuDesk-windows-x64.zip` from [GitHub Releases](https://github.com/pirncedark/afudesk/releases), extract it to a folder and run `afudesk.exe`. Requires Windows 10/11 (64-bit). There is no installer; deleting the folder removes the app.
+
+On first launch Windows Firewall may ask for permission: allow **Private networks**.
+
+## When does it work?
+
+Because AfuDesk has no central server, the sharing device must be **directly reachable**:
+
+| Situation | Works? |
+|---|---|
+| Both devices on the same network (home/office Wi‑Fi) | ✅ Always |
+| UPnP enabled on the sharing side's router | ✅ Over the internet |
+| The sharing side has a public IPv6 address | ✅ Over the internet |
+| Carrier-grade NAT / double NAT, no UPnP and no IPv6 | ❌ Not over the internet |
+
+While giving access, the app shows which case applies ("Reachable from the internet" or "Reachable only from the same network").
+
+## Security
+
+- The code is encrypted with the password using **Argon2id** (64 MiB) + **XChaCha20‑Poly1305**. Without the password the code cannot be read or changed.
+- The connection uses **QUIC/TLS 1.3**. A new certificate is created for every session, and the other side's certificate is checked against the fingerprint inside the code, which prevents man-in-the-middle attacks.
+- A code is valid for **10 minutes** and works **once**; a new code is created after each session.
+- Nobody can see your screen without your approval. Mouse/keyboard control is a separate permission.
+
+## Afu family
+
+- [AfuDM](https://github.com/pirncedark/AfuDM) — download manager (Windows)
+- [AfuTube](https://github.com/pirncedark/AfuDM/releases?q=afutube) — video downloader (Android)
+- [AfuRemote](https://github.com/pirncedark/AfuRemote) — phone as TV remote (Android)
+
+## Development
+
+Layout: `rust/` core (network, code, video, input) · `app/` Flutter UI · `app/kopru/` flutter_rust_bridge bridge.
+
+```bash
+cd rust && cargo test            # core tests (including end-to-end QUIC)
+cd app && flutter test           # UI tests
+cd app && flutter test integration_test -d windows   # real engine + screenshots
+cd app && flutter build windows --release
+```
+
+Requirements: Rust (stable, MSVC), Flutter **3.44.9**, Visual Studio Build Tools (C++). Note: the `flutter_tester` of Flutter 3.47.5 crashes randomly on some Windows machines, so the version is pinned to 3.44.9.
+
+License: MIT
+
+---
+
+## Türkçe
+
+AfuDesk, iki bilgisayarı **hiçbir sunucu olmadan** birbirine bağlayan açık kaynak bir uzak masaüstü uygulamasıdır. Ekranını paylaşan cihaz kendi bağlantı noktasını açar ve adreslerini parolayla şifrelenmiş tek bir koda koyar. Karşı taraf bu kodu ve parolayı girip doğrudan bağlanır. Arada kimsenin sunucusu, hesabı ya da ücreti yoktur.
 
 ## Nasıl kullanılır
 
@@ -18,10 +87,6 @@ AfuDesk, iki bilgisayarı **hiçbir sunucu olmadan** birbirine bağlayan açık 
 2. Kodu yapıştır, parolayı yaz, **Bağlan**'a bas.
 3. Karşı taraf kabul edince ekranı görürsün; izin verildiyse fare ve klavyeyi kullanabilirsin.
 
-| Bağlantı ver | Gelen istek | Uzak ekran |
-|---|---|---|
-| ![](docs/ekranlar/3_baglanti_ver.png) | ![](docs/ekranlar/4_istek_penceresi.png) | ![](docs/ekranlar/8_oturum.png) |
-
 ## Kurulum
 
 [GitHub Releases](https://github.com/pirncedark/afudesk/releases) sayfasından `AfuDesk-windows-x64.zip` dosyasını indir, bir klasöre çıkar ve `afudesk.exe`'yi çalıştır. Windows 10/11 (64 bit) gerekir. Kurulum yoktur; klasörü silmek kaldırmak için yeterlidir.
@@ -30,56 +95,32 @@ AfuDesk, iki bilgisayarı **hiçbir sunucu olmadan** birbirine bağlayan açık 
 
 ## Hangi durumda çalışır?
 
-AfuDesk'te merkezi sunucu olmadığı için bağlantı veren cihaza **doğrudan ulaşılabilmesi** gerekir:
+AfuDesk'te merkezi sunucu olmadığı için ekranını paylaşan cihaza **doğrudan ulaşılabilmesi** gerekir:
 
 | Durum | Çalışır mı |
 |---|---|
 | İki cihaz aynı ağda (ev/ofis Wi‑Fi) | ✅ Her zaman |
-| Bağlantı veren tarafın modeminde UPnP açık | ✅ İnternet üzerinden |
-| Bağlantı veren tarafta genel IPv6 var | ✅ İnternet üzerinden |
-| Operatör CGNAT kullanıyor / çift modem, UPnP ve IPv6 yok | ❌ İnternet üzerinden bağlanılamaz |
+| Paylaşan tarafın modeminde UPnP açık | ✅ İnternet üzerinden |
+| Paylaşan tarafta genel IPv6 var | ✅ İnternet üzerinden |
+| Operatör CGNAT / çift modem, UPnP ve IPv6 yok | ❌ İnternet üzerinden bağlanılamaz |
 
 Uygulama bağlantı verirken hangi durumda olduğunu ekranda yazar ("İnternetten ulaşılabilir" ya da "Yalnız aynı ağdan ulaşılabilir").
 
 ## Güvenlik
 
-- Kod, parolayla **Argon2id** (64 MiB) + **XChaCha20‑Poly1305** kullanılarak şifrelenir. Parolasız kod okunamaz ve değiştirilemez.
-- Bağlantı **QUIC/TLS 1.3** ile şifrelidir. Her oturumda yeni bir sertifika üretilir. Karşı tarafın sertifikası koddaki parmak iziyle doğrulanır, böylece araya girme (MITM) engellenir.
-- Kod **10 dakika** geçerlidir ve **tek kullanımlıktır**. Oturum bitince yeni kod üretilir.
+- Kod, parolayla **Argon2id** (64 MiB) + **XChaCha20‑Poly1305** kullanılarak şifrelenir. Parola olmadan kod okunamaz ve değiştirilemez.
+- Bağlantı **QUIC/TLS 1.3** ile şifrelidir. Her oturumda yeni bir sertifika üretilir; karşı tarafın sertifikası koddaki parmak iziyle doğrulanır, böylece araya girme (MITM) engellenir.
+- Kod **10 dakika** geçerlidir ve **tek kullanımlıktır**; her oturumdan sonra yeni kod üretilir.
 - Onay vermeden kimse ekranını göremez. Fare/klavye kontrolü ayrı bir izindir.
 
 ## Afu ailesi
 
 - [AfuDM](https://github.com/pirncedark/AfuDM) — indirme yöneticisi (Windows)
 - [AfuTube](https://github.com/pirncedark/AfuDM/releases?q=afutube) — video indirici (Android)
-- [AfuRemote](https://github.com/pirncedark/AfuRemote) — telefondan TV kumandası
+- [AfuRemote](https://github.com/pirncedark/AfuRemote) — telefondan TV kumandası (Android)
 
 ## Geliştirme
 
-Yapı: `rust/` çekirdek (ağ, kod, görüntü, girdi) · `app/` Flutter arayüzü · `app/kopru/` flutter_rust_bridge köprüsü.
-
-```bash
-cd rust && cargo test            # 38 test (uçtan uca QUIC dahil)
-cd app && flutter test           # 27 arayüz testi
-cd app && flutter test integration_test -d windows   # gerçek motor + ekran görüntüleri
-cd app && flutter build windows --release
-```
-
-Gerekenler: Rust (stable, MSVC), Flutter **3.44.9**, Visual Studio Build Tools (C++). Not: Flutter 3.47.5'in `flutter_tester`'ı bazı Windows makinelerinde rastgele çöküyor; bu yüzden sürüm 3.44.9'a sabitlendi.
+Yapı: `rust/` çekirdek (ağ, kod, görüntü, girdi) · `app/` Flutter arayüzü · `app/kopru/` flutter_rust_bridge köprüsü. Komutlar ve gereksinimler için yukarıdaki İngilizce **Development** bölümüne bak. Flutter sürümü 3.44.9'a sabitlidir.
 
 Lisans: MIT
-
----
-
-## English
-
-AfuDesk is an open-source remote desktop app that connects two computers **without any server**. The sharing device opens its own endpoint and puts its addresses into a single password-encrypted code; the other side enters the code and password and connects directly.
-
-**Share your screen:** open AfuDesk → **Bağlantı ver** (Give access) → send the code and password → approve the incoming request.
-**Connect:** open AfuDesk → **Bağlan** (Connect) → paste the code, type the password → connect.
-
-It works on the same network always, and over the internet when the sharing side has UPnP enabled on its router or a public IPv6 address. It cannot connect across the internet behind carrier-grade NAT without UPnP/IPv6.
-
-Security: Argon2id + XChaCha20-Poly1305 encrypted code, QUIC/TLS 1.3 with per-session certificate pinned by fingerprint, single-use 10-minute codes, explicit approval with a separate control permission.
-
-Download `AfuDesk-windows-x64.zip` from [Releases](https://github.com/pirncedark/afudesk/releases). License: MIT.
