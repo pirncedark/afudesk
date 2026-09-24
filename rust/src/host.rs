@@ -289,8 +289,11 @@ async fn oturum(
     let dur2 = yayin_dur.clone();
     let fab2 = fabrika.clone();
     std::thread::spawn(move || {
-        let ilk = fab2.yakalayici().and_then(|mut y| y.yakala().map(|g| (y, crate::goruntu::yayin_boyutu(g))));
-        let (mut yakalayici, ilk) = match ilk {
+        let ilk = fab2.yakalayici().and_then(|mut y| {
+            let (g, yakalama_ms) = y.yakala_zamanli()?;
+            Ok((y, crate::goruntu::yayin_boyutu(g), yakalama_ms))
+        });
+        let (mut yakalayici, ilk, ilk_yakalama_ms) = match ilk {
             Ok(x) => x,
             Err(e) => {
                 let _ = boyut_tx.send(Err(e.to_string()));
@@ -299,7 +302,7 @@ async fn oturum(
         };
         let _ = boyut_tx.send(Ok((ilk.genislik, ilk.yukseklik)));
         let mut kodlayici = Kodlayici::new(70);
-        let mut g = Some(ilk);
+        let mut g = Some((ilk, ilk_yakalama_ms));
         while !dur2.load(std::sync::atomic::Ordering::Relaxed) {
             let t0 = std::time::Instant::now();
             let fps = ayar2.fps.load(std::sync::atomic::Ordering::Relaxed).max(1) as u64;
@@ -308,17 +311,18 @@ async fn oturum(
             while let Ok(konumlar) = iptal_rx.try_recv() {
                 kodlayici.yeniden_gonder(konumlar);
             }
-            let goruntu = match g.take() {
+            let (goruntu, yakalama_ms) = match g.take() {
                 Some(x) => x,
-                None => match yakalayici.yakala() {
-                    Ok(x) => crate::goruntu::yayin_boyutu(x),
+                None => match yakalayici.yakala_zamanli() {
+                    Ok((x, yakalama_ms)) => (crate::goruntu::yayin_boyutu(x), yakalama_ms),
                     Err(_) => {
                         std::thread::sleep(aralik);
                         continue;
                     }
                 },
             };
-            if let Ok(Some(k)) = kodlayici.kodla(&goruntu) {
+            if let Ok(Some(mut k)) = kodlayici.kodla(&goruntu) {
+                k.yakalama_ms = yakalama_ms;
                 if kare_tx.blocking_send(k).is_err() {
                     break;
                 }
@@ -422,6 +426,10 @@ async fn oturum(
                         let _ = tokio::task::block_in_place(|| e.uygula(&g));
                     }
                 }
+                Ok(Some(Kontrol::SaatSor { izleyici_ms })) => {
+                    let host_ms = unix_ms();
+                    let _ = protokol::yaz(&mut w, &Kontrol::SaatCevap { izleyici_ms, host_ms }).await;
+                }
                 Ok(Some(Kontrol::Kapat(_))) | Ok(None) | Err(_) => break Oturum::Bitti("İzleyici bağlantıyı kapattı.".into()),
                 Ok(Some(_)) => {}
             },
@@ -430,6 +438,11 @@ async fn oturum(
     yayin_dur.store(true, std::sync::atomic::Ordering::Relaxed);
     yayin.abort();
     sonuc
+}
+
+fn unix_ms() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default().as_millis().min(u64::MAX as u128) as u64
 }
 
 #[cfg(test)]

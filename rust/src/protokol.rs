@@ -45,6 +45,8 @@ pub enum Kontrol {
     Girdi(Girdi),
     Pano(String),
     Kapat(String),
+    SaatSor { izleyici_ms: u64 },
+    SaatCevap { izleyici_ms: u64, host_ms: u64 },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -65,6 +67,8 @@ pub struct Kare {
     /// true: tüm ekran döşemeleri var (anahtar kare).
     pub tam: bool,
     pub dosemeler: Vec<Doseme>,
+    /// Host saatine göre Unix milisaniye cinsinden ekranın yakalandığı an.
+    pub yakalama_ms: u64,
 }
 
 pub async fn yaz<W: AsyncWriteExt + Unpin, T: Serialize>(w: &mut W, m: &T) -> anyhow::Result<()> {

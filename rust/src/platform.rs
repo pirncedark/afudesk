@@ -7,6 +7,18 @@ use anyhow::Result;
 /// kullanılacağı iş parçacığında oluşturulur.
 pub trait Yakalayici {
     fn yakala(&mut self) -> Result<Goruntu>;
+
+    /// Kareyle aynı ana ait host Unix zamanı (ms); yakalayıcılar bunu yakalama anında örtebilir.
+    fn yakala_zamanli(&mut self) -> Result<(Goruntu, u64)> {
+        let goruntu = self.yakala()?;
+        let yakalama_ms = unix_ms();
+        Ok((goruntu, yakalama_ms))
+    }
+}
+
+fn unix_ms() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default().as_millis().min(u64::MAX as u128) as u64
 }
 
 pub trait Enjektor: Send {
@@ -28,10 +40,89 @@ pub mod masaustu {
 
     impl Fabrika for Gercek {
         fn yakalayici(&self) -> Result<Box<dyn Yakalayici>> {
+            #[cfg(windows)]
+            if let Ok(mut yakalayici) = WgcYakalayici::new() {
+                if yakalayici.yakala().is_ok() {
+                    return Ok(Box::new(yakalayici));
+                }
+            }
             Ok(Box::new(XcapYakalayici::new()?))
         }
         fn enjektor(&self) -> Result<Box<dyn Enjektor>> {
             Ok(Box::new(EnigoEnjektor::new()?))
+        }
+    }
+
+    #[cfg(windows)]
+    pub struct WgcYakalayici {
+        kare: std::sync::Arc<(std::sync::Mutex<Option<(Goruntu, u64)>>, std::sync::Condvar)>,
+        _kontrol: windows_capture::capture::CaptureControl<WgcIsleyici, WgcHata>,
+    }
+
+    #[cfg(windows)]
+    type WgcHata = Box<dyn std::error::Error + Send + Sync>;
+
+    #[cfg(windows)]
+    struct WgcIsleyici {
+        kare: std::sync::Arc<(std::sync::Mutex<Option<(Goruntu, u64)>>, std::sync::Condvar)>,
+    }
+
+    #[cfg(windows)]
+    impl windows_capture::capture::GraphicsCaptureApiHandler for WgcIsleyici {
+        type Flags = std::sync::Arc<(std::sync::Mutex<Option<(Goruntu, u64)>>, std::sync::Condvar)>;
+        type Error = WgcHata;
+
+        fn new(ctx: windows_capture::capture::Context<Self::Flags>) -> std::result::Result<Self, Self::Error> {
+            Ok(Self { kare: ctx.flags })
+        }
+
+        fn on_frame_arrived(
+            &mut self,
+            frame: &mut windows_capture::frame::Frame,
+            _kontrol: windows_capture::graphics_capture_api::InternalCaptureControl,
+        ) -> std::result::Result<(), Self::Error> {
+            let genislik = frame.width();
+            let yukseklik = frame.height();
+            let yakalama_ms = unix_ms();
+            let tampon = frame.buffer()?;
+            let mut duz = Vec::new();
+            let piksel = tampon.as_nopadding_buffer(&mut duz).to_vec();
+            let (kilit, kosul) = &*self.kare;
+            *kilit.lock().unwrap() = Some((Goruntu { genislik, yukseklik, rgba: piksel }, yakalama_ms));
+            kosul.notify_all();
+            Ok(())
+        }
+    }
+
+    #[cfg(windows)]
+    impl WgcYakalayici {
+        pub fn new() -> Result<Self> {
+            use windows_capture::{capture::GraphicsCaptureApiHandler, monitor::Monitor, settings::{
+                ColorFormat, CursorCaptureSettings, DirtyRegionSettings, DrawBorderSettings,
+                MinimumUpdateIntervalSettings, SecondaryWindowSettings, Settings,
+            }};
+            let kare = std::sync::Arc::new((std::sync::Mutex::new(None), std::sync::Condvar::new()));
+            let ayarlar = Settings::new(
+                Monitor::primary()?, CursorCaptureSettings::Default, DrawBorderSettings::Default,
+                SecondaryWindowSettings::Default, MinimumUpdateIntervalSettings::Default,
+                DirtyRegionSettings::Default, ColorFormat::Rgba8, kare.clone(),
+            );
+            let kontrol = WgcIsleyici::start_free_threaded(ayarlar)?;
+            Ok(Self { kare, _kontrol: kontrol })
+        }
+    }
+
+    #[cfg(windows)]
+    impl Yakalayici for WgcYakalayici {
+        fn yakala(&mut self) -> Result<Goruntu> {
+            self.yakala_zamanli().map(|(goruntu, _)| goruntu)
+        }
+
+        fn yakala_zamanli(&mut self) -> Result<(Goruntu, u64)> {
+            let (kilit, kosul) = &*self.kare;
+            let kare = kilit.lock().unwrap();
+            let (kare, _) = kosul.wait_timeout_while(kare, std::time::Duration::from_millis(500), |v| v.is_none()).unwrap();
+            kare.clone().ok_or_else(|| anyhow::anyhow!("WGC ilk kareyi 500 ms içinde vermedi"))
         }
     }
 
@@ -187,6 +278,37 @@ pub mod masaustu {
             let sure = t0.elapsed();
             let bayt: usize = k.dosemeler.iter().map(|d| d.jpeg.len()).sum();
             eprintln!("ekran {}x{} -> yayın {}x{}, tam kare {} döşeme, {} KB, {:?}", a.genislik, a.yukseklik, yayin.genislik, yayin.yukseklik, k.dosemeler.len(), bayt / 1024, sure);
+        }
+
+        #[cfg(windows)]
+        #[test]
+        fn gercek_wgc_yakalanir() {
+            let mut wgc = WgcYakalayici::new().expect("WGC başlatılamadı");
+            let mut xcap = XcapYakalayici::new().expect("xcap ekranı bulamadı");
+            // Diğer donanım testleriyle eşzamanlı çalışırken WGC ilk sunumu gecikebilir.
+            let son_sure = std::time::Instant::now() + std::time::Duration::from_secs(15);
+            loop {
+                match wgc.yakala() {
+                    Ok(g) => { assert!(g.genislik > 0 && g.yukseklik > 0); break; }
+                    Err(e) if std::time::Instant::now() < son_sure => {
+                        let _ = e;
+                    }
+                    Err(e) => panic!("WGC ilk kareyi 15 saniyede vermedi: {e}"),
+                }
+            }
+            let basla = std::time::Instant::now();
+            for _ in 0..30 {
+                let g = wgc.yakala().expect("WGC kare yakalayamadı");
+                assert!(g.genislik > 0 && g.yukseklik > 0);
+            }
+            let wgc_ms = basla.elapsed().as_secs_f64() * 1000.0 / 30.0;
+            let basla = std::time::Instant::now();
+            for _ in 0..30 {
+                let g = xcap.yakala().expect("xcap kare yakalayamadı");
+                assert!(g.genislik > 0 && g.yukseklik > 0);
+            }
+            let xcap_ms = basla.elapsed().as_secs_f64() * 1000.0 / 30.0;
+            eprintln!("WGC ortalama: {wgc_ms:.2} ms/kare; xcap ortalama: {xcap_ms:.2} ms/kare");
         }
 
         #[test]

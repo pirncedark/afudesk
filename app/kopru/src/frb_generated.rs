@@ -673,6 +673,7 @@ impl SseDecode for crate::api::afudesk::IzleyiciOlayi {
         let mut var_tur = <String>::sse_decode(deserializer);
         let mut var_rttMs = <u32>::sse_decode(deserializer);
         let mut var_fps = <u32>::sse_decode(deserializer);
+        let mut var_gecikmeMs = <u32>::sse_decode(deserializer);
         let mut var_ad = <String>::sse_decode(deserializer);
         let mut var_metin = <String>::sse_decode(deserializer);
         let mut var_kontrol = <bool>::sse_decode(deserializer);
@@ -683,6 +684,7 @@ impl SseDecode for crate::api::afudesk::IzleyiciOlayi {
             tur: var_tur,
             rtt_ms: var_rttMs,
             fps: var_fps,
+            gecikme_ms: var_gecikmeMs,
             ad: var_ad,
             metin: var_metin,
             kontrol: var_kontrol,
@@ -844,6 +846,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::afudesk::IzleyiciOlayi {
             self.tur.into_into_dart().into_dart(),
             self.rtt_ms.into_into_dart().into_dart(),
             self.fps.into_into_dart().into_dart(),
+            self.gecikme_ms.into_into_dart().into_dart(),
             self.ad.into_into_dart().into_dart(),
             self.metin.into_into_dart().into_dart(),
             self.kontrol.into_into_dart().into_dart(),
@@ -953,6 +956,7 @@ impl SseEncode for crate::api::afudesk::IzleyiciOlayi {
         <String>::sse_encode(self.tur, serializer);
         <u32>::sse_encode(self.rtt_ms, serializer);
         <u32>::sse_encode(self.fps, serializer);
+        <u32>::sse_encode(self.gecikme_ms, serializer);
         <String>::sse_encode(self.ad, serializer);
         <String>::sse_encode(self.metin, serializer);
         <bool>::sse_encode(self.kontrol, serializer);

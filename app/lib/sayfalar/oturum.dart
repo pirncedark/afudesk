@@ -29,7 +29,7 @@ class _OturumDurum extends State<OturumSayfasi> {
   String _karsiAd = '';
   String _mesaj = '';
   bool _kontrol = false;
-  int _rtt = -1, _fps = 0;
+  int _rtt = -1, _fps = 0, _gecikme = 0;
   ui.Image? _kare;
   final _odak = FocusNode();
   // Dokunmatik kip
@@ -101,6 +101,7 @@ class _OturumDurum extends State<OturumSayfasi> {
         setState(() {
           _rtt = o.rttMs;
           _fps = o.fps;
+          _gecikme = o.gecikmeMs;
         });
       case 'koptu':
       case 'hata':
@@ -344,13 +345,15 @@ class _OturumDurum extends State<OturumSayfasi> {
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: Tooltip(
-                message: 'Gecikme (gidiş-dönüş) ve saniyedeki kare',
-                child: Text('$_rtt ms · $_fps fps',
+                message: 'Ekran yakalamadan sende görünene kadar geçen süre',
+                child: Text('${_gecikme > 0 ? _gecikme : _rtt} ms · $_fps fps',
                     key: const Key('oturum_istatistik'),
                     style: TextStyle(
                         fontSize: 12,
                         fontFeatures: const [FontFeature.tabularFigures()],
-                        color: _rtt < 80 ? Renk.basari : (_rtt < 200 ? Renk.soluk : Renk.tehlike))),
+                        color: _gecikme > 0
+                            ? (_gecikme < 100 ? Renk.basari : (_gecikme < 250 ? Renk.soluk : Renk.tehlike))
+                            : (_rtt < 80 ? Renk.basari : (_rtt < 200 ? Renk.soluk : Renk.tehlike)))),
               ),
             ),
           if (_asama == _Asama.bagli)

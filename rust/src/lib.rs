@@ -8,6 +8,7 @@ pub mod izleyici;
 pub mod kod;
 pub mod platform;
 pub mod protokol;
+pub mod zaman;
 
 #[cfg(test)]
 mod uctan_uca;

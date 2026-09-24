@@ -12,6 +12,22 @@ use rustls::{
 use sha2::{Digest, Sha256};
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
+/// RTT'si en düşük bağlantı adayının dizinini döndürür.
+pub fn en_iyi_yol(adaylar: &[(usize, Duration)]) -> Option<usize> {
+    adaylar.iter().min_by_key(|(_, rtt)| *rtt).map(|(indeks, _)| *indeks)
+}
+
+#[cfg(test)]
+mod yol_testleri {
+    use super::*;
+
+    #[test]
+    fn en_dusuk_rtt_yolu_secer() {
+        assert_eq!(en_iyi_yol(&[(0, Duration::from_millis(80)), (1, Duration::from_millis(12))]), Some(1));
+        assert_eq!(en_iyi_yol(&[]), None);
+    }
+}
+
 pub struct Kimlik {
     pub sertifika: CertificateDer<'static>,
     pub anahtar: PrivatePkcs8KeyDer<'static>,
@@ -140,15 +156,42 @@ pub async fn baglan(adresler: &[String], parmak_izi: &str, sure: Duration) -> Re
             Ok::<_, anyhow::Error>(b)
         });
     }
-    while let Some(s) = gorevler.join_next().await {
+    let mut basarililar = Vec::new();
+    let mut secim_sonu = None;
+    while !gorevler.is_empty() {
+        let sonuc = if let Some(sinir) = secim_sonu {
+            match tokio::time::timeout_at(sinir, gorevler.join_next()).await {
+                Ok(s) => s,
+                Err(_) => break,
+            }
+        } else {
+            gorevler.join_next().await
+        };
+        let Some(s) = sonuc else { break };
         match s {
             Ok(Ok(b)) => {
-                gorevler.abort_all();
-                return Ok(b);
+                if secim_sonu.is_none() {
+                    secim_sonu = Some(tokio::time::Instant::now() + Duration::from_millis(300));
+                }
+                basarililar.push(b);
             }
-            Ok(Err(e)) => son_hata = format!("{e:#}"),
-            Err(e) => son_hata = e.to_string(),
+            Ok(Err(e)) => {
+                son_hata = format!("{e:#}");
+            }
+            Err(e) => {
+                son_hata = e.to_string();
+            }
         }
+    }
+    if !basarililar.is_empty() {
+        let rttler: Vec<_> = basarililar.iter().enumerate().map(|(i, c)| (i, c.rtt())).collect();
+        let secilen = en_iyi_yol(&rttler).expect("bağlantı adayı var");
+        let kazanan = basarililar.swap_remove(secilen);
+        for aday in basarililar {
+            aday.close(0u32.into(), b"daha dusuk RTT yolu secildi");
+        }
+        gorevler.abort_all();
+        return Ok(kazanan);
     }
     if son_hata.contains("parmak izi") {
         anyhow::bail!("Güvenlik kontrolü başarısız: karşıdaki cihaz koddaki cihaz değil.");

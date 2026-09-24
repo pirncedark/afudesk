@@ -357,14 +357,17 @@ void main() {
       final m = await oturumAc(t);
       await goruntuAlani(t, m);
       expect(find.byKey(const Key('oturum_istatistik')), findsNothing, reason: 'ölçüm gelmeden gösterilmez');
-      m.izleyici.add(IzleyiciOlay('istatistik', rttMs: 23, fps: 15));
+      m.izleyici.add(IzleyiciOlay('istatistik', rttMs: 23, fps: 15, gecikmeMs: 74));
       await t.pump();
       final y = t.widget<Text>(find.byKey(const Key('oturum_istatistik')));
-      expect(y.data, '23 ms · 15 fps');
+      expect(y.data, '74 ms · 15 fps');
       expect(y.style!.color, Renk.basari);
-      m.izleyici.add(IzleyiciOlay('istatistik', rttMs: 350, fps: 8));
+      m.izleyici.add(IzleyiciOlay('istatistik', rttMs: 350, fps: 8, gecikmeMs: 280));
       await t.pump();
       expect(t.widget<Text>(find.byKey(const Key('oturum_istatistik'))).style!.color, Renk.tehlike);
+      m.izleyici.add(IzleyiciOlay('istatistik', rttMs: 350, fps: 8));
+      await t.pump();
+      expect(t.widget<Text>(find.byKey(const Key('oturum_istatistik'))).data, '350 ms · 8 fps');
     });
 
     testWidgets('karşı taraf reddederse sebep gösterilir', (t) async {
