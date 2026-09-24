@@ -35,8 +35,9 @@ Future<void> hostKes() => RustLib.instance.api.crateApiAfudeskHostKes();
 
 Future<void> hostDurdur() => RustLib.instance.api.crateApiAfudeskHostDurdur();
 
-/// Koda bağlan. Başarısızlık (yanlış parola, ulaşılamıyor...) hata olarak döner;
-/// bağlandıktan sonraki her şey `olaylar` akışından gelir.
+/// Koda bağlan. Her şey (hatalar dahil: `tur = "hata"`) `olaylar` akışından gelir.
+/// Not: FRB akış fonksiyonunun Err dönüşü akışa değil yakalanmamış istisnaya gider;
+/// bu yüzden hata olay olarak yazılır.
 Stream<IzleyiciOlayi> izleyiciBaglan({
   required String kod,
   required String parola,

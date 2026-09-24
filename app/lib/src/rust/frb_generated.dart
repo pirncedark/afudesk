@@ -202,7 +202,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           },
           codec: SseCodec(
             decodeSuccessData: sse_decode_unit,
-            decodeErrorData: sse_decode_AnyhowException,
+            decodeErrorData: null,
           ),
           constMeta: kCrateApiAfudeskHostBaslatConstMeta,
           argValues: [ad, parola, upnp, olaylar],
@@ -406,7 +406,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           },
           codec: SseCodec(
             decodeSuccessData: sse_decode_unit,
-            decodeErrorData: sse_decode_AnyhowException,
+            decodeErrorData: null,
           ),
           constMeta: kCrateApiAfudeskIzleyiciBaglanConstMeta,
           argValues: [kod, parola, ad, olaylar],

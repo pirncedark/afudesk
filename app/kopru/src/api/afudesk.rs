@@ -96,18 +96,25 @@ pub fn surum() -> String {
 }
 
 /// Bağlantı ver: sunucuyu açar, olayları `olaylar` akışına yazar. Önceki host varsa durdurulur.
-pub fn host_baslat(ad: String, parola: String, upnp: bool, olaylar: StreamSink<HostOlayi>) -> anyhow::Result<()> {
+pub fn host_baslat(ad: String, parola: String, upnp: bool, olaylar: StreamSink<HostOlayi>) {
     host_durdur();
+    let hata = |olaylar: &StreamSink<HostOlayi>, m: String| {
+        let _ = olaylar.add(HostOlayi { tur: "hata".into(), metin: m, ..Default::default() });
+    };
     #[cfg(target_os = "android")]
     {
-        let _ = (ad, parola, upnp, olaylar);
-        anyhow::bail!("Bu cihazdan bağlantı verme henüz desteklenmiyor; yalnız bağlanabilirsin.");
+        let _ = (ad, parola, upnp);
+        hata(&olaylar, "Bu cihazdan bağlantı verme henüz desteklenmiyor; yalnız bağlanabilirsin.".into());
+        return;
     }
     #[cfg(not(target_os = "android"))]
     let fab: Arc<dyn afudesk_core::platform::Fabrika> = Arc::new(afudesk_core::platform::masaustu::Gercek);
     #[cfg(not(target_os = "android"))]
     {
-    let mut h = rt().block_on(host::baslat(HostAyar { ad, port: 0, upnp, parola, yalniz_yerel: false }, fab))?;
+    let mut h = match rt().block_on(host::baslat(HostAyar { ad, port: 0, upnp, parola, yalniz_yerel: false }, fab)) {
+        Ok(h) => h,
+        Err(e) => return hata(&olaylar, format!("Bağlantı açılamadı: {e}")),
+    };
     let mut alici = std::mem::replace(&mut h.olaylar, tokio::sync::mpsc::channel(1).1);
     let tx = h.komut_gonderici();
     *HOST.lock().unwrap() = Some((h, tx));
@@ -118,7 +125,6 @@ pub fn host_baslat(ad: String, parola: String, upnp: bool, olaylar: StreamSink<H
             }
         }
     });
-    Ok(())
     }
 }
 
@@ -150,11 +156,18 @@ pub fn host_durdur() {
     }
 }
 
-/// Koda bağlan. Başarısızlık (yanlış parola, ulaşılamıyor...) hata olarak döner;
-/// bağlandıktan sonraki her şey `olaylar` akışından gelir.
-pub fn izleyici_baglan(kod: String, parola: String, ad: String, olaylar: StreamSink<IzleyiciOlayi>) -> anyhow::Result<()> {
+/// Koda bağlan. Her şey (hatalar dahil: `tur = "hata"`) `olaylar` akışından gelir.
+/// Not: FRB akış fonksiyonunun Err dönüşü akışa değil yakalanmamış istisnaya gider;
+/// bu yüzden hata olay olarak yazılır.
+pub fn izleyici_baglan(kod: String, parola: String, ad: String, olaylar: StreamSink<IzleyiciOlayi>) {
     izleyici_kapat();
-    let mut iz = rt().block_on(izleyici::baglan(&kod, &parola, &ad))?;
+    let mut iz = match rt().block_on(izleyici::baglan(&kod, &parola, &ad)) {
+        Ok(i) => i,
+        Err(e) => {
+            let _ = olaylar.add(IzleyiciOlayi { tur: "hata".into(), metin: e.to_string(), ..Default::default() });
+            return;
+        }
+    };
     let mut alici = std::mem::replace(&mut iz.olaylar, tokio::sync::mpsc::channel(1).1);
     let iz = Arc::new(iz);
     *IZLEYICI.lock().unwrap() = Some(iz);
@@ -180,7 +193,6 @@ pub fn izleyici_baglan(kod: String, parola: String, ad: String, olaylar: StreamS
             }
         }
     });
-    Ok(())
 }
 
 /// Dart kareyi ekrana çizdiğinde çağırır.

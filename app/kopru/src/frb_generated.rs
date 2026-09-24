@@ -139,17 +139,12 @@ fn wire__crate__api__afudesk__host_baslat_impl(
             >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || {
-                        let output_ok = crate::api::afudesk::host_baslat(
-                            api_ad,
-                            api_parola,
-                            api_upnp,
-                            api_olaylar,
-                        )?;
-                        std::result::Result::Ok(output_ok)
-                    })(),
-                )
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Ok::<_, ()>({
+                        crate::api::afudesk::host_baslat(api_ad, api_parola, api_upnp, api_olaylar);
+                    })?;
+                    std::result::Result::Ok(output_ok)
+                })())
             }
         },
     )
@@ -388,17 +383,17 @@ fn wire__crate__api__afudesk__izleyici_baglan_impl(
             >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || {
-                        let output_ok = crate::api::afudesk::izleyici_baglan(
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Ok::<_, ()>({
+                        crate::api::afudesk::izleyici_baglan(
                             api_kod,
                             api_parola,
                             api_ad,
                             api_olaylar,
-                        )?;
-                        std::result::Result::Ok(output_ok)
-                    })(),
-                )
+                        );
+                    })?;
+                    std::result::Result::Ok(output_ok)
+                })())
             }
         },
     )

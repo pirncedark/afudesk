@@ -35,7 +35,8 @@ class SahteMotor implements Motor {
     sonKod = kod;
     sonParola = parola;
     cagrilar.add('baglan');
-    if (baglanHatasi != null) return Stream.error(baglanHatasi!);
+    // Gerçek motor gibi: hata akışa 'hata' olayı olarak gelir.
+    if (baglanHatasi != null) return Stream.value(IzleyiciOlay('hata', metin: hataMetni(baglanHatasi!)));
     return izleyici.stream;
   }
 

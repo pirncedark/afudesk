@@ -78,6 +78,7 @@ class _OturumDurum extends State<OturumSayfasi> {
           });
         });
       case 'koptu':
+      case 'hata':
         _bitir(o.metin);
     }
   }
