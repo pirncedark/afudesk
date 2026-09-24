@@ -1,9 +1,9 @@
 // Telefon (dokunmatik) kipinin arayüz testleri.
-import 'dart:typed_data';
 
 import 'package:afudesk/main.dart';
 import 'package:afudesk/motor.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'sahte_motor.dart';
@@ -116,6 +116,27 @@ void main() {
     expect(m.girdiler.where((g) => g.tur == 'metin').single.metin, 'merhaba');
     final sil = m.girdiler.where((g) => g.tur == 'tus').map((g) => '${g.ad}:${g.basili}').toList();
     expect(sil, ['Backspace:true', 'Backspace:false']);
+  });
+
+  testWidgets('dar ekranda başlık kesilmez: çip ve Kes yalnız simge', (t) async {
+    await telefon(t);
+    expect(find.text('ALI-PC'), findsNothing); // bu testte 'bekliyor' yok, başlık varsayılan
+    expect(find.text('Uzak ekran'), findsOneWidget);
+    expect(find.text('Kontrol açık'), findsNothing);
+    expect(find.byTooltip('Bağlantıyı kes'), findsOneWidget);
+  });
+
+  testWidgets('dokunmatik oturum yatay kipe geçer, çıkınca serbest bırakır', (t) async {
+    final yonler = <Object?>[];
+    t.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (c) async {
+      if (c.method == 'SystemChrome.setPreferredOrientations') yonler.add(c.arguments);
+      return null;
+    });
+    await telefon(t);
+    expect(yonler.first, ['DeviceOrientation.landscapeLeft', 'DeviceOrientation.landscapeRight']);
+    await t.tap(find.byTooltip('Bağlantıyı kes'));
+    await gec(t);
+    expect((yonler.last as List).length, 4, reason: 'çıkınca tüm yönler serbest');
   });
 
   testWidgets('yalnız izleme kipinde dokunma ve çubuk yok', (t) async {

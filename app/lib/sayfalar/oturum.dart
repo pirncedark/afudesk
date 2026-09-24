@@ -43,6 +43,11 @@ class _OturumDurum extends State<OturumSayfasi> {
   @override
   void initState() {
     super.initState();
+    if (widget.motor.dokunmatik) {
+      // Telefonda bilgisayar ekranı yatayda ve tam ekranda çok daha okunaklı.
+      SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    }
     _abonelik = widget.motor
         .baglan(kod: widget.kod, parola: widget.parola, ad: widget.motor.cihazAdi())
         .listen(_olay, onError: (Object e) => _bitir(hataMetni(e)), onDone: () {
@@ -99,6 +104,10 @@ class _OturumDurum extends State<OturumSayfasi> {
 
   @override
   void dispose() {
+    if (widget.motor.dokunmatik) {
+      SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
     _dokunmaSaat?.cancel();
     _yaziOdak.dispose();
     _yazi.dispose();
@@ -316,29 +325,40 @@ class _OturumDurum extends State<OturumSayfasi> {
 
   @override
   Widget build(BuildContext context) {
+    // Dar ekranda (telefon dikey) çip ve düğme yalnız simge: başlık sığsın.
+    final dar = MediaQuery.sizeOf(context).width < 520;
+    final izinMetni = _kontrol ? 'Kontrol açık' : 'Yalnız izleme';
+    final izinSimge = Icon(_kontrol ? Icons.mouse : Icons.visibility, size: 16);
     return Scaffold(
       appBar: AppBar(
-        title: Text(_karsiAd.isEmpty ? 'Uzak ekran' : _karsiAd),
+        toolbarHeight: widget.motor.dokunmatik ? 44 : null,
+        title: Text(_karsiAd.isEmpty ? 'Uzak ekran' : _karsiAd, overflow: TextOverflow.ellipsis),
         actions: [
           if (_asama == _Asama.bagli)
             Padding(
               padding: const EdgeInsets.only(right: 8),
-              child: Chip(
-                key: const Key('oturum_kontrol'),
-                avatar: Icon(_kontrol ? Icons.mouse : Icons.visibility, size: 16),
-                label: Text(_kontrol ? 'Kontrol açık' : 'Yalnız izleme'),
-              ),
+              child: dar
+                  ? Tooltip(message: izinMetni, child: Chip(key: const Key('oturum_kontrol'), label: izinSimge))
+                  : Chip(key: const Key('oturum_kontrol'), avatar: izinSimge, label: Text(izinMetni)),
             ),
           if (_asama != _Asama.bitti)
             Padding(
               padding: const EdgeInsets.only(right: 12),
-              child: FilledButton.icon(
-                key: const Key('oturum_kes'),
-                style: FilledButton.styleFrom(backgroundColor: Renk.tehlike, minimumSize: const Size(0, 38)),
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.link_off, size: 18),
-                label: const Text('Kes'),
-              ),
+              child: dar
+                  ? IconButton.filled(
+                      key: const Key('oturum_kes'),
+                      tooltip: 'Bağlantıyı kes',
+                      style: IconButton.styleFrom(backgroundColor: Renk.tehlike),
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.link_off, size: 18),
+                    )
+                  : FilledButton.icon(
+                      key: const Key('oturum_kes'),
+                      style: FilledButton.styleFrom(backgroundColor: Renk.tehlike, minimumSize: const Size(0, 38)),
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.link_off, size: 18),
+                      label: const Text('Kes'),
+                    ),
             ),
         ],
       ),

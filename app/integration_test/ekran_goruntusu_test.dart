@@ -103,5 +103,29 @@ void main() {
     // 6) Hata ekranı
     m.izleyici.add(IzleyiciOlay('koptu', metin: 'Karşı tarafa ulaşılamadı. Aynı ağda değilseniz, bağlantı veren tarafın modeminde UPnP açık olmalı.'));
     await kaydet(t, '9_oturum_hata');
+    // 7) Telefon: ana ekran (ekran paylaşımı yakında) ve dokunmatik oturum
+    await t.binding.setSurfaceSize(const Size(400, 820));
+    m = SahteMotor()
+      ..dokunmatik = true
+      ..baglantiVerilebilir = false;
+    await t.pumpWidget(RepaintBoundary(key: _kok, child: AfuDeskUygulama(key: UniqueKey(), motor: m)));
+    await t.pump();
+    await kaydet(t, '10_telefon_ana');
+    await t.tap(find.byKey(const Key('secenek_baglan')));
+    await t.pump(const Duration(milliseconds: 500));
+    await t.enterText(find.byKey(const Key('baglan_kod')), 'AFU2.abc');
+    await t.enterText(find.byKey(const Key('baglan_parola')), '482913');
+    await t.tap(find.byKey(const Key('baglan_dugme')));
+    await t.pump(const Duration(milliseconds: 500));
+    m.izleyici.add(IzleyiciOlay('bekliyor', ad: 'ALI-PC'));
+    m.izleyici.add(IzleyiciOlay('kabul', kontrol: true, genislik: 1280, yukseklik: 720));
+    await t.pump();
+    await t.runAsync(() async => m.izleyici.add(IzleyiciOlay('kare', genislik: 1280, yukseklik: 720, rgba: desen(1280, 720))));
+    for (var i = 0; i < 100 && find.byKey(const Key('oturum_kare')).evaluate().isEmpty; i++) {
+      await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await t.pump();
+    }
+    await t.tapAt(t.getCenter(find.byKey(const Key('oturum_ekran'))));
+    await kaydet(t, '11_telefon_oturum');
   });
 }
