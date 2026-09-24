@@ -259,7 +259,7 @@ async fn oturum(
     let dur2 = yayin_dur.clone();
     let fab2 = fabrika.clone();
     std::thread::spawn(move || {
-        let ilk = fab2.yakalayici().and_then(|mut y| y.yakala().map(|g| (y, g)));
+        let ilk = fab2.yakalayici().and_then(|mut y| y.yakala().map(|g| (y, crate::goruntu::yayin_boyutu(g))));
         let (mut yakalayici, ilk) = match ilk {
             Ok(x) => x,
             Err(e) => {
@@ -276,7 +276,7 @@ async fn oturum(
             let goruntu = match g.take() {
                 Some(x) => x,
                 None => match yakalayici.yakala() {
-                    Ok(x) => x,
+                    Ok(x) => crate::goruntu::yayin_boyutu(x),
                     Err(_) => {
                         std::thread::sleep(aralik);
                         continue;

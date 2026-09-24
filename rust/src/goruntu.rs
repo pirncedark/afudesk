@@ -2,6 +2,36 @@
 //! İzleyici tarafı döşemeleri RGBA tampona yerleştirir.
 use crate::protokol::{Doseme, Kare};
 use image::{codecs::jpeg::JpegEncoder, ExtendedColorType, ImageDecoder};
+use rayon::prelude::*;
+
+/// Bu genişliği aşan ekranlar yayından önce yarıya küçültülür.
+pub const AZAMI_GENISLIK: u32 = 2560;
+
+/// 2×2 ortalamayla yarı ölçek (tek sayılı son satır/sütun atılır).
+pub fn yarim_olcek(g: &Goruntu) -> Goruntu {
+    let (yg, yy) = (g.genislik / 2, g.yukseklik / 2);
+    let satir = (g.genislik * 4) as usize;
+    let mut rgba = vec![0u8; (yg * yy * 4) as usize];
+    rgba.par_chunks_mut((yg * 4) as usize).enumerate().for_each(|(y, hedef)| {
+        let ust = &g.rgba[2 * y * satir..];
+        let alt = &g.rgba[(2 * y + 1) * satir..];
+        for x in 0..yg as usize {
+            for k in 0..4 {
+                let t = ust[8 * x + k] as u16 + ust[8 * x + 4 + k] as u16 + alt[8 * x + k] as u16 + alt[8 * x + 4 + k] as u16;
+                hedef[4 * x + k] = (t / 4) as u8;
+            }
+        }
+    });
+    Goruntu { genislik: yg, yukseklik: yy, rgba }
+}
+
+/// Yayın boyutuna getir: gerekirse art arda yarıya indir.
+pub fn yayin_boyutu(mut g: Goruntu) -> Goruntu {
+    while g.genislik > AZAMI_GENISLIK {
+        g = yarim_olcek(&g);
+    }
+    g
+}
 
 pub const DOSEME: u32 = 64;
 
@@ -46,21 +76,25 @@ impl Kodlayici {
             .map(|o| o.genislik != g.genislik || o.yukseklik != g.yukseklik)
             .unwrap_or(true);
         let tam = boyut_degisti || self.sira % self.tam_aralik == 0;
-        let mut dosemeler = Vec::new();
+        let mut konumlar = Vec::new();
         let mut y = 0;
         while y < g.yukseklik {
             let yuk = DOSEME.min(g.yukseklik - y);
             let mut x = 0;
             while x < g.genislik {
                 let gen = DOSEME.min(g.genislik - x);
-                let degisti = tam || self.onceki.as_ref().map_or(true, |o| farkli(o, g, x, y, gen, yuk));
-                if degisti {
-                    dosemeler.push(Doseme { x, y, gen, yuk, jpeg: jpeg_kodla(g, x, y, gen, yuk, self.kalite)? });
+                if tam || self.onceki.as_ref().map_or(true, |o| farkli(o, g, x, y, gen, yuk)) {
+                    konumlar.push((x, y, gen, yuk));
                 }
                 x += DOSEME;
             }
             y += DOSEME;
         }
+        let kalite = self.kalite;
+        let dosemeler = konumlar
+            .into_par_iter()
+            .map(|(x, y, gen, yuk)| Ok(Doseme { x, y, gen, yuk, jpeg: jpeg_kodla(g, x, y, gen, yuk, kalite)? }))
+            .collect::<anyhow::Result<Vec<_>>>()?;
         self.onceki = Some(g.clone());
         if dosemeler.is_empty() {
             return Ok(None);
@@ -242,6 +276,26 @@ mod testler {
         let mut kare3 = kare2.clone();
         kare3.genislik = 0;
         assert!(b.uygula(&kare3).is_err());
+    }
+
+    #[test]
+    fn yarim_olcek_ortalama_alir() {
+        let mut g = Goruntu { genislik: 4, yukseklik: 2, rgba: vec![0; 32] };
+        // Sol 2x2 bloğun R değerleri 0,100,200,100 -> ortalama 100.
+        for (i, v) in [(0usize, 0u8), (1, 100), (4, 200), (5, 100)] {
+            g.rgba[i * 4] = v;
+        }
+        let k = yarim_olcek(&g);
+        assert_eq!((k.genislik, k.yukseklik), (2, 1));
+        assert_eq!(k.rgba[0], 100);
+        assert_eq!(k.rgba[4], 0);
+    }
+
+    #[test]
+    fn yayin_boyutu_siniri() {
+        assert_eq!(yayin_boyutu(deneme_goruntu(5120, 16, 0)).genislik, 2560);
+        assert_eq!(yayin_boyutu(deneme_goruntu(1920, 16, 0)).genislik, 1920);
+        assert_eq!(yayin_boyutu(deneme_goruntu(7680, 16, 0)).genislik, 1920);
     }
 
     #[test]

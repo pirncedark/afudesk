@@ -167,6 +167,33 @@ pub mod masaustu {
             assert_eq!(tus_coz("BilinmeyenTus"), None);
             assert_eq!(tus_coz(""), None);
         }
+
+        /// Gerçek donanım: bu makinenin birincil ekranı yakalanabilmeli ve
+        /// ardışık iki yakalama aynı boyutta olmalı.
+        #[test]
+        fn gercek_ekran_yakalanir() {
+            let mut y = XcapYakalayici::new().expect("ekran bulunamadı");
+            let a = y.yakala().expect("yakalama başarısız");
+            assert!(a.genislik >= 640 && a.yukseklik >= 480, "{}x{}", a.genislik, a.yukseklik);
+            assert_eq!(a.rgba.len(), (a.genislik * a.yukseklik * 4) as usize);
+            let b = y.yakala().unwrap();
+            assert_eq!((a.genislik, a.yukseklik), (b.genislik, b.yukseklik));
+            // Tamamen siyah değil (yakalama gerçekten piksel döndürüyor).
+            assert!(a.rgba.chunks_exact(4).any(|p| p[0] > 10 || p[1] > 10 || p[2] > 10));
+            // Gerçek ekran + kodlayıcı: 1 tam kare üretilebilmeli, süresi ölçülür.
+            let t0 = std::time::Instant::now();
+            let yayin = crate::goruntu::yayin_boyutu(a.clone());
+            let k = crate::goruntu::Kodlayici::new(70).kodla(&yayin).unwrap().unwrap();
+            let sure = t0.elapsed();
+            let bayt: usize = k.dosemeler.iter().map(|d| d.jpeg.len()).sum();
+            eprintln!("ekran {}x{} -> yayın {}x{}, tam kare {} döşeme, {} KB, {:?}", a.genislik, a.yukseklik, yayin.genislik, yayin.yukseklik, k.dosemeler.len(), bayt / 1024, sure);
+        }
+
+        #[test]
+        fn gercek_enjektor_acilir() {
+            let e = EnigoEnjektor::new().expect("enigo açılamadı");
+            assert!(e.boyut.0 > 0 && e.boyut.1 > 0);
+        }
     }
 }
 

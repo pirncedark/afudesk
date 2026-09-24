@@ -27,6 +27,7 @@ image = { version = "0.25", default-features = false, features = ["jpeg"] }
 local-ip-address = "0.6"
 igd-next = { version = "0.16", features = ["aio_tokio"] }
 log = "0.4"
+rayon = "1"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 xcap = "0.9"
