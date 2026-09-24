@@ -1,5 +1,6 @@
 // Arayüz ile Rust çekirdeği arasındaki sözleşme. Testler SahteMotor kullanır.
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:typed_data';
 
 import 'src/rust/api/afudesk.dart' as rust;
@@ -63,6 +64,10 @@ class Girdi {
 
 abstract class Motor {
   String cihazAdi();
+  /// Bu cihaz ekranını paylaşabilir mi (şimdilik yalnız masaüstü).
+  bool get baglantiVerilebilir;
+  /// Dokunmatik kontrol kipi (telefon/tablet).
+  bool get dokunmatik;
   Stream<HostOlay> hostBaslat({required String ad, String parola = '', bool upnp = true});
   Future<void> hostKabul({required bool kontrol});
   Future<void> hostRed();
@@ -76,6 +81,11 @@ abstract class Motor {
 
 /// Gerçek motor: Rust çekirdeği (flutter_rust_bridge).
 class RustMotor implements Motor {
+  @override
+  bool get baglantiVerilebilir => Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+  @override
+  bool get dokunmatik => Platform.isAndroid || Platform.isIOS;
+
   @override
   String cihazAdi() => rust.cihazAdi();
 

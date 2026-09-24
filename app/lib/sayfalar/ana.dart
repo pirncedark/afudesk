@@ -37,9 +37,13 @@ class AnaSayfa extends StatelessWidget {
                       anahtar: const Key('secenek_ver'),
                       simge: Icons.screen_share_rounded,
                       baslik: 'Bağlantı ver',
-                      aciklama: 'Ekranını paylaş. Sana bir kod ve parola verilir, bunları karşı tarafa gönder.',
-                      onTap: () => Navigator.push(
-                          context, MaterialPageRoute(builder: (_) => BaglantiVerSayfasi(motor: motor))),
+                      aciklama: motor.baglantiVerilebilir
+                          ? 'Ekranını paylaş. Sana bir kod ve parola verilir, bunları karşı tarafa gönder.'
+                          : 'Bu cihazdan ekran paylaşımı yakında. Şimdilik bir bilgisayara bağlanabilirsin.',
+                      onTap: motor.baglantiVerilebilir
+                          ? () => Navigator.push(
+                              context, MaterialPageRoute(builder: (_) => BaglantiVerSayfasi(motor: motor)))
+                          : null,
                     ),
                     _SecenekKarti(
                       anahtar: const Key('secenek_baglan'),
@@ -50,6 +54,7 @@ class AnaSayfa extends StatelessWidget {
                           Navigator.push(context, MaterialPageRoute(builder: (_) => BaglanSayfasi(motor: motor))),
                     ),
                   ];
+                  if (!motor.baglantiVerilebilir) kartlar.setAll(0, [kartlar[1], kartlar[0]]);
                   return dar
                       ? Column(children: [kartlar[0], const SizedBox(height: 14), kartlar[1]])
                       // Yan yana kartlar aynı yükseklikte.
@@ -77,13 +82,15 @@ class _SecenekKarti extends StatelessWidget {
   final IconData simge;
   final String baslik;
   final String aciklama;
-  final VoidCallback onTap;
+  /// null: devre dışı (ör. telefonda ekran paylaşımı henüz yok).
+  final VoidCallback? onTap;
   const _SecenekKarti(
       {required this.anahtar, required this.simge, required this.baslik, required this.aciklama, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    final kapali = onTap == null;
+    return Opacity(opacity: kapali ? 0.55 : 1, child: Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         key: anahtar,
@@ -103,6 +110,6 @@ class _SecenekKarti extends StatelessWidget {
           ]),
         ),
       ),
-    );
+    ));
   }
 }

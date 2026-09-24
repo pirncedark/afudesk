@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../dokunma.dart';
 import '../klavye.dart';
 import '../motor.dart';
 import '../tema.dart';
@@ -30,6 +31,14 @@ class _OturumDurum extends State<OturumSayfasi> {
   bool _kontrol = false;
   ui.Image? _kare;
   final _odak = FocusNode();
+  // Dokunmatik kip
+  final _dokunma = DokunmaCevirici();
+  Timer? _dokunmaSaat;
+  final _saat = Stopwatch()..start();
+  final _yaziOdak = FocusNode();
+  final _yazi = TextEditingController(text: _gozcu);
+  bool _klavyeAcik = false;
+  static const _gozcu = '\u200b';
 
   @override
   void initState() {
@@ -63,6 +72,11 @@ class _OturumDurum extends State<OturumSayfasi> {
           _kontrol = o.kontrol;
         });
         _odak.requestFocus();
+        if (widget.motor.dokunmatik && o.kontrol) {
+          // Uzun basışı zamanında yakalamak için düzenli yokla.
+          _dokunmaSaat?.cancel();
+          _dokunmaSaat = Timer.periodic(const Duration(milliseconds: 100), (_) => _gonder(_dokunma.zaman(_ms)));
+        }
       case 'kare':
         ui.decodeImageFromPixels(o.rgba, o.genislik, o.yukseklik, ui.PixelFormat.rgba8888, (img) {
           if (!mounted) {
@@ -85,6 +99,9 @@ class _OturumDurum extends State<OturumSayfasi> {
 
   @override
   void dispose() {
+    _dokunmaSaat?.cancel();
+    _yaziOdak.dispose();
+    _yazi.dispose();
     _abonelik?.cancel();
     widget.motor.izleyiciKapat();
     final son = _kare;
@@ -112,6 +129,176 @@ class _OturumDurum extends State<OturumSayfasi> {
     if (!_kontrol) return;
     final n = _normalize(yerel, alan);
     if (n != null) widget.motor.girdi(Girdi('konum', x: n.dx, y: n.dy));
+  }
+
+  int get _ms => _saat.elapsedMilliseconds;
+
+  /// Dokunmatik: ekran dışına taşan parmak kenara kırpılır.
+  Offset? _normalizeKirp(Offset yerel, Size alan) {
+    final k = _kare;
+    if (k == null) return null;
+    final olcek = (alan.width / k.width).clamp(0.0, alan.height / k.height);
+    final g = k.width * olcek, y = k.height * olcek;
+    final sol = (alan.width - g) / 2, ust = (alan.height - y) / 2;
+    return Offset(((yerel.dx - sol) / g).clamp(0.0, 1.0), ((yerel.dy - ust) / y).clamp(0.0, 1.0));
+  }
+
+  void _gonder(List<Girdi> g) {
+    if (g.isEmpty) return;
+    for (final x in g) {
+      widget.motor.girdi(x);
+    }
+    // İmleç işaretini güncelle.
+    if (g.any((x) => x.tur == 'konum') && mounted) setState(() {});
+  }
+
+  /// Görünmez yazı alanı hep tek bir gözcü karakter tutar: silinirse Backspace,
+  /// eklenen her şey metin olarak gider.
+  void _yaziDegisti(String v) {
+    if (v.isEmpty) {
+      _ozelTus('Backspace');
+    } else {
+      final yeni = v.replaceAll(_gozcu, '');
+      if (yeni.isNotEmpty) _gonder([Girdi('metin', metin: yeni)]);
+    }
+    _yazi.value = const TextEditingValue(text: _gozcu, selection: TextSelection.collapsed(offset: 1));
+  }
+
+  void _ozelTus(String ad) => _gonder([Girdi('tus', ad: ad, basili: true), Girdi('tus', ad: ad, basili: false)]);
+
+  Widget _dokunmatikCubuk() {
+    Widget t(String etiket, String ad, {IconData? simge}) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 3),
+          child: OutlinedButton(
+            key: Key('ozel_$ad'),
+            style: OutlinedButton.styleFrom(minimumSize: const Size(44, 40), padding: const EdgeInsets.symmetric(horizontal: 10)),
+            onPressed: () => _ozelTus(ad),
+            child: simge != null ? Icon(simge, size: 18) : Text(etiket),
+          ),
+        );
+    return Container(
+      color: Renk.yuzey,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      child: Row(children: [
+        FilledButton.icon(
+          key: const Key('oturum_klavye'),
+          style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
+          onPressed: () {
+            setState(() => _klavyeAcik = !_klavyeAcik);
+            if (_klavyeAcik) {
+              _yaziOdak.requestFocus();
+              SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+            } else {
+              _yaziOdak.unfocus();
+            }
+          },
+          icon: Icon(_klavyeAcik ? Icons.keyboard_hide : Icons.keyboard),
+          label: const Text('Klavye'),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: [
+              t('Esc', 'Escape'),
+              t('Tab', 'Tab'),
+              t('', 'Enter', simge: Icons.keyboard_return),
+              t('', 'Backspace', simge: Icons.backspace_outlined),
+              t('', 'ArrowLeft', simge: Icons.arrow_back),
+              t('', 'ArrowUp', simge: Icons.arrow_upward),
+              t('', 'ArrowDown', simge: Icons.arrow_downward),
+              t('', 'ArrowRight', simge: Icons.arrow_forward),
+              t('Win', 'Meta'),
+            ]),
+          ),
+        ),
+        SizedBox(
+          width: 1,
+          height: 1,
+          child: Opacity(
+            opacity: 0,
+            child: TextField(
+              key: const Key('oturum_yazi'),
+              focusNode: _yaziOdak,
+              controller: _yazi,
+              autocorrect: false,
+              enableSuggestions: false,
+              onChanged: _yaziDegisti,
+              onSubmitted: (_) {
+                _ozelTus('Enter');
+                _yaziOdak.requestFocus();
+              },
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _dokunmatikEkran(ui.Image? k) {
+    return Column(children: [
+      Expanded(
+        child: Container(
+          color: Colors.black,
+          child: LayoutBuilder(builder: (context, c) {
+            final alan = Size(c.maxWidth, c.maxHeight);
+            final imlec = _imlecKonumu(alan);
+            return Listener(
+              key: const Key('oturum_ekran'),
+              onPointerDown: (e) {
+                if (!_kontrol) return;
+                final n = _normalizeKirp(e.localPosition, alan);
+                if (n != null) _gonder(_dokunma.bas(e.pointer, n.dx, n.dy, _ms));
+              },
+              onPointerMove: (e) {
+                if (!_kontrol) return;
+                final n = _normalizeKirp(e.localPosition, alan);
+                if (n != null) _gonder(_dokunma.hareket(e.pointer, n.dx, n.dy, _ms));
+              },
+              onPointerUp: (e) {
+                if (_kontrol) _gonder(_dokunma.birak(e.pointer, _ms));
+              },
+              onPointerCancel: (e) {
+                if (_kontrol) _gonder(_dokunma.iptal(e.pointer));
+              },
+              child: Stack(children: [
+                Positioned.fill(
+                  child: k == null
+                      ? const Center(child: CircularProgressIndicator())
+                      : RawImage(key: const Key('oturum_kare'), image: k, fit: BoxFit.contain, filterQuality: FilterQuality.medium),
+                ),
+                if (imlec != null)
+                  Positioned(
+                    key: const Key('oturum_imlec'),
+                    left: imlec.dx - 9,
+                    top: imlec.dy - 9,
+                    child: IgnorePointer(
+                      child: Container(
+                        width: 18,
+                        height: 18,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                          color: Renk.vurgu.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ),
+                  ),
+              ]),
+            );
+          }),
+        ),
+      ),
+      if (_kontrol) SafeArea(top: false, child: _dokunmatikCubuk()),
+    ]);
+  }
+
+  Offset? _imlecKonumu(Size alan) {
+    final k = _kare, x = _dokunma.imlecX, y = _dokunma.imlecY;
+    if (k == null || x == null || y == null) return null;
+    final olcek = (alan.width / k.width).clamp(0.0, alan.height / k.height);
+    final g = k.width * olcek, yy = k.height * olcek;
+    return Offset((alan.width - g) / 2 + x * g, (alan.height - yy) / 2 + y * yy);
   }
 
   String _tus(int dugmeler) =>
@@ -183,6 +370,7 @@ class _OturumDurum extends State<OturumSayfasi> {
         );
       case _Asama.bagli:
         final k = _kare;
+        if (widget.motor.dokunmatik) return _dokunmatikEkran(k);
         return Container(
           color: Colors.black,
           child: LayoutBuilder(builder: (context, c) {

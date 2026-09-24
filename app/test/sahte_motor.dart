@@ -11,6 +11,10 @@ class SahteMotor implements Motor {
   Object? baglanHatasi;
   String? sonKod, sonParola;
   int kareOnayi = 0;
+  @override
+  bool baglantiVerilebilir = true;
+  @override
+  bool dokunmatik = false;
 
   @override
   String cihazAdi() => 'TEST-PC';
