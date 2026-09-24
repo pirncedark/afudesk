@@ -1,11 +1,13 @@
 //! Bağlanan taraf: kodu çözer, doğrudan bağlanır, onayı bekler, kareleri birleştirir.
 use crate::{
-    ag, goruntu::Birlestirici,
+    ag,
+    dosya::{self, GonderAyari, Gonderim},
+    goruntu::Birlestirici,
     kod,
     protokol::{self, Girdi, Izinler, Kare, Kontrol, SURUM},
 };
 use anyhow::Result;
-use std::time::Duration;
+use std::{path::PathBuf, time::Duration};
 use tokio::sync::mpsc;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -18,12 +20,17 @@ pub enum IzleyiciOlay {
     /// Saniyede bir: bağlantı gidiş-dönüş süresi ve ekrana gelen kare hızı.
     Istatistik { rtt_ms: u32, fps: u32 },
     Koptu { sebep: String },
+    /// Dosya gönderme ilerlemesi. `gonderilen` devam noktası dahil toplam ilerlemedir.
+    /// `bitti` ise `hata` boşsa başarılı.
+    Dosya { ad: String, gonderilen: u64, toplam: u64, bitti: bool, hata: String },
 }
 
 pub struct Izleyici {
     pub olaylar: mpsc::Receiver<IzleyiciOlay>,
     girdi: mpsc::Sender<Girdi>,
     baglanti: quinn::Connection,
+    /// Zayıf: oturum bitince olay kanalı kapanabilsin.
+    olay: mpsc::WeakSender<IzleyiciOlay>,
 }
 
 impl Izleyici {
@@ -38,6 +45,38 @@ impl Izleyici {
     pub fn kapat(&self) {
         self.baglanti.close(0u32.into(), b"izleyici");
     }
+
+    /// Dosyayı karşı tarafa gönderir (arka planda). İlerleme ve sonuç
+    /// `IzleyiciOlay::Dosya` olarak gelir; sonuç ayrıca dönen görevden okunabilir.
+    /// Aynı dosya yeniden gönderilirse host kaldığı yerden devam ettirir.
+    pub fn dosya_gonder(&self, yol: impl Into<PathBuf>) -> tokio::task::JoinHandle<Result<Gonderim>> {
+        self.dosya_gonder_ayarli(yol.into(), GonderAyari::default())
+    }
+
+    pub(crate) fn dosya_gonder_ayarli(&self, yol: PathBuf, ayar: GonderAyari) -> tokio::task::JoinHandle<Result<Gonderim>> {
+        let c = self.baglanti.clone();
+        let olay = self.olay.upgrade();
+        tokio::spawn(async move {
+            let ad = yol.file_name().map(|a| a.to_string_lossy().into_owned()).unwrap_or_default();
+            let mut son = (0, 0);
+            let sonuc = dosya::gonder(&c, &yol, ayar, |gonderilen, toplam| {
+                son = (gonderilen, toplam);
+                // Ara ilerleme düşebilir (arayüz yavaşsa); sonuç asla düşmez.
+                if let Some(o) = &olay {
+                    let _ = o.try_send(IzleyiciOlay::Dosya { ad: ad.clone(), gonderilen, toplam, bitti: false, hata: String::new() });
+                }
+            })
+            .await;
+            if let Some(o) = &olay {
+                let bitis = match &sonuc {
+                    Ok(g) => IzleyiciOlay::Dosya { ad: ad.clone(), gonderilen: g.toplam, toplam: g.toplam, bitti: true, hata: String::new() },
+                    Err(e) => IzleyiciOlay::Dosya { ad: ad.clone(), gonderilen: son.0, toplam: son.1, bitti: true, hata: e.to_string() },
+                };
+                let _ = o.send(bitis).await;
+            }
+            sonuc
+        })
+    }
 }
 
 pub async fn baglan(kod_metni: &str, parola: &str, ad: &str) -> Result<Izleyici> {
@@ -48,13 +87,14 @@ pub async fn baglan(kod_metni: &str, parola: &str, ad: &str) -> Result<Izleyici>
     let (olay_tx, olaylar) = mpsc::channel(4);
     let (girdi, mut girdi_rx) = mpsc::channel::<Girdi>(256);
     let _ = olay_tx.send(IzleyiciOlay::OnayBekleniyor { karsi_ad: d.ad.clone() }).await;
+    let olay = olay_tx.downgrade();
     let c2 = c.clone();
     tokio::spawn(async move {
         let sebep = calis(&c2, &mut w, &mut r, &olay_tx, &mut girdi_rx).await;
         c2.close(0u32.into(), b"bitti");
         let _ = olay_tx.send(IzleyiciOlay::Koptu { sebep }).await;
     });
-    Ok(Izleyici { olaylar, girdi, baglanti: c })
+    Ok(Izleyici { olaylar, girdi, baglanti: c, olay })
 }
 
 async fn calis(

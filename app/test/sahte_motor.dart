@@ -10,6 +10,11 @@ class SahteMotor implements Motor {
   final girdiler = <Girdi>[];
   Object? baglanHatasi;
   String? sonKod, sonParola;
+  /// Son kabulde verilen dosya alma izni.
+  bool? sonDosyaIzni;
+  /// Dosya seçicinin döndüreceği yol (null = vazgeçildi).
+  String? secilecekDosya;
+  final gonderilenDosyalar = <String>[];
   int kareOnayi = 0;
   @override
   bool baglantiVerilebilir = true;
@@ -26,7 +31,10 @@ class SahteMotor implements Motor {
   }
 
   @override
-  Future<void> hostKabul({required bool kontrol}) async => cagrilar.add('kabul:$kontrol');
+  Future<void> hostKabul({required bool kontrol, bool dosya = false}) async {
+    cagrilar.add('kabul:$kontrol');
+    sonDosyaIzni = dosya;
+  }
   @override
   Future<void> hostRed() async => cagrilar.add('red');
   @override
@@ -48,6 +56,10 @@ class SahteMotor implements Motor {
   void kareCizildi() => kareOnayi++;
   @override
   void girdi(Girdi g) => girdiler.add(g);
+  @override
+  Future<String?> dosyaSec() async => secilecekDosya;
+  @override
+  Future<void> dosyaGonder(String yol) async => gonderilenDosyalar.add(yol);
   @override
   Future<void> izleyiciKapat() async => cagrilar.add('izleyiciKapat');
 }

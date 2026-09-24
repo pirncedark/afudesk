@@ -1,6 +1,8 @@
 //! Tel protokolü: QUIC akışları üzerinde uzunluk önekli (u32 BE) bincode mesajları.
 //! Kontrol akışı (çift yönlü): Merhaba/Kabul/Red/Girdi/Pano/Kapat.
 //! Görüntü akışı (tek yönlü, host → izleyici): Kare.
+//! Dosya akışı (çift yönlü, izleyici açar; dosya başına bir akış):
+//! DosyaBaslik → DosyaDevam | DosyaHata, sonra DosyaParca… ve DosyaTamam | DosyaHata.
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -33,6 +35,10 @@ pub enum Girdi {
 pub struct Izinler {
     pub kontrol: bool,
     pub pano: bool,
+    /// İzleyiciden dosya alma. Not: bincode kendini tanımlamadığı için `default`
+    /// yalnız kendini tanımlayan biçimlerde (JSON vb.) işe yarar.
+    #[serde(default)]
+    pub dosya: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -45,6 +51,15 @@ pub enum Kontrol {
     Girdi(Girdi),
     Pano(String),
     Kapat(String),
+    /// İzleyici → host, dosya akışının ilk mesajı.
+    DosyaBaslik { kimlik: [u8; 16], ad: String, boyut: u64, sha256: [u8; 32] },
+    /// Host → izleyici: bu bayttan itibaren gönder (yarım dosya varsa > 0).
+    DosyaDevam { baslangic: u64 },
+    /// İzleyici → host: sıradaki dosya parçası (en çok `dosya::PARCA` bayt).
+    DosyaParca(Vec<u8>),
+    /// Host → izleyici: dosya eksiksiz geldi, SHA-256 doğru, yerine taşındı.
+    DosyaTamam,
+    DosyaHata(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

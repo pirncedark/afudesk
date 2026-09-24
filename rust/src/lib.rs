@@ -2,6 +2,7 @@
 //! adreslerini parolayla şifreli tek bir koda koyar; karşı taraf kodla doğrudan bağlanır.
 pub mod adres;
 pub mod ag;
+pub mod dosya;
 pub mod goruntu;
 pub mod host;
 pub mod izleyici;

@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 860621179;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 168140344;
 
 // Section: executor
 
@@ -206,11 +206,12 @@ fn wire__crate__api__afudesk__host_kabul_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_kontrol = <bool>::sse_decode(&mut deserializer);
+            let api_dosya = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
                     let output_ok = Ok::<_, ()>({
-                        crate::api::afudesk::host_kabul(api_kontrol);
+                        crate::api::afudesk::host_kabul(api_kontrol, api_dosya);
                     })?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -391,6 +392,41 @@ fn wire__crate__api__afudesk__izleyici_baglan_impl(
                             api_ad,
                             api_olaylar,
                         );
+                    })?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__afudesk__izleyici_dosya_gonder_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "izleyici_dosya_gonder",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_yol = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Ok::<_, ()>({
+                        crate::api::afudesk::izleyici_dosya_gonder(api_yol);
                     })?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -647,6 +683,8 @@ impl SseDecode for crate::api::afudesk::HostOlayi {
         let mut var_ad = <String>::sse_decode(deserializer);
         let mut var_metin = <String>::sse_decode(deserializer);
         let mut var_kontrol = <bool>::sse_decode(deserializer);
+        let mut var_dosya = <bool>::sse_decode(deserializer);
+        let mut var_yol = <String>::sse_decode(deserializer);
         return crate::api::afudesk::HostOlayi {
             tur: var_tur,
             kod: var_kod,
@@ -656,6 +694,8 @@ impl SseDecode for crate::api::afudesk::HostOlayi {
             ad: var_ad,
             metin: var_metin,
             kontrol: var_kontrol,
+            dosya: var_dosya,
+            yol: var_yol,
         };
     }
 }
@@ -679,6 +719,10 @@ impl SseDecode for crate::api::afudesk::IzleyiciOlayi {
         let mut var_genislik = <u32>::sse_decode(deserializer);
         let mut var_yukseklik = <u32>::sse_decode(deserializer);
         let mut var_rgba = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_dosya = <bool>::sse_decode(deserializer);
+        let mut var_gonderilen = <u64>::sse_decode(deserializer);
+        let mut var_toplam = <u64>::sse_decode(deserializer);
+        let mut var_bitti = <bool>::sse_decode(deserializer);
         return crate::api::afudesk::IzleyiciOlayi {
             tur: var_tur,
             rtt_ms: var_rttMs,
@@ -689,6 +733,10 @@ impl SseDecode for crate::api::afudesk::IzleyiciOlayi {
             genislik: var_genislik,
             yukseklik: var_yukseklik,
             rgba: var_rgba,
+            dosya: var_dosya,
+            gonderilen: var_gonderilen,
+            toplam: var_toplam,
+            bitti: var_bitti,
         };
     }
 }
@@ -724,6 +772,13 @@ impl SseDecode for u32 {
     }
 }
 
+impl SseDecode for u64 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_u64::<NativeEndian>().unwrap()
+    }
+}
+
 impl SseDecode for u8 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -754,9 +809,12 @@ fn pde_ffi_dispatcher_primary_impl(
         8 => wire__crate__api__afudesk__host_red_impl(port, ptr, rust_vec_len, data_len),
         9 => wire__crate__api__afudesk__init_app_impl(port, ptr, rust_vec_len, data_len),
         10 => wire__crate__api__afudesk__izleyici_baglan_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__afudesk__izleyici_girdi_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__afudesk__izleyici_kapat_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__afudesk__izleyici_olayi_default_impl(
+        11 => {
+            wire__crate__api__afudesk__izleyici_dosya_gonder_impl(port, ptr, rust_vec_len, data_len)
+        }
+        12 => wire__crate__api__afudesk__izleyici_girdi_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__afudesk__izleyici_kapat_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__afudesk__izleyici_olayi_default_impl(
             port,
             ptr,
             rust_vec_len,
@@ -775,8 +833,8 @@ fn pde_ffi_dispatcher_sync_impl(
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
         1 => wire__crate__api__afudesk__cihaz_adi_impl(ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__afudesk__kare_cizildi_impl(ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__afudesk__surum_impl(ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__afudesk__kare_cizildi_impl(ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__afudesk__surum_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -822,6 +880,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::afudesk::HostOlayi {
             self.ad.into_into_dart().into_dart(),
             self.metin.into_into_dart().into_dart(),
             self.kontrol.into_into_dart().into_dart(),
+            self.dosya.into_into_dart().into_dart(),
+            self.yol.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -850,6 +910,10 @@ impl flutter_rust_bridge::IntoDart for crate::api::afudesk::IzleyiciOlayi {
             self.genislik.into_into_dart().into_dart(),
             self.yukseklik.into_into_dart().into_dart(),
             self.rgba.into_into_dart().into_dart(),
+            self.dosya.into_into_dart().into_dart(),
+            self.gonderilen.into_into_dart().into_dart(),
+            self.toplam.into_into_dart().into_dart(),
+            self.bitti.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -937,6 +1001,8 @@ impl SseEncode for crate::api::afudesk::HostOlayi {
         <String>::sse_encode(self.ad, serializer);
         <String>::sse_encode(self.metin, serializer);
         <bool>::sse_encode(self.kontrol, serializer);
+        <bool>::sse_encode(self.dosya, serializer);
+        <String>::sse_encode(self.yol, serializer);
     }
 }
 
@@ -959,6 +1025,10 @@ impl SseEncode for crate::api::afudesk::IzleyiciOlayi {
         <u32>::sse_encode(self.genislik, serializer);
         <u32>::sse_encode(self.yukseklik, serializer);
         <Vec<u8>>::sse_encode(self.rgba, serializer);
+        <bool>::sse_encode(self.dosya, serializer);
+        <u64>::sse_encode(self.gonderilen, serializer);
+        <u64>::sse_encode(self.toplam, serializer);
+        <bool>::sse_encode(self.bitti, serializer);
     }
 }
 
@@ -986,6 +1056,13 @@ impl SseEncode for u32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         serializer.cursor.write_u32::<NativeEndian>(self).unwrap();
+    }
+}
+
+impl SseEncode for u64 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer.cursor.write_u64::<NativeEndian>(self).unwrap();
     }
 }
 

@@ -156,6 +156,51 @@ void main() {
       expect(m.cagrilar.where((c) => c.startsWith('kabul')), isEmpty);
     });
 
+    testWidgets('dosya alma izin kutusu varsayılan kapalı', (t) async {
+      final m = await verAc(t);
+      m.host.add(const HostOlay('istek', ad: 'Veli'));
+      await gec(t);
+      expect(find.text('Dosya almaya izin ver'), findsOneWidget);
+      expect(t.widget<CheckboxListTile>(find.byKey(const Key('istek_dosya'))).value, isFalse);
+      expect(t.widget<CheckboxListTile>(find.byKey(const Key('istek_kontrol'))).value, isTrue,
+          reason: 'kontrol kutusunun varsayılanı değişmemeli');
+      await t.tap(find.byKey(const Key('istek_kabul')));
+      await gec(t);
+      expect(m.cagrilar, contains('kabul:true'));
+      expect(m.sonDosyaIzni, isFalse, reason: 'dokunulmazsa dosya izni verilmemeli');
+      m.host.add(const HostOlay('baglandi', ad: 'Veli', kontrol: true));
+      await t.pump();
+      expect(find.text('Dosya gönderemez.'), findsOneWidget);
+
+      // Sonraki istekte kutu yine kapalı başlar; işaretlenirse izin gider.
+      m.host.add(const HostOlay('koptu', metin: 'İzleyici bağlantıyı kapattı.'));
+      m.host.add(const HostOlay('istek', ad: 'Ayşe'));
+      await gec(t);
+      expect(t.widget<CheckboxListTile>(find.byKey(const Key('istek_dosya'))).value, isFalse,
+          reason: 'her istekte yeniden kapalı başlamalı');
+      await t.tap(find.byKey(const Key('istek_dosya')));
+      await t.pump();
+      expect(t.widget<CheckboxListTile>(find.byKey(const Key('istek_dosya'))).value, isTrue);
+      await t.tap(find.byKey(const Key('istek_kabul')));
+      await gec(t);
+      expect(m.sonDosyaIzni, isTrue);
+    });
+
+    testWidgets('alınan dosya bildirilir ve listelenir', (t) async {
+      final m = await verAc(t);
+      m.host.add(const HostOlay('baglandi', ad: 'Veli', kontrol: true, dosya: true));
+      await t.pump();
+      expect(find.textContaining('Sana dosya gönderebilir'), findsOneWidget);
+      expect(find.byKey(const Key('ver_alinanlar')), findsNothing);
+      m.host.add(const HostOlay('dosya', ad: 'rapor.pdf', yol: r'C:\Users\x\Downloads\AfuDesk\rapor.pdf'));
+      await t.pump();
+      expect(find.text('Dosya alındı: rapor.pdf'), findsOneWidget);
+      expect(find.byKey(const Key('ver_alinanlar')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const Key('ver_alinanlar')), matching: find.text('rapor.pdf')),
+          findsOneWidget);
+      expect(find.byTooltip(r'C:\Users\x\Downloads\AfuDesk\rapor.pdf'), findsOneWidget);
+    });
+
     testWidgets('istek penceresi süre dolunca kendiliğinden reddeder', (t) async {
       String? sonuc = 'bos';
       await t.pumpWidget(MaterialApp(
@@ -367,6 +412,70 @@ void main() {
       expect(t.widget<Text>(find.byKey(const Key('oturum_istatistik'))).style!.color, Renk.tehlike);
     });
 
+    testWidgets('dosya gönderme ilerlemesi gösterilir', (t) async {
+      final m = await oturumAc(t);
+      m.izleyici.add(IzleyiciOlay('kabul', kontrol: true, dosya: true, genislik: 200, yukseklik: 100));
+      await t.pump();
+      final cubuk = find.byKey(const Key('oturum_dosya_ilerleme'));
+      final dugme = find.byKey(const Key('oturum_dosya_gonder'));
+      expect(cubuk, findsNothing, reason: 'gönderim yokken çubuk yok');
+
+      // Seçici vazgeçilirse hiçbir şey gönderilmez.
+      m.secilecekDosya = null;
+      await t.tap(dugme);
+      await t.pump();
+      expect(m.gonderilenDosyalar, isEmpty);
+      expect(cubuk, findsNothing);
+
+      m.secilecekDosya = r'C:\Belgeler\rapor.pdf';
+      await t.tap(dugme);
+      await t.pump();
+      expect(m.gonderilenDosyalar, [r'C:\Belgeler\rapor.pdf']);
+      expect(find.text('rapor.pdf hazırlanıyor…'), findsOneWidget);
+      expect(t.widget<LinearProgressIndicator>(cubuk).value, isNull);
+
+      m.izleyici.add(IzleyiciOlay('dosya', ad: 'rapor.pdf', gonderilen: 1024 * 1024, toplam: 4 * 1024 * 1024));
+      await t.pump();
+      expect(t.widget<LinearProgressIndicator>(cubuk).value, closeTo(0.25, 1e-9));
+      expect(find.text('rapor.pdf — %25 (1,0 MB / 4,0 MB)'), findsOneWidget);
+      // Gönderim sürerken ikinci dosya başlatılamaz.
+      expect(t.widget<OutlinedButton>(dugme).onPressed, isNull);
+
+      m.izleyici.add(IzleyiciOlay('dosya', ad: 'rapor.pdf', gonderilen: 3 * 1024 * 1024, toplam: 4 * 1024 * 1024));
+      await t.pump();
+      expect(t.widget<LinearProgressIndicator>(cubuk).value, closeTo(0.75, 1e-9));
+
+      m.izleyici.add(
+          IzleyiciOlay('dosya', ad: 'rapor.pdf', gonderilen: 4 * 1024 * 1024, toplam: 4 * 1024 * 1024, bitti: true));
+      await t.pump();
+      expect(cubuk, findsNothing);
+      expect(find.text('rapor.pdf gönderildi.'), findsOneWidget);
+      expect(t.widget<OutlinedButton>(dugme).onPressed, isNotNull);
+
+      // Hata: sebep gösterilir, çubuk kalkar.
+      await t.tap(dugme);
+      await t.pump();
+      expect(cubuk, findsOneWidget);
+      m.izleyici.add(IzleyiciOlay('dosya',
+          ad: 'rapor.pdf',
+          gonderilen: 1024,
+          toplam: 4096,
+          bitti: true,
+          metin: 'Dosya bozuk geldi (SHA-256 uyuşmuyor); yeniden gönder.'));
+      await t.pump();
+      expect(cubuk, findsNothing);
+      expect(find.text('rapor.pdf gönderilemedi: Dosya bozuk geldi (SHA-256 uyuşmuyor); yeniden gönder.'),
+          findsOneWidget);
+    });
+
+    testWidgets('dosya izni yoksa gönder düğmesi pasif', (t) async {
+      final m = await oturumAc(t);
+      m.izleyici.add(IzleyiciOlay('kabul', kontrol: true, genislik: 200, yukseklik: 100));
+      await t.pump();
+      expect(t.widget<OutlinedButton>(find.byKey(const Key('oturum_dosya_gonder'))).onPressed, isNull);
+      expect(find.byTooltip('Karşı taraf dosya almaya izin vermedi'), findsOneWidget);
+    });
+
     testWidgets('karşı taraf reddederse sebep gösterilir', (t) async {
       final m = await oturumAc(t);
       m.izleyici.add(IzleyiciOlay('koptu', metin: 'Karşı taraf bağlantıyı reddetti.'));
@@ -395,6 +504,14 @@ void main() {
       expect(tusAdi(LogicalKeyboardKey.keyA), 'a');
       expect(tusAdi(LogicalKeyboardKey.digit5), '5');
       expect(tusAdi(LogicalKeyboardKey.mediaPlay), isNull);
+    });
+
+    test('dosya adı ve boyut metni', () {
+      expect(dosyaAdi(r'C:\Belgeler\rapor.pdf'), 'rapor.pdf');
+      expect(dosyaAdi('/home/a/b.txt'), 'b.txt');
+      expect(boyutMetni(512), '512 B');
+      expect(boyutMetni(1536), '1,5 KB');
+      expect(boyutMetni(3 * 1024 * 1024), '3,0 MB');
     });
 
     test('hata metni temizlenir', () {
