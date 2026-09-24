@@ -9,6 +9,7 @@ pub mod kod;
 pub mod platform;
 pub mod protokol;
 pub mod kol;
+pub mod sanal_kol;
 
 #[cfg(test)]
 mod uctan_uca;

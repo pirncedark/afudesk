@@ -17,6 +17,7 @@ pub trait Enjektor: Send {
 pub trait Fabrika: Send + Sync {
     fn yakalayici(&self) -> Result<Box<dyn Yakalayici>>;
     fn enjektor(&self) -> Result<Box<dyn Enjektor>>;
+    fn kol_surucusu(&self) -> Result<Box<dyn crate::sanal_kol::KolSurucusu>>;
 }
 
 #[cfg(not(target_os = "android"))]
@@ -33,6 +34,7 @@ pub mod masaustu {
         fn enjektor(&self) -> Result<Box<dyn Enjektor>> {
             Ok(Box::new(EnigoEnjektor::new()?))
         }
+        fn kol_surucusu(&self) -> Result<Box<dyn crate::sanal_kol::KolSurucusu>> { Ok(Box::new(crate::sanal_kol::ViGEmSurucusu::yeni()?)) }
     }
 
     pub struct XcapYakalayici {
@@ -206,11 +208,12 @@ pub mod sahte {
     pub struct SahteFabrika {
         pub girdiler: Arc<Mutex<Vec<Girdi>>>,
         pub boyut: (u32, u32),
+        pub kol_durumlari: Arc<Mutex<Vec<crate::protokol::KolDurumu>>>,
     }
 
     impl SahteFabrika {
         pub fn new(g: u32, y: u32) -> Self {
-            Self { girdiler: Default::default(), boyut: (g, y) }
+            Self { girdiler: Default::default(), boyut: (g, y), kol_durumlari: Default::default() }
         }
     }
 
@@ -245,6 +248,7 @@ pub mod sahte {
     }
 
     impl Fabrika for SahteFabrika {
+        fn kol_surucusu(&self) -> Result<Box<dyn crate::sanal_kol::KolSurucusu>> { Ok(Box::new(crate::sanal_kol::SahteKolSurucusu::yeni(self.kol_durumlari.clone()))) }
         fn yakalayici(&self) -> Result<Box<dyn Yakalayici>> {
             Ok(Box::new(SahteEkran { boyut: self.boyut, sayac: 0 }))
         }

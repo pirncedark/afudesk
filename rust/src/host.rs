@@ -43,6 +43,7 @@ pub enum HostOlay {
     Baglandi { ad: String, izinler: Izinler },
     Koptu { sebep: String },
     Hata(String),
+    Uyari(String),
 }
 
 pub enum HostKomut {
@@ -403,6 +404,7 @@ async fn oturum(
     });
 
     let mut enjektor = if izinler.kontrol { fabrika.enjektor().ok() } else { None };
+    let mut sanal_kol = if izinler.oyun_kolu { match fabrika.kol_surucusu() { Ok(s) => Some(s), Err(_) => { let _ = olay.send(HostOlay::Uyari(crate::sanal_kol::SURUCU_UYARISI.into())).await; None } } } else { None };
     let mut kol_siralari = std::collections::HashMap::<u8, u32>::new();
     let sonuc = loop {
         tokio::select! {
@@ -420,8 +422,10 @@ async fn oturum(
             m = protokol::oku::<_, Kontrol>(&mut r) => match m {
                 Ok(Some(Kontrol::Girdi(g))) => {
                     if let protokol::Girdi::Kol(k) = &g {
-                        if !izinler.oyun_kolu || !sira_yeni(kol_siralari.get(&k.slot).copied(), k.sira) { continue; }
+                        if sanal_kol.is_none() || !sira_yeni(kol_siralari.get(&k.slot).copied(), k.sira) { continue; }
                         kol_siralari.insert(k.slot, k.sira);
+                        if let Some(s) = sanal_kol.as_mut() { let _ = s.guncelle(k); }
+                        continue;
                     }
                     if let Some(e) = enjektor.as_mut() {
                         let _ = tokio::task::block_in_place(|| e.uygula(&g));
@@ -432,16 +436,21 @@ async fn oturum(
             },
             d = c.read_datagram() => match d {
                 Ok(b) => if let Ok(k) = bincode::deserialize::<protokol::KolDurumu>(&b) {
-                    if izinler.oyun_kolu && sira_yeni(kol_siralari.get(&k.slot).copied(), k.sira) {
+                    if sanal_kol.is_some() && sira_yeni(kol_siralari.get(&k.slot).copied(), k.sira) {
                         kol_siralari.insert(k.slot, k.sira);
+                        if let Some(s) = sanal_kol.as_mut() { let _ = s.guncelle(&k); }
                     }
                 },
                 Err(_) => {}
             },
+            _ = tokio::time::sleep(Duration::from_millis(50)) => {
+                if let Some(s) = sanal_kol.as_mut() { for (slot,buyuk,kucuk) in s.titresim_al() { let _ = protokol::yaz(&mut w, &Kontrol::Titresim { slot,buyuk,kucuk }).await; } }
+            }
         }
     };
     yayin_dur.store(true, std::sync::atomic::Ordering::Relaxed);
     yayin.abort();
+    if let Some(s) = sanal_kol.as_mut() { for slot in kol_siralari.keys().copied().collect::<Vec<_>>() { s.kaldir(slot); } }
     sonuc
 }
 

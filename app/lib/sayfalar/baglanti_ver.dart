@@ -29,6 +29,7 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
   String _bagliAd = '';
   bool _bagliKontrol = false;
   bool _bagliOyunKolu = false;
+  bool _kolSurucusuYok = false;
   DateTime _bitis = DateTime.now();
   Timer? _sayac;
   bool _istekAcik = false;
@@ -71,6 +72,7 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
       case 'istek':
         _istekGoster(o.ad);
       case 'baglandi':
+        _kolSurucusuYok = false;
         setState(() {
           _asama = _Asama.bagli;
           _bagliAd = o.ad;
@@ -86,6 +88,9 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
           _asama = _Asama.hata;
           _hata = o.metin;
         });
+      case 'uyari':
+        _kolSurucusuYok = true;
+        _mesaj(o.metin);
     }
   }
 
@@ -170,7 +175,7 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
               const SizedBox(height: 6),
               Text(_bagliKontrol ? 'Fare ve klavyeyi kullanabiliyor.' : 'Yalnız izliyor; kontrol edemez.',
                   style: const TextStyle(color: Renk.soluk)),
-              Text('Oyun kolu: ${_bagliOyunKolu ? 'açık' : 'kapalı'}', key: const Key('ver_oyun_kolu')),
+              Text('Oyun kolu: ${_kolSurucusuYok ? 'sürücü yok' : (_bagliOyunKolu ? 'açık' : 'kapalı')}', key: const Key('ver_oyun_kolu')),
               const SizedBox(height: 18),
               FilledButton.icon(
                 key: const Key('ver_kes'),

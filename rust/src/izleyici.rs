@@ -19,6 +19,7 @@ pub enum IzleyiciOlay {
     Istatistik { rtt_ms: u32, fps: u32 },
     Koptu { sebep: String },
     KolAlgilandi,
+    Titresim { slot: u8, buyuk: u8, kucuk: u8 },
 }
 
 pub struct Izleyici {
@@ -156,6 +157,7 @@ async fn calis(
             }
             m = protokol::oku::<_, Kontrol>(r) => match m {
                 Ok(Some(Kontrol::Kapat(s))) => return s,
+                Ok(Some(Kontrol::Titresim { slot, buyuk, kucuk })) => { let _ = olay.send(IzleyiciOlay::Titresim { slot, buyuk, kucuk }).await; }
                 Ok(Some(_)) => {}
                 _ => return "Bağlantı koptu.".into(),
             },
