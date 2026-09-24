@@ -1,0 +1,19 @@
+GOREV: AfuDesk v1.2 icin ARASTIRMA (salt arastirma, KOD YAZMA, dosya DEGISTIRME)
+
+ONAY BEKLEME: etkilesimsiz calisiyorsun; soru sorma, dogrudan arastir ve raporu yaz.
+UYDURMA YASAK: dogrulamadigin surum/API icin "dogrulanmadi" yaz.
+
+Arastir ve her madde icin: crate linki, guncel surum, lisans, KISA calisir ornek, BILINEN TUZAKLAR:
+1. windows-capture (Rust): Windows Graphics Capture ile birincil monitoru surekli yakalama; kareyi RGBA Vec<u8> olarak alma;
+   ilk kare gecikmesi, sari cerceve (border) kapatma, imleci dahil etme/etmeme, Windows 10 surum gereksinimi.
+2. vigem-client (Rust): Xbox 360 sanal kol olusturma, rapor gonderme (XGamepad alanlari), titresim (rumble) bildirimi alma,
+   ViGEmBus surucusu yoksa hangi hata doner, surucunun kurulu olup olmadigini anlama.
+3. gilrs (Rust): Windows'ta XInput kol okuma, olay dongusu, force feedback (titresim) destegi Windows'ta var mi, eksenlerin
+   isaret/olcek kurali (XInput i16 ile eslesme).
+4. quinn 0.11 datagram: TransportConfig datagram_receive_buffer_size / send_buffer, max_datagram_size, send_datagram hatalari
+   (TooLarge, Disabled), datagram ile guvenilir akisin birlikte kullanimi.
+5. Uzak masaustunde saat farki olcumu (NTP benzeri tek gidis-donus) icin dogru formul ve bilinen hatalar.
+
+SINIR: Hicbir dosya DEGISTIRME, kurulum yapma, git kullanma. Yalniz asagidaki rapor dosyasini yaz.
+BITINCE: raporu docs/arastirma_v12.md dosyasina Turkce yaz. Her madde sonunda "DENETIM ICIN KONTROL:" basligi altinda,
+bu kutuphaneyi kullanan bir kodu gozden gecirirken bakilacak 3-5 somut madde yaz.
