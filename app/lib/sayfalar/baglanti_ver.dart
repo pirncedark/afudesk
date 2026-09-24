@@ -29,6 +29,8 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
   String _bagliAd = '';
   bool _bagliKontrol = false;
   bool _bagliPano = false;
+  bool _bagliDosya = false;
+  final _alinanlar = <(String, String)>[];
   DateTime _bitis = DateTime.now();
   Timer? _sayac;
   bool _istekAcik = false;
@@ -76,7 +78,12 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
           _bagliAd = o.ad;
           _bagliKontrol = o.kontrol;
           _bagliPano = o.pano;
+          _bagliDosya = o.dosya;
+          _alinanlar.clear();
         });
+      case 'dosya':
+        setState(() => _alinanlar.insert(0, (o.ad, o.yol)));
+        _mesaj('Dosya alındı: ${o.ad}');
       case 'koptu':
         _mesaj(o.metin);
         // Host yeni kod üretecek ('hazir' gelecek).
@@ -101,7 +108,7 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
     if (sonuc == null) {
       await widget.motor.hostRed();
     } else {
-      await widget.motor.hostKabul(kontrol: sonuc.kontrol, pano: sonuc.pano);
+      await widget.motor.hostKabul(kontrol: sonuc.kontrol, pano: sonuc.pano, dosya: sonuc.dosya);
     }
   }
 
@@ -175,6 +182,36 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
                   padding: EdgeInsets.only(top: 4),
                   child: Text('Pano paylaşılıyor.', key: Key('ver_pano'), style: TextStyle(color: Renk.soluk)),
                 ),
+const SizedBox(height: 4),
+              Text(_bagliDosya ? 'Sana dosya gönderebilir (İndirilenler\\AfuDesk).' : 'Dosya gönderemez.',
+                  key: const Key('ver_dosya_izni'), style: const TextStyle(color: Renk.soluk)),
+              if (_alinanlar.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Container(
+                  key: const Key('ver_alinanlar'),
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: Renk.yuzey2, borderRadius: BorderRadius.circular(8)),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('Alınan dosyalar', style: TextStyle(fontWeight: FontWeight.w700)),
+                    for (final (ad, yol) in _alinanlar)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Row(children: [
+                          const Icon(Icons.download_done_rounded, size: 18, color: Renk.basari),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Tooltip(
+                              message: yol,
+                              child: Text(ad, overflow: TextOverflow.ellipsis),
+                            ),
+                          ),
+                        ]),
+                      ),
+                  ]),
+                ),
+              ],
+
               const SizedBox(height: 18),
               FilledButton.icon(
                 key: const Key('ver_kes'),
@@ -260,11 +297,10 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
   }
 }
 
-/// Kabul kararı: verilen izinler.
-class IstekKarari {
   final bool kontrol;
   final bool pano;
-  const IstekKarari({required this.kontrol, required this.pano});
+  final bool dosya;
+  const IstekKarari({required this.kontrol, required this.pano, required this.dosya});
 }
 
 /// Gelen bağlantı isteği. Sonuç: null = reddet, [IstekKarari] = kabul (+izinler).
@@ -279,8 +315,8 @@ class IstekPenceresi extends StatefulWidget {
 
 class _IstekPenceresiDurum extends State<IstekPenceresi> {
   bool _kontrol = true;
-  /// Gizlilik: pano paylaşımı varsayılan KAPALI.
   bool _pano = false;
+  bool _dosya = false;
   late int _kalan = widget.sure.inSeconds;
   Timer? _t;
 
@@ -325,13 +361,21 @@ class _IstekPenceresiDurum extends State<IstekPenceresi> {
           onChanged: (v) => setState(() => _pano = v ?? false),
           title: const Text('Pano paylaşımı'),
           subtitle: const Text('Kopyalanan metinler iki yönde paylaşılır.', style: TextStyle(fontSize: 12)),
+key: const Key('istek_dosya'),
+          contentPadding: EdgeInsets.zero,
+          value: _dosya,
+          onChanged: (v) => setState(() => _dosya = v ?? false),
+          title: const Text('Dosya almaya izin ver'),
+          subtitle: const Text('Gelen dosyalar İndirilenler\\AfuDesk klasörüne kaydedilir.',
+              style: TextStyle(color: Renk.soluk, fontSize: 12)),
+
         ),
         Text('$_kalan sn içinde yanıt vermezsen reddedilir.', style: const TextStyle(color: Renk.soluk, fontSize: 12)),
       ]),
       actions: [
         TextButton(key: const Key('istek_red'), onPressed: () => Navigator.pop(context, null), child: const Text('Reddet')),
         FilledButton(
-            key: const Key('istek_kabul'), onPressed: () => Navigator.pop(context, IstekKarari(kontrol: _kontrol, pano: _pano)),
+key: const Key('istek_kabul'), onPressed: () => Navigator.pop(context, IstekKarari(kontrol: _kontrol, pano: _pano, dosya: _dosya)),
             child: const Text('Kabul et')),
       ],
     );

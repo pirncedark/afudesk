@@ -147,4 +147,9 @@ void main() {
     expect(m.girdiler, isEmpty);
     expect(find.byKey(const Key('oturum_klavye')), findsNothing);
   });
+
+  testWidgets('dokunmatik oturumda dosya gönder düğmesi yok (yalnız masaüstü)', (t) async {
+    await telefon(t);
+    expect(find.byKey(const Key('oturum_dosya_gonder')), findsNothing);
+  });
 }

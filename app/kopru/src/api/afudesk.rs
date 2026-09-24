@@ -29,7 +29,7 @@ static IZLEYICI: Mutex<Option<Arc<izleyici::Izleyici>>> = Mutex::new(None);
 /// Dart son kareyi çizdi mi? (en-yeni-kazanır geri basıncı)
 static KARE_SERBEST: AtomicBool = AtomicBool::new(true);
 
-/// Host olayı. `tur`: hazir | istek | baglandi | koptu | hata.
+/// Host olayı. `tur`: hazir | istek | baglandi | koptu | hata | dosya.
 #[derive(Debug, Clone, Default)]
 pub struct HostOlayi {
     pub tur: String,
@@ -41,9 +41,13 @@ pub struct HostOlayi {
     pub metin: String,
     pub kontrol: bool,
     pub pano: bool,
+    /// baglandi: dosya alma izni.
+    pub dosya: bool,
+    /// dosya: al?nan dosyan?n tam yolu.
+    pub yol: String,
 }
 
-/// İzleyici olayı. `tur`: bekliyor | kabul | kare | istatistik | koptu | hata | pano.
+/// ?zleyici olay?. `tur`: bekliyor | kabul | kare | istatistik | koptu | hata | pano | dosya.
 #[derive(Debug, Clone, Default)]
 pub struct IzleyiciOlayi {
     pub tur: String,
@@ -57,6 +61,12 @@ pub struct IzleyiciOlayi {
     pub genislik: u32,
     pub yukseklik: u32,
     pub rgba: Vec<u8>,
+    /// kabul: dosya gönderme izni.
+    pub dosya: bool,
+    /// dosya: gönderilen/toplam bayt; `bitti` ise `metin` boşsa başarılı, doluysa hata.
+    pub gonderilen: u64,
+    pub toplam: u64,
+    pub bitti: bool,
 }
 
 /// Girdi. `tur`: konum | fare | kaydir | tus | metin.
@@ -79,11 +89,12 @@ fn host_dto(o: HostOlay) -> HostOlayi {
             HostOlayi { tur: "hazir".into(), kod, parola, adresler, erisim, ..Default::default() }
         }
         HostOlay::Istek { ad } => HostOlayi { tur: "istek".into(), ad, ..Default::default() },
-        HostOlay::Baglandi { ad, izinler } => {
-            HostOlayi { tur: "baglandi".into(), ad, kontrol: izinler.kontrol, pano: izinler.pano, ..Default::default() }
-        }
+        HostOlay::Baglandi { ad, izinler } => HostOlayi {
+            tur: "baglandi".into(), ad, kontrol: izinler.kontrol, pano: izinler.pano, dosya: izinler.dosya, ..Default::default()
+        },
         HostOlay::Koptu { sebep } => HostOlayi { tur: "koptu".into(), metin: sebep, ..Default::default() },
         HostOlay::Hata(m) => HostOlayi { tur: "hata".into(), metin: m, ..Default::default() },
+        HostOlay::DosyaAlindi { ad, yol } => HostOlayi { tur: "dosya".into(), ad, yol, ..Default::default() },
     }
 }
 
@@ -116,7 +127,7 @@ pub fn host_baslat(ad: String, parola: String, upnp: bool, olaylar: StreamSink<H
     let fab: Arc<dyn afudesk_core::platform::Fabrika> = Arc::new(afudesk_core::platform::masaustu::Gercek);
     #[cfg(not(target_os = "android"))]
     {
-    let mut h = match rt().block_on(host::baslat(HostAyar { ad, port: 0, upnp, parola, yalniz_yerel: false }, fab)) {
+    let mut h = match rt().block_on(host::baslat(HostAyar { ad, port: 0, upnp, parola, yalniz_yerel: false, dosya_klasoru: None }, fab)) {
         Ok(h) => h,
         Err(e) => return hata(&olaylar, format!("Bağlantı açılamadı: {e}")),
     };
@@ -142,8 +153,8 @@ fn host_komut(k: HostKomut) {
     }
 }
 
-pub fn host_kabul(kontrol: bool, pano: bool) {
-    host_komut(HostKomut::Kabul(Izinler { kontrol, pano }));
+pub fn host_kabul(kontrol: bool, pano: bool, dosya: bool) {
+    host_komut(HostKomut::Kabul(Izinler { kontrol, pano, dosya }));
 }
 
 pub fn host_red() {
@@ -188,9 +199,9 @@ pub fn izleyici_baglan(kod: String, parola: String, ad: String, olaylar: StreamS
         while let Some(o) = alici.recv().await {
             let dto = match o {
                 IzleyiciOlay::OnayBekleniyor { karsi_ad } => IzleyiciOlayi { tur: "bekliyor".into(), ad: karsi_ad, ..Default::default() },
-                IzleyiciOlay::Kabul { izinler, genislik, yukseklik } => {
-                    IzleyiciOlayi { tur: "kabul".into(), kontrol: izinler.kontrol, pano: izinler.pano, genislik, yukseklik, ..Default::default() }
-                }
+                IzleyiciOlay::Kabul { izinler, genislik, yukseklik } => IzleyiciOlayi {
+                    tur: "kabul".into(), kontrol: izinler.kontrol, pano: izinler.pano, dosya: izinler.dosya, genislik, yukseklik, ..Default::default()
+                },
                 IzleyiciOlay::Kare { genislik, yukseklik, rgba } => {
                     // Dart önceki kareyi çizmediyse bunu atla; sıradaki daha yeni olacak.
                     if !KARE_SERBEST.swap(false, Ordering::SeqCst) {
@@ -203,6 +214,9 @@ pub fn izleyici_baglan(kod: String, parola: String, ad: String, olaylar: StreamS
                 }
                 IzleyiciOlay::Koptu { sebep } => IzleyiciOlayi { tur: "koptu".into(), metin: sebep, ..Default::default() },
                 IzleyiciOlay::Pano(metin) => IzleyiciOlayi { tur: "pano".into(), metin, ..Default::default() },
+                IzleyiciOlay::Dosya { ad, gonderilen, toplam, bitti, hata } => IzleyiciOlayi {
+                    tur: "dosya".into(), ad, gonderilen, toplam, bitti, metin: hata, ..Default::default()
+                },
             };
             if olaylar.add(dto).is_err() {
                 break;
@@ -235,6 +249,14 @@ pub fn izleyici_girdi(g: GirdiOlayi) {
         _ => return,
     };
     rt().spawn(async move { iz.gonder(girdi).await });
+}
+
+/// Dosyayı karşı tarafa gönderir; ilerleme/sonuç izleyici akışına `tur = "dosya"` olarak gelir.
+pub fn izleyici_dosya_gonder(yol: String) {
+    let Some(iz) = IZLEYICI.lock().unwrap().clone() else { return };
+    let _g = rt().enter();
+    // Görev arka planda sürer; sonuç olay olarak gelir.
+    drop(iz.dosya_gonder(yol));
 }
 
 pub fn izleyici_kapat() {

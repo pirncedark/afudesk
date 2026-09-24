@@ -3,14 +3,20 @@
 //! panoyu karşı tarafla paylaşır.
 use crate::{
     adres::{self, UpnpDurum},
-    ag, goruntu::Kodlayici,
+    ag, dosya,
+    goruntu::Kodlayici,
     kod::{self, Davet},
     pano::{Esitleyici, PANO_ARALIGI},
     platform::Fabrika,
     protokol::{self, Izinler, Kontrol, SURUM},
 };
 use anyhow::Result;
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{
+    net::SocketAddr,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
 use tokio::sync::{mpsc, oneshot};
 
 pub const VARSAYILAN_PORT: u16 = 47_470;
@@ -45,6 +51,8 @@ pub enum HostOlay {
     Baglandi { ad: String, izinler: Izinler },
     Koptu { sebep: String },
     Hata(String),
+    /// İzleyiciden bir dosya eksiksiz ve doğrulanmış olarak geldi.
+    DosyaAlindi { ad: String, yol: String },
 }
 
 pub enum HostKomut {
@@ -62,6 +70,8 @@ pub struct HostAyar {
     pub parola: String,
     /// Testler için: kodda yalnız 127.0.0.1 olsun, UPnP denenmesin.
     pub yalniz_yerel: bool,
+    /// Alınan dosyaların klasörü; `None` = İndirilenler\AfuDesk.
+    pub dosya_klasoru: Option<PathBuf>,
 }
 
 pub struct Host {
@@ -167,6 +177,7 @@ async fn calis(
         let _ = olay.send(HostOlay::Hata("Ağ bağlantısı bulunamadı.".into())).await;
         return;
     }
+    let klasor = ayar.dosya_klasoru.clone().unwrap_or_else(dosya::varsayilan_klasor);
     let parola = if ayar.parola.trim().is_empty() { kod::yeni_parola() } else { ayar.parola.trim().to_owned() };
     'kod: loop {
         let bilet = kod::yeni_bilet();
@@ -198,7 +209,7 @@ async fn calis(
             };
             let Some(gelen) = gelen else { break 'kod };
             let Ok(Ok(baglanti)) = tokio::time::timeout(Duration::from_secs(10), gelen).await else { continue };
-            match oturum(&baglanti, &bilet, &fabrika, &olay, &mut komut, &mut durdur).await {
+            match oturum(&baglanti, &bilet, &fabrika, &klasor, &olay, &mut komut, &mut durdur).await {
                 Oturum::Reddedildi => continue,
                 Oturum::Bitti(sebep) => {
                     let _ = olay.send(HostOlay::Koptu { sebep }).await;
@@ -239,6 +250,7 @@ async fn oturum(
     c: &quinn::Connection,
     bilet: &str,
     fabrika: &Arc<dyn Fabrika>,
+    klasor: &Path,
     olay: &mpsc::Sender<HostOlay>,
     komut: &mut mpsc::Receiver<HostKomut>,
     durdur: &mut oneshot::Receiver<()>,
@@ -427,6 +439,24 @@ async fn oturum(
     };
     let mut pano_saat = tokio::time::interval(PANO_ARALIGI);
     pano_saat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    // Kontrol akışından sonra gelen her çift yönlü akış bir dosya akışıdır. İzin yoksa da
+    // kabul edilir: başlık okunur ve izleyiciye nedenini söyleyen `DosyaHata` döner.
+    // Ayrı görevde kabul edilir: aşağıdaki select'e dal olarak eklenseydi, bir dosya
+    // akışı geldiğinde yarım okunmuş bir kontrol mesajı iptal olup akış kayabilirdi
+    // (`protokol::oku` iptale dayanıklı değil).
+    let alici = dosya::Alici::new(klasor.to_owned(), izinler.dosya);
+    let (c3, olay3) = (c.clone(), olay.clone());
+    let dosyalar = tokio::spawn(async move {
+        while let Ok((w2, r2)) = c3.accept_bi().await {
+            let (alici, olay) = (alici.clone(), olay3.clone());
+            tokio::spawn(async move {
+                if let Some((ad, yol)) = dosya::al(&alici, w2, r2).await {
+                    let _ = olay.send(HostOlay::DosyaAlindi { ad, yol: yol.display().to_string() }).await;
+                }
+            });
+        }
+    });
+
     let sonuc = loop {
         tokio::select! {
             _ = &mut *durdur => { c.close(0u32.into(), b"durdu"); break Oturum::Durdur; }
@@ -471,6 +501,7 @@ async fn oturum(
     okuyucu.abort();
     yayin_dur.store(true, std::sync::atomic::Ordering::Relaxed);
     yayin.abort();
+    dosyalar.abort();
     sonuc
 }
 

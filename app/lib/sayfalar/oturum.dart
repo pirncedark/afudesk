@@ -29,6 +29,8 @@ class _OturumDurum extends State<OturumSayfasi> {
   String _karsiAd = '';
   String _mesaj = '';
   bool _kontrol = false;
+  bool _dosyaIzni = false;
+  _Aktarim? _aktarim;
   int _rtt = -1, _fps = 0, _gecikme = 0;
   ui.Image? _kare;
   final _odak = FocusNode();
@@ -76,6 +78,7 @@ class _OturumDurum extends State<OturumSayfasi> {
         setState(() {
           _asama = _Asama.bagli;
           _kontrol = o.kontrol;
+          _dosyaIzni = o.dosya;
         });
         _odak.requestFocus();
         if (widget.motor.dokunmatik && o.kontrol) {
@@ -110,10 +113,69 @@ class _OturumDurum extends State<OturumSayfasi> {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(const SnackBar(content: Text('Pano güncellendi'), duration: Duration(seconds: 1)));
+case 'dosya':
+        _dosyaOlayi(o);
+
       case 'koptu':
       case 'hata':
         _bitir(o.metin);
     }
+  }
+
+  // --- dosya gönderme ---
+
+  Future<void> _dosyaGonder() async {
+    final yol = await widget.motor.dosyaSec();
+    if (yol == null || !mounted) return;
+    setState(() => _aktarim = _Aktarim(dosyaAdi(yol)));
+    await widget.motor.dosyaGonder(yol);
+  }
+
+  void _dosyaOlayi(IzleyiciOlay o) {
+    if (!o.bitti) {
+      setState(() => _aktarim = _Aktarim(o.ad, gonderilen: o.gonderilen, toplam: o.toplam));
+      return;
+    }
+    setState(() => _aktarim = null);
+    final basarili = o.metin.isEmpty;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        key: const Key('oturum_dosya_sonuc'),
+        content: Text(basarili ? '${o.ad} gönderildi.' : '${o.ad} gönderilemedi: ${o.metin}'),
+        backgroundColor: basarili ? null : Renk.tehlike,
+        duration: Duration(seconds: basarili ? 3 : 6),
+      ));
+  }
+
+  Widget _dosyaCubugu(_Aktarim a) {
+    final oran = a.toplam > 0 ? (a.gonderilen / a.toplam).clamp(0.0, 1.0) : null;
+    final metin = oran == null
+        ? '${a.ad} hazırlanıyor…'
+        : '${a.ad} — %${(oran * 100).floor()} (${boyutMetni(a.gonderilen)} / ${boyutMetni(a.toplam)})';
+    return Material(
+      color: Renk.yuzey,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              const Icon(Icons.upload_file_rounded, size: 18, color: Renk.soluk),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(metin,
+                    key: const Key('oturum_dosya_metin'),
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13, fontFeatures: [FontFeature.tabularFigures()])),
+              ),
+            ]),
+            const SizedBox(height: 6),
+            LinearProgressIndicator(key: const Key('oturum_dosya_ilerleme'), value: oran),
+          ]),
+        ),
+      ),
+    );
   }
 
   @override
@@ -363,6 +425,28 @@ class _OturumDurum extends State<OturumSayfasi> {
                             : (_rtt < 80 ? Renk.basari : (_rtt < 200 ? Renk.soluk : Renk.tehlike)))),
               ),
             ),
+          if (_asama == _Asama.bagli && !widget.motor.dokunmatik)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Tooltip(
+                message: _dosyaIzni
+                    ? (_aktarim == null ? 'Karşı tarafa dosya gönder' : 'Bir dosya gönderiliyor')
+                    : 'Karşı taraf dosya almaya izin vermedi',
+                child: dar
+                    ? IconButton(
+                        key: const Key('oturum_dosya_gonder'),
+                        onPressed: _dosyaIzni && _aktarim == null ? _dosyaGonder : null,
+                        icon: const Icon(Icons.upload_file_rounded),
+                      )
+                    : OutlinedButton.icon(
+                        key: const Key('oturum_dosya_gonder'),
+                        style: OutlinedButton.styleFrom(minimumSize: const Size(0, 38)),
+                        onPressed: _dosyaIzni && _aktarim == null ? _dosyaGonder : null,
+                        icon: const Icon(Icons.upload_file_rounded, size: 18),
+                        label: const Text('Dosya gönder'),
+                      ),
+              ),
+            ),
           if (_asama == _Asama.bagli)
             Padding(
               padding: const EdgeInsets.only(right: 8),
@@ -392,6 +476,7 @@ class _OturumDurum extends State<OturumSayfasi> {
         ],
       ),
       body: _govde(),
+      bottomNavigationBar: _asama == _Asama.bagli && _aktarim != null ? _dosyaCubugu(_aktarim!) : null,
     );
   }
 
@@ -462,6 +547,13 @@ class _OturumDurum extends State<OturumSayfasi> {
         );
     }
   }
+}
+
+class _Aktarim {
+  final String ad;
+  final int gonderilen;
+  final int toplam;
+  const _Aktarim(this.ad, {this.gonderilen = 0, this.toplam = 0});
 }
 
 class _Bilgi extends StatelessWidget {

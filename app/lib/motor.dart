@@ -3,11 +3,13 @@ import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:typed_data';
 
+import 'package:file_selector/file_selector.dart' as fs;
+
 import 'src/rust/api/afudesk.dart' as rust;
 
 /// Host tarafı olayı.
 class HostOlay {
-  final String tur; // hazir | istek | baglandi | koptu | hata
+  final String tur; // hazir | istek | baglandi | koptu | hata | dosya
   final String kod;
   final String parola;
   final String erisim;
@@ -15,6 +17,8 @@ class HostOlay {
   final String metin;
   final bool kontrol;
   final bool pano;
+  final bool dosya;
+  final String yol;
   const HostOlay(this.tur,
       {this.kod = '',
       this.parola = '',
@@ -22,12 +26,14 @@ class HostOlay {
       this.ad = '',
       this.metin = '',
       this.kontrol = false,
-      this.pano = false});
+      this.pano = false,
+      this.dosya = false,
+      this.yol = ''});
 }
 
 /// İzleyici tarafı olayı.
 class IzleyiciOlay {
-  final String tur; // bekliyor | kabul | kare | istatistik | koptu | hata | pano
+  final String tur; // bekliyor | kabul | kare | istatistik | koptu | hata | pano | dosya
   final int rttMs;
   final int gecikmeMs;
   final int fps;
@@ -38,6 +44,12 @@ class IzleyiciOlay {
   final int genislik;
   final int yukseklik;
   final Uint8List rgba;
+  /// kabul: karşı taraf dosya almaya izin verdi mi.
+  final bool dosya;
+  /// dosya: ilerleme (bayt). `bitti` ise `metin` boşsa başarılı, doluysa hata.
+  final int gonderilen;
+  final int toplam;
+  final bool bitti;
   IzleyiciOlay(this.tur,
       {this.rttMs = 0,
       this.gecikmeMs = 0,
@@ -48,6 +60,10 @@ class IzleyiciOlay {
       this.pano = false,
       this.genislik = 0,
       this.yukseklik = 0,
+      this.dosya = false,
+      this.gonderilen = 0,
+      this.toplam = 0,
+      this.bitti = false,
       Uint8List? rgba})
       : rgba = rgba ?? Uint8List(0);
 }
@@ -79,14 +95,17 @@ abstract class Motor {
   /// Dokunmatik kontrol kipi (telefon/tablet).
   bool get dokunmatik;
   Stream<HostOlay> hostBaslat({required String ad, String parola = '', bool upnp = true});
-  /// `pano`: iki yönlü metin pano paylaşımı (varsayılan kapalı — gizlilik).
-  Future<void> hostKabul({required bool kontrol, bool pano = false});
+  Future<void> hostKabul({required bool kontrol, bool pano = false, bool dosya = false});
   Future<void> hostRed();
   Future<void> hostKes();
   Future<void> hostDurdur();
   Stream<IzleyiciOlay> baglan({required String kod, required String parola, required String ad});
   void kareCizildi();
   void girdi(Girdi g);
+  /// Gönderilecek dosyayı kullanıcıya seçtirir; vazgeçilirse null.
+  Future<String?> dosyaSec();
+  /// Dosyayı karşı tarafa gönderir; ilerleme `baglan` akışına 'dosya' olayı olarak gelir.
+  Future<void> dosyaGonder(String yol);
   Future<void> izleyiciKapat();
 }
 
@@ -109,11 +128,13 @@ class RustMotor implements Motor {
           ad: o.ad,
           metin: o.metin,
           kontrol: o.kontrol,
-          pano: o.pano));
+          pano: o.pano,
+          dosya: o.dosya,
+          yol: o.yol));
 
   @override
-  Future<void> hostKabul({required bool kontrol, bool pano = false}) =>
-      rust.hostKabul(kontrol: kontrol, pano: pano);
+  Future<void> hostKabul({required bool kontrol, bool pano = false, bool dosya = false}) =>
+      rust.hostKabul(kontrol: kontrol, pano: pano, dosya: dosya);
   @override
   Future<void> hostRed() => rust.hostRed();
   @override
@@ -133,6 +154,10 @@ class RustMotor implements Motor {
           rttMs: o.rttMs,
           fps: o.fps,
           gecikmeMs: o.gecikmeMs,
+          dosya: o.dosya,
+          gonderilen: o.gonderilen.toInt(),
+          toplam: o.toplam.toInt(),
+          bitti: o.bitti,
           rgba: o.rgba));
 
   @override
@@ -153,7 +178,29 @@ class RustMotor implements Motor {
   }
 
   @override
+  Future<String?> dosyaSec() async => (await fs.openFile(confirmButtonText: 'Gönder'))?.path;
+
+  @override
+  Future<void> dosyaGonder(String yol) => rust.izleyiciDosyaGonder(yol: yol);
+
+  @override
   Future<void> izleyiciKapat() => rust.izleyiciKapat();
+}
+
+/// Yolun son parçası (Windows ve POSIX ayırıcıları).
+String dosyaAdi(String yol) => yol.split(RegExp(r'[\\/]')).lastWhere((p) => p.isNotEmpty, orElse: () => yol);
+
+/// İnsan okunur boyut: 512 B, 1,5 KB, 3,0 MB, 1,2 GB.
+String boyutMetni(int bayt) {
+  if (bayt < 1024) return '$bayt B';
+  const birimler = ['KB', 'MB', 'GB', 'TB'];
+  var d = bayt / 1024;
+  var i = 0;
+  while (d >= 1024 && i < birimler.length - 1) {
+    d /= 1024;
+    i++;
+  }
+  return '${d.toStringAsFixed(1).replaceAll('.', ',')} ${birimler[i]}';
 }
 
 /// Rust hata mesajını kullanıcıya gösterilecek hale getirir.
