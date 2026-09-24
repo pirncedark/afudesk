@@ -9,23 +9,57 @@ use crate::{
     zaman,
 };
 use anyhow::Result;
-use std::{collections::VecDeque, path::PathBuf, sync::{Arc, atomic::{AtomicBool, AtomicI64, Ordering}}, time::Duration};
+use std::{
+    collections::VecDeque,
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, AtomicI64, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 use tokio::sync::mpsc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum IzleyiciOlay {
     /// Bağlandı, karşı tarafın onayı bekleniyor.
-    OnayBekleniyor { karsi_ad: String },
-    Kabul { izinler: Izinler, genislik: u32, yukseklik: u32 },
+    OnayBekleniyor {
+        karsi_ad: String,
+    },
+    Kabul {
+        izinler: Izinler,
+        genislik: u32,
+        yukseklik: u32,
+    },
     /// Birleştirilmiş tam ekran (RGBA).
-    Kare { genislik: u32, yukseklik: u32, rgba: Vec<u8> },
+    Kare {
+        genislik: u32,
+        yukseklik: u32,
+        rgba: Vec<u8>,
+    },
     /// Saniyede bir: bağlantı gidiş-dönüş süresi ve ekrana gelen kare hızı.
-    Istatistik { rtt_ms: u32, fps: u32, gecikme_ms: u32 },
-    Koptu { sebep: String },
-    /// Kar?? taraftan pano metni geldi (izleyicinin panosu varsa oraya da yaz?ld?).
+    Istatistik {
+        rtt_ms: u32,
+        fps: u32,
+        gecikme_ms: u32,
+    },
+    Koptu {
+        sebep: String,
+    },
     Pano(String),
-    /// Dosya g?nderme ilerlemesi. `gonderilen` devam noktas? dahil toplam ilerlemedir.
-    Dosya { ad: String, gonderilen: u64, toplam: u64, bitti: bool, hata: String },
+    Dosya {
+        ad: String,
+        gonderilen: u64,
+        toplam: u64,
+        bitti: bool,
+        hata: String,
+    },
+    KolAlgilandi,
+    Titresim {
+        slot: u8,
+        buyuk: u8,
+        kucuk: u8,
+    },
 }
 
 pub struct Izleyici {
@@ -52,28 +86,56 @@ impl Izleyici {
     /// Dosyayı karşı tarafa gönderir (arka planda). İlerleme ve sonuç
     /// `IzleyiciOlay::Dosya` olarak gelir; sonuç ayrıca dönen görevden okunabilir.
     /// Aynı dosya yeniden gönderilirse host kaldığı yerden devam ettirir.
-    pub fn dosya_gonder(&self, yol: impl Into<PathBuf>) -> tokio::task::JoinHandle<Result<Gonderim>> {
+    pub fn dosya_gonder(
+        &self,
+        yol: impl Into<PathBuf>,
+    ) -> tokio::task::JoinHandle<Result<Gonderim>> {
         self.dosya_gonder_ayarli(yol.into(), GonderAyari::default())
     }
 
-    pub(crate) fn dosya_gonder_ayarli(&self, yol: PathBuf, ayar: GonderAyari) -> tokio::task::JoinHandle<Result<Gonderim>> {
+    pub(crate) fn dosya_gonder_ayarli(
+        &self,
+        yol: PathBuf,
+        ayar: GonderAyari,
+    ) -> tokio::task::JoinHandle<Result<Gonderim>> {
         let c = self.baglanti.clone();
         let olay = self.olay.upgrade();
         tokio::spawn(async move {
-            let ad = yol.file_name().map(|a| a.to_string_lossy().into_owned()).unwrap_or_default();
+            let ad = yol
+                .file_name()
+                .map(|a| a.to_string_lossy().into_owned())
+                .unwrap_or_default();
             let mut son = (0, 0);
             let sonuc = dosya::gonder(&c, &yol, ayar, |gonderilen, toplam| {
                 son = (gonderilen, toplam);
                 // Ara ilerleme düşebilir (arayüz yavaşsa); sonuç asla düşmez.
                 if let Some(o) = &olay {
-                    let _ = o.try_send(IzleyiciOlay::Dosya { ad: ad.clone(), gonderilen, toplam, bitti: false, hata: String::new() });
+                    let _ = o.try_send(IzleyiciOlay::Dosya {
+                        ad: ad.clone(),
+                        gonderilen,
+                        toplam,
+                        bitti: false,
+                        hata: String::new(),
+                    });
                 }
             })
             .await;
             if let Some(o) = &olay {
                 let bitis = match &sonuc {
-                    Ok(g) => IzleyiciOlay::Dosya { ad: ad.clone(), gonderilen: g.toplam, toplam: g.toplam, bitti: true, hata: String::new() },
-                    Err(e) => IzleyiciOlay::Dosya { ad: ad.clone(), gonderilen: son.0, toplam: son.1, bitti: true, hata: e.to_string() },
+                    Ok(g) => IzleyiciOlay::Dosya {
+                        ad: ad.clone(),
+                        gonderilen: g.toplam,
+                        toplam: g.toplam,
+                        bitti: true,
+                        hata: String::new(),
+                    },
+                    Err(e) => IzleyiciOlay::Dosya {
+                        ad: ad.clone(),
+                        gonderilen: son.0,
+                        toplam: son.1,
+                        bitti: true,
+                        hata: e.to_string(),
+                    },
                 };
                 let _ = o.send(bitis).await;
             }
@@ -88,26 +150,72 @@ pub async fn baglan(kod_metni: &str, parola: &str, ad: &str) -> Result<Izleyici>
 
 /// `pano`: izleyicinin kendi panosu. `None` (ör. Android) ise yalnız host → izleyici yönü
 /// çalışır; gelen metin `IzleyiciOlay::Pano` ile arayüze bildirilir.
-pub async fn baglan_panolu(kod_metni: &str, parola: &str, ad: &str, pano: Option<Box<dyn Pano>>) -> Result<Izleyici> {
+pub async fn baglan_panolu(
+    kod_metni: &str,
+    parola: &str,
+    ad: &str,
+    pano: Option<Box<dyn Pano>>,
+) -> Result<Izleyici> {
     let d = kod::coz(kod_metni, parola, kod::simdi())?;
     let c = ag::baglan(&d.adresler, &d.parmak_izi, Duration::from_secs(6)).await?;
     let (mut w, r) = c.open_bi().await?;
-    protokol::yaz(&mut w, &Kontrol::Merhaba { surum: SURUM, bilet: d.bilet.clone(), ad: ad.to_owned() }).await?;
+    protokol::yaz(
+        &mut w,
+        &Kontrol::Merhaba {
+            surum: SURUM,
+            bilet: d.bilet.clone(),
+            ad: ad.to_owned(),
+        },
+    )
+    .await?;
     let (olay_tx, olaylar) = mpsc::channel(4);
     let (girdi, mut girdi_rx) = mpsc::channel::<Girdi>(256);
-    let _ = olay_tx.send(IzleyiciOlay::OnayBekleniyor { karsi_ad: d.ad.clone() }).await;
+    let _ = olay_tx
+        .send(IzleyiciOlay::OnayBekleniyor {
+            karsi_ad: d.ad.clone(),
+        })
+        .await;
     let olay = olay_tx.downgrade();
+
+    let (kol_olay_tx, mut kol_olay_rx) = mpsc::unbounded_channel();
+    let (titresim_tx, titresim_rx) = std::sync::mpsc::channel::<(u8, u8)>();
+    #[cfg(all(not(target_os = "android"), not(test)))]
+    {
+        let tx = girdi.clone();
+        std::thread::spawn(move || crate::kol::oku(tx, kol_olay_tx, titresim_rx));
+    }
+    #[cfg(any(target_os = "android", test))]
+    drop(kol_olay_tx);
+    #[cfg(any(target_os = "android", test))]
+    drop(titresim_rx);
     let c2 = c.clone();
     let saat_farki = Arc::new(AtomicI64::new(0));
     let saat_esitlendi = Arc::new(AtomicBool::new(false));
     let fark2 = saat_farki.clone();
     let esit2 = saat_esitlendi.clone();
     tokio::spawn(async move {
-        let sebep = calis(&c2, &mut w, r, &olay_tx, &mut girdi_rx, pano, fark2, esit2).await;
+        let sebep = calis(
+            &c2,
+            &mut w,
+            r,
+            &olay_tx,
+            &mut girdi_rx,
+            pano,
+            fark2,
+            esit2,
+            &mut kol_olay_rx,
+            titresim_tx,
+        )
+        .await;
         c2.close(0u32.into(), b"bitti");
         let _ = olay_tx.send(IzleyiciOlay::Koptu { sebep }).await;
     });
-    Ok(Izleyici { olaylar, girdi, baglanti: c, olay })
+    Ok(Izleyici {
+        olaylar,
+        girdi,
+        baglanti: c,
+        olay,
+    })
 }
 
 async fn calis(
@@ -119,11 +227,24 @@ async fn calis(
     pano: Option<Box<dyn Pano>>,
     saat_farki: Arc<AtomicI64>,
     saat_esitlendi: Arc<AtomicBool>,
+    kol_olay: &mut mpsc::UnboundedReceiver<()>,
+    titresim: std::sync::mpsc::Sender<(u8, u8)>,
 ) -> String {
-    let ilk = tokio::time::timeout(Duration::from_secs(75), protokol::oku::<_, Kontrol>(&mut r)).await;
+    let ilk =
+        tokio::time::timeout(Duration::from_secs(75), protokol::oku::<_, Kontrol>(&mut r)).await;
     let izinler = match ilk {
-        Ok(Ok(Some(Kontrol::Kabul { izinler, genislik, yukseklik }))) => {
-            let _ = olay.send(IzleyiciOlay::Kabul { izinler: izinler.clone(), genislik, yukseklik }).await;
+        Ok(Ok(Some(Kontrol::Kabul {
+            izinler,
+            genislik,
+            yukseklik,
+        }))) => {
+            let _ = olay
+                .send(IzleyiciOlay::Kabul {
+                    izinler: izinler.clone(),
+                    genislik,
+                    yukseklik,
+                })
+                .await;
             izinler
         }
         Ok(Ok(Some(Kontrol::Red(s)))) => return s,
@@ -133,7 +254,9 @@ async fn calis(
     let (gelen_tx, mut gelen_rx) = mpsc::channel::<Kontrol>(16);
     let okuyucu = tokio::spawn(async move {
         while let Ok(Some(m)) = protokol::oku::<_, Kontrol>(&mut r).await {
-            if gelen_tx.send(m).await.is_err() { break; }
+            if gelen_tx.send(m).await.is_err() {
+                break;
+            }
         }
     });
     let c2 = c.clone();
@@ -147,7 +270,9 @@ async fn calis(
             while let Ok(mut akis) = c3.accept_uni().await {
                 let tx = kare_tx.clone();
                 tokio::spawn(async move {
-                    if let Ok(Some(k)) = protokol::oku::<_, Kare>(&mut akis).await { let _ = tx.send(k).await; }
+                    if let Ok(Some(k)) = protokol::oku::<_, Kare>(&mut akis).await {
+                        let _ = tx.send(k).await;
+                    }
                 });
             }
         });
@@ -159,18 +284,36 @@ async fn calis(
             b.uygula(&k)?;
             let simdi = std::time::Instant::now();
             if esit2.load(Ordering::Relaxed) {
-                gecikmeler.push_back((simdi, zaman::gecikme_ms(unix_ms(), fark2.load(Ordering::Relaxed), k.yakalama_ms)));
+                gecikmeler.push_back((
+                    simdi,
+                    zaman::gecikme_ms(unix_ms(), fark2.load(Ordering::Relaxed), k.yakalama_ms),
+                ));
             }
-            while gecikmeler.front().is_some_and(|(t, _)| simdi.duration_since(*t) > Duration::from_secs(1)) { gecikmeler.pop_front(); }
+            while gecikmeler
+                .front()
+                .is_some_and(|(t, _)| simdi.duration_since(*t) > Duration::from_secs(1))
+            {
+                gecikmeler.pop_front();
+            }
             sayac += 1;
-            let _ = olay2.try_send(IzleyiciOlay::Kare { genislik: b.goruntu.genislik, yukseklik: b.goruntu.yukseklik, rgba: b.goruntu.rgba.clone() });
+            let _ = olay2.try_send(IzleyiciOlay::Kare {
+                genislik: b.goruntu.genislik,
+                yukseklik: b.goruntu.yukseklik,
+                rgba: b.goruntu.rgba.clone(),
+            });
             if son.elapsed() >= Duration::from_secs(1) {
                 let fps = (sayac as f64 / son.elapsed().as_secs_f64()).round() as u32;
                 let rtt_ms = c2.rtt().as_millis().min(u32::MAX as u128) as u32;
                 let mut ms: Vec<u32> = gecikmeler.iter().map(|(_, v)| *v).collect();
                 ms.sort_unstable();
                 let gecikme_ms = if ms.is_empty() { 0 } else { ms[ms.len() / 2] };
-                let _ = olay2.send(IzleyiciOlay::Istatistik { rtt_ms, fps, gecikme_ms }).await;
+                let _ = olay2
+                    .send(IzleyiciOlay::Istatistik {
+                        rtt_ms,
+                        fps,
+                        gecikme_ms,
+                    })
+                    .await;
                 sayac = 0;
                 son = std::time::Instant::now();
             }
@@ -185,16 +328,34 @@ async fn calis(
     pano_saat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut saat_olcum = tokio::time::interval(Duration::from_secs(2));
     saat_olcum.tick().await;
+    let mut son_kol: Option<Girdi> = None;
+    let mut kol_yenile = tokio::time::interval(Duration::from_millis(100));
+    kol_yenile.tick().await;
     let sonuc = loop {
         tokio::select! {
             s = &mut goruntu => break match s { Ok(Err(e)) => format!("G?r?nt? ak??? kesildi: {e}"), _ => "Ba?lant? kapand?.".into() },
             g = girdi.recv() => match g {
                 Some(g) => {
+                    if let Girdi::Kol(k) = &g {
+                        if !izinler.oyun_kolu { continue; }
+                        son_kol = Some(g.clone());
+                        if let Ok(payload) = bincode::serialize(k) {
+                            if c.send_datagram(payload.into()).is_ok() { continue; }
+                        }
+                        if protokol::yaz(w, &Kontrol::Girdi(g)).await.is_err() { break "Ba?lant? koptu.".into(); }
+                        continue;
+                    }
                     if !izinler.kontrol { continue; }
                     if protokol::yaz(w, &Kontrol::Girdi(g)).await.is_err() { break "Ba?lant? koptu.".into(); }
                 }
                 None => break "Ba?lant? kapand?.".into(),
             },
+            Some(()) = kol_olay.recv() => { let _ = olay.send(IzleyiciOlay::KolAlgilandi).await; }
+            _ = kol_yenile.tick(), if izinler.oyun_kolu => {
+                if let Some(g) = son_kol.clone() {
+                    if protokol::yaz(w, &Kontrol::Girdi(g)).await.is_err() { break "Ba?lant? koptu.".into(); }
+                }
+            }
             _ = saat_olcum.tick() => {
                 let izleyici_ms = unix_ms();
                 if protokol::yaz(w, &Kontrol::SaatSor { izleyici_ms }).await.is_err() { break "Ba?lant? koptu.".into(); }
@@ -210,6 +371,10 @@ async fn calis(
                     if !izinler.pano || metin.is_empty() || !pano::sinir_icinde(&metin) { continue; }
                     if let Some(p) = pano.as_mut() { let _ = tokio::task::block_in_place(|| p.gelen(&metin)); }
                     let _ = olay.send(IzleyiciOlay::Pano(metin)).await;
+                }
+                Some(Kontrol::Titresim { slot, buyuk, kucuk }) => {
+                    let _ = titresim.send((buyuk, kucuk));
+                    let _ = olay.send(IzleyiciOlay::Titresim { slot, buyuk, kucuk }).await;
                 }
                 Some(_) => {}
                 None => break "Ba?lant? koptu.".into(),
@@ -228,6 +393,9 @@ async fn calis(
 }
 
 fn unix_ms() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default().as_millis().min(u64::MAX as u128) as u64
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .min(u64::MAX as u128) as u64
 }

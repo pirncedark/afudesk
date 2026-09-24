@@ -70,7 +70,13 @@ pub fn kodla(d: &Davet, parola: &str) -> Result<String, KodHata> {
     let k = anahtar(parola, &tuz)?;
     let json = serde_json::to_vec(d).map_err(|_| KodHata::Bozuk)?;
     let sifreli = XChaCha20Poly1305::new(&k.into())
-        .encrypt(XNonce::from_slice(&nonce), Payload { msg: &json, aad: AAD })
+        .encrypt(
+            XNonce::from_slice(&nonce),
+            Payload {
+                msg: &json,
+                aad: AAD,
+            },
+        )
         .map_err(|_| KodHata::Bozuk)?;
     let mut ham = Vec::with_capacity(TUZ + NONCE + sifreli.len());
     ham.extend_from_slice(&tuz);
@@ -100,7 +106,10 @@ pub fn coz(kod: &str, parola: &str, simdi: i64) -> Result<Davet, KodHata> {
     let json = XChaCha20Poly1305::new(&k.into())
         .decrypt(
             XNonce::from_slice(&ham[TUZ..TUZ + NONCE]),
-            Payload { msg: &ham[TUZ + NONCE..], aad: AAD },
+            Payload {
+                msg: &ham[TUZ + NONCE..],
+                aad: AAD,
+            },
         )
         .map_err(|_| KodHata::ParolaYanlis)?;
     let d: Davet = serde_json::from_slice(&json).map_err(|_| KodHata::Bozuk)?;
@@ -179,7 +188,10 @@ mod testler {
     fn suresi_dolmus_ve_sinir() {
         let k = kodla(&ornek(), "123456").unwrap();
         assert!(coz(&k, "123456", 1_000 + GECERLILIK_SN).is_ok());
-        assert_eq!(coz(&k, "123456", 1_001 + GECERLILIK_SN), Err(KodHata::SuresiDolmus));
+        assert_eq!(
+            coz(&k, "123456", 1_001 + GECERLILIK_SN),
+            Err(KodHata::SuresiDolmus)
+        );
     }
 
     #[test]
@@ -207,7 +219,10 @@ mod testler {
             let mut b = k.clone().into_bytes();
             b[i] = if b[i] == b'A' { b'B' } else { b'A' };
             let r = coz(&String::from_utf8(b).unwrap(), "123456", 1_000);
-            assert!(matches!(r, Err(KodHata::ParolaYanlis | KodHata::Bozuk)), "konum {i}");
+            assert!(
+                matches!(r, Err(KodHata::ParolaYanlis | KodHata::Bozuk)),
+                "konum {i}"
+            );
         }
     }
 

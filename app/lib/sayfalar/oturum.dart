@@ -31,6 +31,7 @@ class _OturumDurum extends State<OturumSayfasi> {
   bool _kontrol = false;
   bool _dosyaIzni = false;
   _Aktarim? _aktarim;
+  bool _p2 = false;
   int _rtt = -1, _fps = 0, _gecikme = 0;
   ui.Image? _kare;
   final _odak = FocusNode();
@@ -86,6 +87,8 @@ class _OturumDurum extends State<OturumSayfasi> {
           _dokunmaSaat?.cancel();
           _dokunmaSaat = Timer.periodic(const Duration(milliseconds: 100), (_) => _gonder(_dokunma.zaman(_ms)));
         }
+      case 'kol':
+        setState(() => _p2 = true);
       case 'kare':
         ui.decodeImageFromPixels(o.rgba, o.genislik, o.yukseklik, ui.PixelFormat.rgba8888, (img) {
           if (!mounted) {
@@ -408,7 +411,10 @@ case 'dosya':
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: widget.motor.dokunmatik ? 44 : null,
-        title: Text(_karsiAd.isEmpty ? 'Uzak ekran' : _karsiAd, overflow: TextOverflow.ellipsis),
+        title: Row(mainAxisSize: MainAxisSize.min, children: [
+          Flexible(child: Text(_karsiAd.isEmpty ? 'Uzak ekran' : _karsiAd, overflow: TextOverflow.ellipsis)),
+          if (_asama == _Asama.bagli && _p2) const Padding(padding: EdgeInsets.only(left: 8), child: Chip(key: Key('oturum_p2'), label: Text('🎮 P2'))),
+        ]),
         actions: [
           if (_asama == _Asama.bagli && _rtt >= 0)
             Padding(

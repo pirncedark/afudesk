@@ -36,7 +36,10 @@ struct YayinAyari {
 /// `iptal`: son ölçüm aralığında yetişmediği için iptal edilen kare sayısı.
 pub fn uyarla(kalite: u8, fps: u32, rtt_ms: u32, iptal: u32) -> (u8, u32) {
     if iptal > 0 || rtt_ms > 200 {
-        (kalite.saturating_sub(10).max(35), fps.saturating_sub(3).max(8))
+        (
+            kalite.saturating_sub(10).max(35),
+            fps.saturating_sub(3).max(8),
+        )
     } else if rtt_ms < 80 {
         ((kalite + 5).min(80), (fps + 2).min(24))
     } else {
@@ -46,13 +49,29 @@ pub fn uyarla(kalite: u8, fps: u32, rtt_ms: u32, iptal: u32) -> (u8, u32) {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum HostOlay {
-    Hazir { kod: String, parola: String, adresler: Vec<String>, erisim: String },
-    Istek { ad: String },
-    Baglandi { ad: String, izinler: Izinler },
-    Koptu { sebep: String },
+    Hazir {
+        kod: String,
+        parola: String,
+        adresler: Vec<String>,
+        erisim: String,
+    },
+    Istek {
+        ad: String,
+    },
+    Baglandi {
+        ad: String,
+        izinler: Izinler,
+    },
+    Koptu {
+        sebep: String,
+    },
     Hata(String),
-    /// İzleyiciden bir dosya eksiksiz ve doğrulanmış olarak geldi.
-    DosyaAlindi { ad: String, yol: String },
+    /// Dosya al?nd?.
+    DosyaAlindi {
+        ad: String,
+        yol: String,
+    },
+    Uyari(String),
 }
 
 pub enum HostKomut {
@@ -103,7 +122,9 @@ impl Drop for Host {
 
 fn bagla_port(kimlik: &ag::Kimlik, istek: u16) -> Result<quinn::Endpoint> {
     let adaylar: Vec<u16> = if istek == 0 {
-        (VARSAYILAN_PORT..VARSAYILAN_PORT + 20).chain(std::iter::once(0)).collect()
+        (VARSAYILAN_PORT..VARSAYILAN_PORT + 20)
+            .chain(std::iter::once(0))
+            .collect()
     } else {
         vec![istek]
     };
@@ -126,11 +147,20 @@ pub async fn baslat(ayar: HostAyar, fabrika: Arc<dyn Fabrika>) -> Result<Host> {
     let port = ep4.local_addr()?.port();
     // IPv6 aynı portta ayrı uç nokta (Windows'ta çift yığın varsayılan değil); açılamazsa önemsiz.
     let ep6 = ag::sunucu(&kimlik, SocketAddr::from(([0u16; 8], port))).ok();
-    tokio::spawn(calis(ayar, fabrika, kimlik, ep4, ep6, olay_tx, komut_rx, durdur_rx));
-    Ok(Host { olaylar, komut, durdur: Some(durdur_tx) })
+    tokio::spawn(calis(
+        ayar, fabrika, kimlik, ep4, ep6, olay_tx, komut_rx, durdur_rx,
+    ));
+    Ok(Host {
+        olaylar,
+        komut,
+        durdur: Some(durdur_tx),
+    })
 }
 
-async fn adresleri_topla(ayar: &HostAyar, port: u16) -> (Vec<String>, UpnpDurum, Option<adres::UpnpEslemesi>) {
+async fn adresleri_topla(
+    ayar: &HostAyar,
+    port: u16,
+) -> (Vec<String>, UpnpDurum, Option<adres::UpnpEslemesi>) {
     if ayar.yalniz_yerel {
         return (vec![format!("127.0.0.1:{port}")], UpnpDurum::Kapali, None);
     }
@@ -174,11 +204,21 @@ async fn calis(
     let port = ep4.local_addr().map(|a| a.port()).unwrap_or(0);
     let (adresler, erisim, eslesme) = adresleri_topla(&ayar, port).await;
     if adresler.is_empty() {
-        let _ = olay.send(HostOlay::Hata("Ağ bağlantısı bulunamadı.".into())).await;
+        let _ = olay
+            .send(HostOlay::Hata("Ağ bağlantısı bulunamadı.".into()))
+            .await;
         return;
     }
-    let klasor = ayar.dosya_klasoru.clone().unwrap_or_else(dosya::varsayilan_klasor);
-    let parola = if ayar.parola.trim().is_empty() { kod::yeni_parola() } else { ayar.parola.trim().to_owned() };
+    let klasor = ayar
+        .dosya_klasoru
+        .clone()
+        .unwrap_or_else(dosya::varsayilan_klasor);
+    let parola = if ayar.parola.trim().is_empty() {
+        kod::yeni_parola()
+    } else {
+        ayar.parola.trim().to_owned()
+    };
+
     'kod: loop {
         let bilet = kod::yeni_bilet();
         let davet = Davet {
@@ -197,7 +237,12 @@ async fn calis(
             }
         };
         let _ = olay
-            .send(HostOlay::Hazir { kod: metin, parola: parola.clone(), adresler: adresler.clone(), erisim: erisim.aciklama() })
+            .send(HostOlay::Hazir {
+                kod: metin,
+                parola: parola.clone(),
+                adresler: adresler.clone(),
+                erisim: erisim.aciklama(),
+            })
             .await;
         let bitis = tokio::time::Instant::now() + Duration::from_secs(kod::GECERLILIK_SN as u64);
         loop {
@@ -208,8 +253,21 @@ async fn calis(
                 g = async { match &ep6 { Some(e) => e.accept().await, None => std::future::pending().await } } => g,
             };
             let Some(gelen) = gelen else { break 'kod };
-            let Ok(Ok(baglanti)) = tokio::time::timeout(Duration::from_secs(10), gelen).await else { continue };
-            match oturum(&baglanti, &bilet, &fabrika, &klasor, &olay, &mut komut, &mut durdur).await {
+            let Ok(Ok(baglanti)) = tokio::time::timeout(Duration::from_secs(10), gelen).await
+            else {
+                continue;
+            };
+            match oturum(
+                &baglanti,
+                &bilet,
+                &fabrika,
+                &klasor,
+                &olay,
+                &mut komut,
+                &mut durdur,
+            )
+            .await
+            {
                 Oturum::Reddedildi => continue,
                 Oturum::Bitti(sebep) => {
                     let _ = olay.send(HostOlay::Koptu { sebep }).await;
@@ -235,7 +293,11 @@ enum Oturum {
 }
 
 fn sabit_zamanli_esit(a: &str, b: &str) -> bool {
-    a.len() == b.len() && a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+    a.len() == b.len()
+        && a.bytes()
+            .zip(b.bytes())
+            .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+            == 0
 }
 
 async fn reddet(w: &mut quinn::SendStream, c: &quinn::Connection, sebep: &str) {
@@ -255,16 +317,28 @@ async fn oturum(
     komut: &mut mpsc::Receiver<HostKomut>,
     durdur: &mut oneshot::Receiver<()>,
 ) -> Oturum {
-    let Ok(Ok((mut w, mut r))) = tokio::time::timeout(Duration::from_secs(10), c.accept_bi()).await else {
+    let Ok(Ok((mut w, mut r))) = tokio::time::timeout(Duration::from_secs(10), c.accept_bi()).await
+    else {
         return Oturum::Reddedildi;
     };
-    let merhaba = tokio::time::timeout(Duration::from_secs(10), protokol::oku::<_, Kontrol>(&mut r)).await;
-    let Ok(Ok(Some(Kontrol::Merhaba { surum, bilet: gelen, ad }))) = merhaba else {
+    let merhaba =
+        tokio::time::timeout(Duration::from_secs(10), protokol::oku::<_, Kontrol>(&mut r)).await;
+    let Ok(Ok(Some(Kontrol::Merhaba {
+        surum,
+        bilet: gelen,
+        ad,
+    }))) = merhaba
+    else {
         c.close(1u32.into(), b"protokol");
         return Oturum::Reddedildi;
     };
     if surum != SURUM {
-        reddet(&mut w, c, "AfuDesk sürümleri uyuşmuyor; iki taraf da güncellemeli.").await;
+        reddet(
+            &mut w,
+            c,
+            "AfuDesk sürümleri uyuşmuyor; iki taraf da güncellemeli.",
+        )
+        .await;
         return Oturum::Reddedildi;
     }
     if !sabit_zamanli_esit(&gelen, bilet) {
@@ -357,11 +431,26 @@ async fn oturum(
             return Oturum::Bitti("Ekran yakalanamadı.".into());
         }
     };
-    if protokol::yaz(&mut w, &Kontrol::Kabul { izinler: izinler.clone(), genislik, yukseklik }).await.is_err() {
+    if protokol::yaz(
+        &mut w,
+        &Kontrol::Kabul {
+            izinler: izinler.clone(),
+            genislik,
+            yukseklik,
+        },
+    )
+    .await
+    .is_err()
+    {
         yayin_dur.store(true, std::sync::atomic::Ordering::Relaxed);
         return Oturum::Bitti("Bağlantı koptu.".into());
     }
-    let _ = olay.send(HostOlay::Baglandi { ad, izinler: izinler.clone() }).await;
+    let _ = olay
+        .send(HostOlay::Baglandi {
+            ad,
+            izinler: izinler.clone(),
+        })
+        .await;
 
     // Her kare kendi tek yönlü akışında: bir karenin kaybı sonrakileri bekletmez.
     // Yolda çok kare birikirse en eskisi iptal edilir, döşemeleri yeniden gönderilir.
@@ -430,10 +519,17 @@ async fn oturum(
             }
         }
     });
-    let mut enjektor = if izinler.kontrol { fabrika.enjektor().ok() } else { None };
+    let mut enjektor = if izinler.kontrol {
+        fabrika.enjektor().ok()
+    } else {
+        None
+    };
     // Pano yalnız izin verildiyse açılır; izin yoksa hiçbir yönde metin geçmez.
     let mut pano = if izinler.pano {
-        fabrika.pano().ok().map(|p| tokio::task::block_in_place(|| Esitleyici::new(p)))
+        fabrika
+            .pano()
+            .ok()
+            .map(|p| tokio::task::block_in_place(|| Esitleyici::new(p)))
     } else {
         None
     };
@@ -451,12 +547,33 @@ async fn oturum(
             let (alici, olay) = (alici.clone(), olay3.clone());
             tokio::spawn(async move {
                 if let Some((ad, yol)) = dosya::al(&alici, w2, r2).await {
-                    let _ = olay.send(HostOlay::DosyaAlindi { ad, yol: yol.display().to_string() }).await;
+                    let _ = olay
+                        .send(HostOlay::DosyaAlindi {
+                            ad,
+                            yol: yol.display().to_string(),
+                        })
+                        .await;
                 }
             });
         }
     });
 
+    let mut sanal_kol = if izinler.oyun_kolu {
+        match fabrika.kol_surucusu() {
+            Ok(s) => Some(s),
+            Err(_) => {
+                let _ = olay
+                    .send(HostOlay::Uyari(crate::sanal_kol::SURUCU_UYARISI.into()))
+                    .await;
+                None
+            }
+        }
+    } else {
+        None
+    };
+    let mut kol_siralari = std::collections::HashMap::<u8, u32>::new();
+    let mut titresim_araligi = tokio::time::interval(Duration::from_millis(50));
+    titresim_araligi.tick().await;
     let sonuc = loop {
         tokio::select! {
             _ = &mut *durdur => { c.close(0u32.into(), b"durdu"); break Oturum::Durdur; }
@@ -472,20 +589,26 @@ async fn oturum(
             },
             m = gelen_rx.recv() => match m {
                 Some(Kontrol::Girdi(g)) => {
-                    if let Some(e) = enjektor.as_mut() {
-                        let _ = tokio::task::block_in_place(|| e.uygula(&g));
+                    if let protokol::Girdi::Kol(k) = &g {
+                        if sanal_kol.is_none() || !sira_yeni(kol_siralari.get(&k.slot).copied(), k.sira) { continue; }
+                        kol_siralari.insert(k.slot, k.sira);
+                        let surucu_hatasi = sanal_kol.as_mut().is_some_and(|s| s.guncelle(k).is_err());
+                        if surucu_hatasi {
+                            sanal_kol = None;
+                            let _ = olay.send(HostOlay::Uyari(crate::sanal_kol::SURUCU_UYARISI.into())).await;
+                        }
+                        continue;
                     }
+                    if let Some(e) = enjektor.as_mut() { let _ = tokio::task::block_in_place(|| e.uygula(&g)); }
                 }
                 Some(Kontrol::SaatSor { izleyici_ms }) => {
                     let host_ms = unix_ms();
                     let _ = protokol::yaz(&mut w, &Kontrol::SaatCevap { izleyici_ms, host_ms }).await;
                 }
                 Some(Kontrol::Pano(metin)) => {
-                    if let Some(p) = pano.as_mut() {
-                        let _ = tokio::task::block_in_place(|| p.gelen(&metin));
-                    }
+                    if let Some(p) = pano.as_mut() { let _ = tokio::task::block_in_place(|| p.gelen(&metin)); }
                 }
-                Some(Kontrol::Kapat(_)) | None => break Oturum::Bitti("?zleyici ba?lant?y? kapatt?.".into()),
+                Some(Kontrol::Kapat(_)) | None => break Oturum::Bitti("\u{0130}zleyici ba\u{011F}lant\u{0131}y\u{0131} kapatt\u{0131}.".into()),
                 Some(_) => {}
             },
             _ = pano_saat.tick(), if pano.is_some() => {
@@ -495,6 +618,26 @@ async fn oturum(
                         break Oturum::Bitti("Bağlantı koptu.".into());
                     }
                 }
+            },
+            d = c.read_datagram() => match d {
+                Ok(b) => if let Ok(k) = bincode::deserialize::<protokol::KolDurumu>(&b) {
+                    if sanal_kol.is_some() && sira_yeni(kol_siralari.get(&k.slot).copied(), k.sira) {
+                        kol_siralari.insert(k.slot, k.sira);
+                        let surucu_hatasi = sanal_kol.as_mut().is_some_and(|s| s.guncelle(&k).is_err());
+                        if surucu_hatasi {
+                            sanal_kol = None;
+                            let _ = olay.send(HostOlay::Uyari(crate::sanal_kol::SURUCU_UYARISI.into())).await;
+                        }
+                    }
+                },
+                Err(_) => {}
+            },
+            _ = titresim_araligi.tick() => {
+                if let Some(s) = sanal_kol.as_mut() {
+                    for (slot, buyuk, kucuk) in s.titresim_al() {
+                        let _ = protokol::yaz(&mut w, &Kontrol::Titresim { slot, buyuk, kucuk }).await;
+                    }
+                }
             }
         }
     };
@@ -502,12 +645,38 @@ async fn oturum(
     yayin_dur.store(true, std::sync::atomic::Ordering::Relaxed);
     yayin.abort();
     dosyalar.abort();
+    if let Some(s) = sanal_kol.as_mut() {
+        for slot in kol_siralari.keys().copied().collect::<Vec<_>>() {
+            s.kaldir(slot);
+        }
+    }
     sonuc
 }
 
 fn unix_ms() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default().as_millis().min(u64::MAX as u128) as u64
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .min(u64::MAX as u128) as u64
+}
+
+pub fn sira_yeni(eski: Option<u32>, yeni: u32) -> bool {
+    eski.map(|e| yeni != e && yeni.wrapping_sub(e) < (1u32 << 31))
+        .unwrap_or(true)
+}
+
+#[cfg(test)]
+mod sira_testleri {
+    use super::sira_yeni;
+    #[test]
+    fn sira_sarmali_ve_eski_paket() {
+        assert!(sira_yeni(None, u32::MAX - 1));
+        assert!(sira_yeni(Some(u32::MAX - 1), 1));
+        assert!(!sira_yeni(Some(1), u32::MAX - 1));
+        assert!(!sira_yeni(Some(7), 7));
+        assert!(sira_yeni(Some(7), 8));
+    }
 }
 
 #[cfg(test)]

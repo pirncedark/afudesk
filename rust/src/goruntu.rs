@@ -12,17 +12,26 @@ pub fn yarim_olcek(g: &Goruntu) -> Goruntu {
     let (yg, yy) = (g.genislik / 2, g.yukseklik / 2);
     let satir = (g.genislik * 4) as usize;
     let mut rgba = vec![0u8; (yg * yy * 4) as usize];
-    rgba.par_chunks_mut((yg * 4) as usize).enumerate().for_each(|(y, hedef)| {
-        let ust = &g.rgba[2 * y * satir..];
-        let alt = &g.rgba[(2 * y + 1) * satir..];
-        for x in 0..yg as usize {
-            for k in 0..4 {
-                let t = ust[8 * x + k] as u16 + ust[8 * x + 4 + k] as u16 + alt[8 * x + k] as u16 + alt[8 * x + 4 + k] as u16;
-                hedef[4 * x + k] = (t / 4) as u8;
+    rgba.par_chunks_mut((yg * 4) as usize)
+        .enumerate()
+        .for_each(|(y, hedef)| {
+            let ust = &g.rgba[2 * y * satir..];
+            let alt = &g.rgba[(2 * y + 1) * satir..];
+            for x in 0..yg as usize {
+                for k in 0..4 {
+                    let t = ust[8 * x + k] as u16
+                        + ust[8 * x + 4 + k] as u16
+                        + alt[8 * x + k] as u16
+                        + alt[8 * x + 4 + k] as u16;
+                    hedef[4 * x + k] = (t / 4) as u8;
+                }
             }
-        }
-    });
-    Goruntu { genislik: yg, yukseklik: yy, rgba }
+        });
+    Goruntu {
+        genislik: yg,
+        yukseklik: yy,
+        rgba,
+    }
 }
 
 /// Yayın boyutuna getir: gerekirse art arda yarıya indir.
@@ -55,7 +64,13 @@ pub struct Kodlayici {
 
 impl Kodlayici {
     pub fn new(kalite: u8) -> Self {
-        Self { onceki: None, zorunlu: Default::default(), kalite, sira: 0, tam_aralik: 150 }
+        Self {
+            onceki: None,
+            zorunlu: Default::default(),
+            kalite,
+            sira: 0,
+            tam_aralik: 150,
+        }
     }
 
     pub fn kalite_ayarla(&mut self, k: u8) {
@@ -94,7 +109,13 @@ impl Kodlayici {
             let mut x = 0;
             while x < g.genislik {
                 let gen = DOSEME.min(g.genislik - x);
-                if tam || self.zorunlu.contains(&(x, y)) || self.onceki.as_ref().map_or(true, |o| farkli(o, g, x, y, gen, yuk)) {
+                if tam
+                    || self.zorunlu.contains(&(x, y))
+                    || self
+                        .onceki
+                        .as_ref()
+                        .map_or(true, |o| farkli(o, g, x, y, gen, yuk))
+                {
                     konumlar.push((x, y, gen, yuk));
                 }
                 x += DOSEME;
@@ -104,7 +125,15 @@ impl Kodlayici {
         let kalite = self.kalite;
         let dosemeler = konumlar
             .into_par_iter()
-            .map(|(x, y, gen, yuk)| Ok(Doseme { x, y, gen, yuk, jpeg: jpeg_kodla(g, x, y, gen, yuk, kalite)? }))
+            .map(|(x, y, gen, yuk)| {
+                Ok(Doseme {
+                    x,
+                    y,
+                    gen,
+                    yuk,
+                    jpeg: jpeg_kodla(g, x, y, gen, yuk, kalite)?,
+                })
+            })
             .collect::<anyhow::Result<Vec<_>>>()?;
         self.onceki = Some(g.clone());
         self.zorunlu.clear();
@@ -112,7 +141,14 @@ impl Kodlayici {
             return Ok(None);
         }
         self.sira += 1;
-        Ok(Some(Kare { sira: self.sira, genislik: g.genislik, yukseklik: g.yukseklik, tam, dosemeler, yakalama_ms: 0 }))
+        Ok(Some(Kare {
+            sira: self.sira,
+            genislik: g.genislik,
+            yukseklik: g.yukseklik,
+            tam,
+            dosemeler,
+            yakalama_ms: 0,
+        }))
     }
 }
 
@@ -128,7 +164,14 @@ fn farkli(a: &Goruntu, b: &Goruntu, x: u32, y: u32, gen: u32, yuk: u32) -> bool 
     false
 }
 
-fn jpeg_kodla(g: &Goruntu, x: u32, y: u32, gen: u32, yuk: u32, kalite: u8) -> anyhow::Result<Vec<u8>> {
+fn jpeg_kodla(
+    g: &Goruntu,
+    x: u32,
+    y: u32,
+    gen: u32,
+    yuk: u32,
+    kalite: u8,
+) -> anyhow::Result<Vec<u8>> {
     let mut rgb = Vec::with_capacity((gen * yuk * 3) as usize);
     let satir = (g.genislik * 4) as usize;
     for yy in y..y + yuk {
@@ -138,7 +181,12 @@ fn jpeg_kodla(g: &Goruntu, x: u32, y: u32, gen: u32, yuk: u32, kalite: u8) -> an
         }
     }
     let mut cikti = Vec::new();
-    JpegEncoder::new_with_quality(&mut cikti, kalite).encode(&rgb, gen, yuk, ExtendedColorType::Rgb8)?;
+    JpegEncoder::new_with_quality(&mut cikti, kalite).encode(
+        &rgb,
+        gen,
+        yuk,
+        ExtendedColorType::Rgb8,
+    )?;
     Ok(cikti)
 }
 
@@ -152,13 +200,23 @@ pub struct Birlestirici {
 
 impl Default for Birlestirici {
     fn default() -> Self {
-        Self { goruntu: Goruntu { genislik: 0, yukseklik: 0, rgba: Vec::new() }, doseme_sira: Default::default() }
+        Self {
+            goruntu: Goruntu {
+                genislik: 0,
+                yukseklik: 0,
+                rgba: Vec::new(),
+            },
+            doseme_sira: Default::default(),
+        }
     }
 }
 
 impl Birlestirici {
     pub fn uygula(&mut self, k: &Kare) -> anyhow::Result<()> {
-        anyhow::ensure!(k.genislik > 0 && k.yukseklik > 0 && k.genislik <= 16384 && k.yukseklik <= 16384, "geçersiz kare boyutu");
+        anyhow::ensure!(
+            k.genislik > 0 && k.yukseklik > 0 && k.genislik <= 16384 && k.yukseklik <= 16384,
+            "geçersiz kare boyutu"
+        );
         if k.genislik != self.goruntu.genislik || k.yukseklik != self.goruntu.yukseklik {
             self.goruntu = Goruntu {
                 genislik: k.genislik,
@@ -206,7 +264,11 @@ pub fn deneme_goruntu(g: u32, y: u32, tohum: u8) -> Goruntu {
             rgba.extend_from_slice(&[(xx % 256) as u8, (yy % 256) as u8, tohum, 255]);
         }
     }
-    Goruntu { genislik: g, yukseklik: y, rgba }
+    Goruntu {
+        genislik: g,
+        yukseklik: y,
+        rgba,
+    }
 }
 
 #[cfg(test)]
@@ -215,7 +277,10 @@ mod testler {
 
     fn yakin(a: &Goruntu, b: &Goruntu) -> bool {
         a.genislik == b.genislik
-            && a.rgba.iter().zip(&b.rgba).all(|(x, y)| (*x as i32 - *y as i32).abs() <= 24)
+            && a.rgba
+                .iter()
+                .zip(&b.rgba)
+                .all(|(x, y)| (*x as i32 - *y as i32).abs() <= 24)
     }
 
     #[test]
@@ -264,7 +329,11 @@ mod testler {
                 let icinde = (64..128).contains(&xx) && (64..128).contains(&yy);
                 let i = ((yy * 256 + xx) * 4) as usize;
                 if !icinde {
-                    assert_eq!(b.goruntu.rgba[i..i + 4], once[i..i + 4], "({xx},{yy}) değişmemeliydi");
+                    assert_eq!(
+                        b.goruntu.rgba[i..i + 4],
+                        once[i..i + 4],
+                        "({xx},{yy}) değişmemeliydi"
+                    );
                 }
             }
         }
@@ -288,10 +357,16 @@ mod testler {
     #[test]
     fn kotu_kare_reddedilir() {
         let mut b = Birlestirici::default();
-        let mut kare = Kodlayici::new(80).kodla(&deneme_goruntu(64, 64, 0)).unwrap().unwrap();
+        let mut kare = Kodlayici::new(80)
+            .kodla(&deneme_goruntu(64, 64, 0))
+            .unwrap()
+            .unwrap();
         kare.dosemeler[0].x = 32; // ekran dışına taşar
         assert!(b.uygula(&kare).is_err());
-        let mut kare2 = Kodlayici::new(80).kodla(&deneme_goruntu(64, 64, 0)).unwrap().unwrap();
+        let mut kare2 = Kodlayici::new(80)
+            .kodla(&deneme_goruntu(64, 64, 0))
+            .unwrap()
+            .unwrap();
         kare2.dosemeler[0].jpeg = vec![1, 2, 3];
         assert!(b.uygula(&kare2).is_err());
         let mut kare3 = kare2.clone();
@@ -302,14 +377,26 @@ mod testler {
     #[test]
     fn sirasiz_gelen_eski_kare_yeniyi_ezmez() {
         let mut k = Kodlayici::new(90);
-        let siyah = Goruntu { genislik: 64, yukseklik: 64, rgba: [0, 0, 0, 255].repeat(64 * 64) };
-        let beyaz = Goruntu { genislik: 64, yukseklik: 64, rgba: [255, 255, 255, 255].repeat(64 * 64) };
+        let siyah = Goruntu {
+            genislik: 64,
+            yukseklik: 64,
+            rgba: [0, 0, 0, 255].repeat(64 * 64),
+        };
+        let beyaz = Goruntu {
+            genislik: 64,
+            yukseklik: 64,
+            rgba: [255, 255, 255, 255].repeat(64 * 64),
+        };
         let k1 = k.kodla(&siyah).unwrap().unwrap();
         let k2 = k.kodla(&beyaz).unwrap().unwrap();
         let mut b = Birlestirici::default();
         b.uygula(&k2).unwrap(); // yeni önce geldi
         b.uygula(&k1).unwrap(); // eski geç geldi: yok sayılmalı
-        assert!(b.goruntu.rgba[0] > 240, "beyaz kalmalı, {}", b.goruntu.rgba[0]);
+        assert!(
+            b.goruntu.rgba[0] > 240,
+            "beyaz kalmalı, {}",
+            b.goruntu.rgba[0]
+        );
     }
 
     #[test]
@@ -327,7 +414,11 @@ mod testler {
 
     #[test]
     fn yarim_olcek_ortalama_alir() {
-        let mut g = Goruntu { genislik: 4, yukseklik: 2, rgba: vec![0; 32] };
+        let mut g = Goruntu {
+            genislik: 4,
+            yukseklik: 2,
+            rgba: vec![0; 32],
+        };
         // Sol 2x2 bloğun R değerleri 0,100,200,100 -> ortalama 100.
         for (i, v) in [(0usize, 0u8), (1, 100), (4, 200), (5, 100)] {
             g.rgba[i * 4] = v;

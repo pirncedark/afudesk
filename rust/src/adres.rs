@@ -14,7 +14,10 @@ pub struct UpnpEslemesi {
 
 impl UpnpEslemesi {
     pub async fn kapat(self) {
-        let _ = self.gecit.remove_port(PortMappingProtocol::UDP, self.dis_port).await;
+        let _ = self
+            .gecit
+            .remove_port(PortMappingProtocol::UDP, self.dis_port)
+            .await;
     }
 }
 
@@ -44,7 +47,9 @@ pub fn yerel_ipv4() -> Option<Ipv4Addr> {
 
 /// Genel (küresel tek yayın) IPv6 adresleri: 2000::/3.
 pub fn genel_ipv6() -> Vec<std::net::Ipv6Addr> {
-    let Ok(liste) = local_ip_address::list_afinet_netifas() else { return vec![] };
+    let Ok(liste) = local_ip_address::list_afinet_netifas() else {
+        return vec![];
+    };
     let mut v: Vec<_> = liste
         .into_iter()
         .filter_map(|(_, ip)| match ip {
@@ -58,23 +63,38 @@ pub fn genel_ipv6() -> Vec<std::net::Ipv6Addr> {
 }
 
 pub async fn upnp_ac(yerel: Ipv4Addr, port: u16) -> Result<UpnpEslemesi, String> {
-    let secenek = SearchOptions { timeout: Some(Duration::from_secs(3)), ..Default::default() };
+    let secenek = SearchOptions {
+        timeout: Some(Duration::from_secs(3)),
+        ..Default::default()
+    };
     let gecit = igd::search_gateway(secenek)
         .await
         .map_err(|_| "modemde UPnP kapalı ya da desteklenmiyor".to_owned())?;
-    let dis_ip = gecit.get_external_ip().await.map_err(|e| format!("dış IP alınamadı: {e}"))?;
+    let dis_ip = gecit
+        .get_external_ip()
+        .await
+        .map_err(|e| format!("dış IP alınamadı: {e}"))?;
     if !genel_mi(dis_ip) {
-        return Err(format!("modem dış adresi özel ağ ({dis_ip}); operatör CGNAT kullanıyor olabilir"));
+        return Err(format!(
+            "modem dış adresi özel ağ ({dis_ip}); operatör CGNAT kullanıyor olabilir"
+        ));
     }
     let yerel_adres = SocketAddr::V4(SocketAddrV4::new(yerel, port));
-    let dis_port = match gecit.add_port(PortMappingProtocol::UDP, port, yerel_adres, 7200, "AfuDesk").await {
+    let dis_port = match gecit
+        .add_port(PortMappingProtocol::UDP, port, yerel_adres, 7200, "AfuDesk")
+        .await
+    {
         Ok(()) => port,
         Err(_) => gecit
             .add_any_port(PortMappingProtocol::UDP, yerel_adres, 7200, "AfuDesk")
             .await
             .map_err(|e| format!("port açılamadı: {e}"))?,
     };
-    Ok(UpnpEslemesi { gecit, dis_port, dis_adres: SocketAddr::new(dis_ip, dis_port) })
+    Ok(UpnpEslemesi {
+        gecit,
+        dis_port,
+        dis_adres: SocketAddr::new(dis_ip, dis_port),
+    })
 }
 
 fn genel_mi(ip: IpAddr) -> bool {

@@ -7,9 +7,11 @@ pub mod goruntu;
 pub mod host;
 pub mod izleyici;
 pub mod kod;
+pub mod kol;
 pub mod pano;
 pub mod platform;
 pub mod protokol;
+pub mod sanal_kol;
 pub mod zaman;
 
 #[cfg(test)]

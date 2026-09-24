@@ -66,7 +66,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 860621179;
+  int get rustContentHash => 168140344;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -93,6 +93,8 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiAfudeskHostKabul({
     required bool kontrol,
     required bool pano,
+    required bool dosya,
+    required bool oyunKolu,
   });
 
   Future<void> crateApiAfudeskHostKes();
@@ -108,6 +110,8 @@ abstract class RustLibApi extends BaseApi {
     required String parola,
     required String ad,
   });
+
+  Future<void> crateApiAfudeskIzleyiciDosyaGonder({required String yol});
 
   Future<void> crateApiAfudeskIzleyiciGirdi({required GirdiOlayi g});
 
@@ -249,6 +253,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Future<void> crateApiAfudeskHostKabul({
     required bool kontrol,
     required bool pano,
+    required bool dosya,
+    required bool oyunKolu,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -256,6 +262,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_bool(kontrol, serializer);
           sse_encode_bool(pano, serializer);
+          sse_encode_bool(dosya, serializer);
+          sse_encode_bool(oyunKolu, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -268,7 +276,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: null,
         ),
         constMeta: kCrateApiAfudeskHostKabulConstMeta,
-        argValues: [kontrol, pano],
+        argValues: [kontrol, pano, dosya, oyunKolu],
         apiImpl: this,
       ),
     );
@@ -276,7 +284,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiAfudeskHostKabulConstMeta => const TaskConstMeta(
     debugName: "host_kabul",
-    argNames: ["kontrol", "pano"],
+    argNames: ["kontrol", "pano", "dosya", "oyunKolu"],
   );
 
   @override
@@ -430,6 +438,37 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<void> crateApiAfudeskIzleyiciDosyaGonder({required String yol}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(yol, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 11,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiAfudeskIzleyiciDosyaGonderConstMeta,
+        argValues: [yol],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAfudeskIzleyiciDosyaGonderConstMeta =>
+      const TaskConstMeta(
+        debugName: "izleyici_dosya_gonder",
+        argNames: ["yol"],
+      );
+
+  @override
   Future<void> crateApiAfudeskIzleyiciGirdi({required GirdiOlayi g}) {
     return handler.executeNormal(
       NormalTask(
@@ -439,7 +478,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 12,
             port: port_,
           );
         },
@@ -466,7 +505,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 13,
             port: port_,
           );
         },
@@ -493,7 +532,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 14,
             port: port_,
           );
         },
@@ -517,7 +556,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 14)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 15)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -539,7 +578,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 15)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -621,8 +660,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   HostOlayi dco_decode_host_olayi(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    if (arr.length != 12)
+      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
     return HostOlayi(
       tur: dco_decode_String(arr[0]),
       kod: dco_decode_String(arr[1]),
@@ -633,6 +672,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       metin: dco_decode_String(arr[6]),
       kontrol: dco_decode_bool(arr[7]),
       pano: dco_decode_bool(arr[8]),
+      dosya: dco_decode_bool(arr[9]),
+      yol: dco_decode_String(arr[10]),
+      oyunKolu: dco_decode_bool(arr[11]),
     );
   }
 
@@ -646,8 +688,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   IzleyiciOlayi dco_decode_izleyici_olayi(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 11)
-      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    if (arr.length != 18)
+      throw Exception('unexpected arr length: expect 18 but see ${arr.length}');
     return IzleyiciOlayi(
       tur: dco_decode_String(arr[0]),
       rttMs: dco_decode_u_32(arr[1]),
@@ -660,6 +702,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       genislik: dco_decode_u_32(arr[8]),
       yukseklik: dco_decode_u_32(arr[9]),
       rgba: dco_decode_list_prim_u_8_strict(arr[10]),
+      dosya: dco_decode_bool(arr[11]),
+      gonderilen: dco_decode_u_64(arr[12]),
+      toplam: dco_decode_u_64(arr[13]),
+      bitti: dco_decode_bool(arr[14]),
+      slot: dco_decode_u_8(arr[15]),
+      buyuk: dco_decode_u_8(arr[16]),
+      kucuk: dco_decode_u_8(arr[17]),
     );
   }
 
@@ -679,6 +728,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   int dco_decode_u_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
+  }
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeU64(raw);
   }
 
   @protected
@@ -776,6 +831,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_metin = sse_decode_String(deserializer);
     var var_kontrol = sse_decode_bool(deserializer);
     var var_pano = sse_decode_bool(deserializer);
+    var var_dosya = sse_decode_bool(deserializer);
+    var var_yol = sse_decode_String(deserializer);
+    var var_oyunKolu = sse_decode_bool(deserializer);
     return HostOlayi(
       tur: var_tur,
       kod: var_kod,
@@ -786,6 +844,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       metin: var_metin,
       kontrol: var_kontrol,
       pano: var_pano,
+      dosya: var_dosya,
+      yol: var_yol,
+      oyunKolu: var_oyunKolu,
     );
   }
 
@@ -809,6 +870,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_genislik = sse_decode_u_32(deserializer);
     var var_yukseklik = sse_decode_u_32(deserializer);
     var var_rgba = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_dosya = sse_decode_bool(deserializer);
+    var var_gonderilen = sse_decode_u_64(deserializer);
+    var var_toplam = sse_decode_u_64(deserializer);
+    var var_bitti = sse_decode_bool(deserializer);
+    var var_slot = sse_decode_u_8(deserializer);
+    var var_buyuk = sse_decode_u_8(deserializer);
+    var var_kucuk = sse_decode_u_8(deserializer);
     return IzleyiciOlayi(
       tur: var_tur,
       rttMs: var_rttMs,
@@ -821,6 +889,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       genislik: var_genislik,
       yukseklik: var_yukseklik,
       rgba: var_rgba,
+      dosya: var_dosya,
+      gonderilen: var_gonderilen,
+      toplam: var_toplam,
+      bitti: var_bitti,
+      slot: var_slot,
+      buyuk: var_buyuk,
+      kucuk: var_kucuk,
     );
   }
 
@@ -847,6 +922,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   int sse_decode_u_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint32();
+  }
+
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getBigUint64();
   }
 
   @protected
@@ -955,6 +1036,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.metin, serializer);
     sse_encode_bool(self.kontrol, serializer);
     sse_encode_bool(self.pano, serializer);
+    sse_encode_bool(self.dosya, serializer);
+    sse_encode_String(self.yol, serializer);
+    sse_encode_bool(self.oyunKolu, serializer);
   }
 
   @protected
@@ -977,6 +1061,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_32(self.genislik, serializer);
     sse_encode_u_32(self.yukseklik, serializer);
     sse_encode_list_prim_u_8_strict(self.rgba, serializer);
+    sse_encode_bool(self.dosya, serializer);
+    sse_encode_u_64(self.gonderilen, serializer);
+    sse_encode_u_64(self.toplam, serializer);
+    sse_encode_bool(self.bitti, serializer);
+    sse_encode_u_8(self.slot, serializer);
+    sse_encode_u_8(self.buyuk, serializer);
+    sse_encode_u_8(self.kucuk, serializer);
   }
 
   @protected
@@ -1002,6 +1093,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_u_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint32(self);
+  }
+
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putBigUint64(self);
   }
 
   @protected

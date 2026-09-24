@@ -11,7 +11,14 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 const SURE: Duration = Duration::from_secs(20);
 
 fn ayar(parola: &str) -> HostAyar {
-    HostAyar { ad: "Ali PC".into(), port: 0, upnp: false, parola: parola.into(), yalniz_yerel: true, dosya_klasoru: None }
+    HostAyar {
+        ad: "Ali PC".into(),
+        port: 0,
+        upnp: false,
+        parola: parola.into(),
+        yalniz_yerel: true,
+        dosya_klasoru: None,
+    }
 }
 
 async fn olay_bekle(h: &mut host::Host, f: impl Fn(&HostOlay) -> bool) -> HostOlay {
@@ -64,9 +71,19 @@ async fn tam_akis_goruntu_ve_girdi() {
         HostOlay::Istek { ad } => assert_eq!(ad, "Veli"),
         _ => unreachable!(),
     }
-    h.komut(HostKomut::Kabul(Izinler { kontrol: true, pano: false, dosya: false })).await;
+    h.komut(HostKomut::Kabul(Izinler {
+        kontrol: true,
+        pano: false,
+        dosya: false,
+        oyun_kolu: true,
+    }))
+    .await;
     match iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Kabul { .. })).await {
-        IzleyiciOlay::Kabul { genislik, yukseklik, izinler } => {
+        IzleyiciOlay::Kabul {
+            genislik,
+            yukseklik,
+            izinler,
+        } => {
             assert_eq!((genislik, yukseklik), (160, 100));
             assert!(izinler.kontrol);
         }
@@ -75,8 +92,11 @@ async fn tam_akis_goruntu_ve_girdi() {
     // En az iki farklı kare gelmeli (sahte ekran sol üstü değiştiriyor).
     let mut goruler = Vec::new();
     while goruler.len() < 2 {
-        if let IzleyiciOlay::Kare { genislik, yukseklik, rgba } =
-            iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Kare { .. })).await
+        if let IzleyiciOlay::Kare {
+            genislik,
+            yukseklik,
+            rgba,
+        } = iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Kare { .. })).await
         {
             assert_eq!((genislik, yukseklik), (160, 100));
             assert_eq!(rgba.len(), 160 * 100 * 4);
@@ -88,8 +108,16 @@ async fn tam_akis_goruntu_ve_girdi() {
     }
 
     i.gonder(Girdi::FareKonum { x: 0.5, y: 0.25 }).await;
-    i.gonder(Girdi::FareTus { tus: FareTusu::Sol, basili: true }).await;
-    i.gonder(Girdi::Tus { ad: "ş".into(), basili: true }).await;
+    i.gonder(Girdi::FareTus {
+        tus: FareTusu::Sol,
+        basili: true,
+    })
+    .await;
+    i.gonder(Girdi::Tus {
+        ad: "ş".into(),
+        basili: true,
+    })
+    .await;
     tokio::time::timeout(SURE, async {
         while girdiler.lock().unwrap().len() < 3 {
             tokio::time::sleep(Duration::from_millis(50)).await;
@@ -97,12 +125,18 @@ async fn tam_akis_goruntu_ve_girdi() {
     })
     .await
     .expect("girdiler hosta ulaşmadı");
-    assert_eq!(girdiler.lock().unwrap()[0], Girdi::FareKonum { x: 0.5, y: 0.25 });
+    assert_eq!(
+        girdiler.lock().unwrap()[0],
+        Girdi::FareKonum { x: 0.5, y: 0.25 }
+    );
 
     // Host keser → izleyici sebebini öğrenir, host yeni kod üretir (bilet tek kullanımlık).
     h.komut(HostKomut::Kes).await;
     match iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Koptu { .. })).await {
-        IzleyiciOlay::Koptu { sebep } => assert!(sebep.contains("kesti") || sebep.contains("kapandı"), "{sebep}"),
+        IzleyiciOlay::Koptu { sebep } => assert!(
+            sebep.contains("kesti") || sebep.contains("kapandı"),
+            "{sebep}"
+        ),
         _ => unreachable!(),
     }
     let (kod2, _) = hazir(&mut h).await;
@@ -117,16 +151,28 @@ async fn kontrol_izni_yoksa_girdi_uygulanmaz() {
     let (kod, parola) = hazir(&mut h).await;
     let mut i = izleyici::baglan(&kod, &parola, "Veli").await.unwrap();
     olay_bekle(&mut h, |o| matches!(o, HostOlay::Istek { .. })).await;
-    h.komut(HostKomut::Kabul(Izinler { kontrol: false, pano: false, dosya: false })).await;
+    h.komut(HostKomut::Kabul(Izinler {
+        kontrol: false,
+        pano: false,
+        dosya: false,
+        oyun_kolu: false,
+    }))
+    .await;
     iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Kare { .. })).await;
-    i.gonder(Girdi::FareTus { tus: FareTusu::Sol, basili: true }).await;
+    i.gonder(Girdi::FareTus {
+        tus: FareTusu::Sol,
+        basili: true,
+    })
+    .await;
     tokio::time::sleep(Duration::from_millis(800)).await;
     assert!(girdiler.lock().unwrap().is_empty());
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn red_edilince_izleyici_sebebi_gorur() {
-    let mut h = host::baslat(ayar("222222"), Arc::new(SahteFabrika::new(64, 64))).await.unwrap();
+    let mut h = host::baslat(ayar("222222"), Arc::new(SahteFabrika::new(64, 64)))
+        .await
+        .unwrap();
     let (kod, parola) = hazir(&mut h).await;
     let mut i = izleyici::baglan(&kod, &parola, "Veli").await.unwrap();
     olay_bekle(&mut h, |o| matches!(o, HostOlay::Istek { .. })).await;
@@ -142,23 +188,32 @@ async fn red_edilince_izleyici_sebebi_gorur() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn yanlis_parola_baglanmadan_reddedilir() {
-    let mut h = host::baslat(ayar("333333"), Arc::new(SahteFabrika::new(64, 64))).await.unwrap();
+    let mut h = host::baslat(ayar("333333"), Arc::new(SahteFabrika::new(64, 64)))
+        .await
+        .unwrap();
     let (kod, _) = hazir(&mut h).await;
-    let e = izleyici::baglan(&kod, "000000", "Veli").await.err().unwrap();
+    let e = izleyici::baglan(&kod, "000000", "Veli")
+        .await
+        .err()
+        .unwrap();
     assert_eq!(e.to_string(), "Parola yanlış.");
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn sahte_bilet_reddedilir() {
     // Saldırgan adresi ve parmak izini biliyor ama bileti bilmiyor (ör. eski kod).
-    let mut h = host::baslat(ayar("444444"), Arc::new(SahteFabrika::new(64, 64))).await.unwrap();
+    let mut h = host::baslat(ayar("444444"), Arc::new(SahteFabrika::new(64, 64)))
+        .await
+        .unwrap();
     let (kod, parola) = hazir(&mut h).await;
     let mut d = crate::kod::coz(&kod, &parola, crate::kod::simdi()).unwrap();
     d.bilet = crate::kod::yeni_bilet();
     let sahte = crate::kod::kodla(&d, &parola).unwrap();
     let mut i = izleyici::baglan(&sahte, &parola, "Mallory").await.unwrap();
     match iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Koptu { .. })).await {
-        IzleyiciOlay::Koptu { sebep } => assert_eq!(sebep, "Kod geçersiz ya da daha önce kullanılmış."),
+        IzleyiciOlay::Koptu { sebep } => {
+            assert_eq!(sebep, "Kod geçersiz ya da daha önce kullanılmış.")
+        }
         _ => unreachable!(),
     }
     // Host kullanıcıya istek GÖSTERMEMELİ.
@@ -168,11 +223,17 @@ async fn sahte_bilet_reddedilir() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn host_durdurulunca_baglanilamaz() {
-    let mut h = host::baslat(ayar("555555"), Arc::new(SahteFabrika::new(64, 64))).await.unwrap();
+    let mut h = host::baslat(ayar("555555"), Arc::new(SahteFabrika::new(64, 64)))
+        .await
+        .unwrap();
     let (kod, parola) = hazir(&mut h).await;
     h.durdur();
     tokio::time::sleep(Duration::from_millis(300)).await;
-    let e = izleyici::baglan(&kod, &parola, "Veli").await.err().unwrap().to_string();
+    let e = izleyici::baglan(&kod, &parola, "Veli")
+        .await
+        .err()
+        .unwrap()
+        .to_string();
     // Paralel testlerde boşalan portu başka bir host alabilir: o zaman parmak izi
     // uyuşmaz ve bağlantı güvenlik kontrolünde reddedilir — bu da doğru davranış.
     assert!(
@@ -199,9 +260,17 @@ async fn pano_oturumu(parola: &str, pano_izni: bool) -> PanoOturumu {
     iz_pano.ayarla("izleyici başlangıç");
     let mut h = host::baslat(ayar(parola), fab).await.unwrap();
     let (kod, parola) = hazir(&mut h).await;
-    let mut i = izleyici::baglan_panolu(&kod, &parola, "Veli", Some(Box::new(iz_pano.clone()))).await.unwrap();
+    let mut i = izleyici::baglan_panolu(&kod, &parola, "Veli", Some(Box::new(iz_pano.clone())))
+        .await
+        .unwrap();
     olay_bekle(&mut h, |o| matches!(o, HostOlay::Istek { .. })).await;
-    h.komut(HostKomut::Kabul(Izinler { kontrol: false, pano: pano_izni })).await;
+    h.komut(HostKomut::Kabul(Izinler {
+        kontrol: false,
+        pano: pano_izni,
+        dosya: false,
+        oyun_kolu: false,
+    }))
+    .await;
     match iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Kabul { .. })).await {
         IzleyiciOlay::Kabul { izinler, .. } => assert_eq!(izinler.pano, pano_izni),
         _ => unreachable!(),
@@ -217,7 +286,13 @@ async fn pano_oturumu(parola: &str, pano_izni: bool) -> PanoOturumu {
             }
         }
     });
-    PanoOturumu { _h: h, _i: i, host_pano, iz_pano, iz_olaylari }
+    PanoOturumu {
+        _h: h,
+        _i: i,
+        host_pano,
+        iz_pano,
+        iz_olaylari,
+    }
 }
 
 async fn kosul_bekle(ne: &str, f: impl Fn() -> bool) {
@@ -240,16 +315,28 @@ async fn pano_iki_yonlu_gider() {
 
     // Host → izleyici.
     o.host_pano.ayarla("hosttan merhaba ş");
-    kosul_bekle("host panosu izleyiciye gitmedi", || o.iz_pano.icerik().as_deref() == Some("hosttan merhaba ş")).await;
+    kosul_bekle("host panosu izleyiciye gitmedi", || {
+        o.iz_pano.icerik().as_deref() == Some("hosttan merhaba ş")
+    })
+    .await;
     kosul_bekle("izleyici arayüzüne Pano olayı gelmedi", || {
-        o.iz_olaylari.lock().unwrap().contains(&"hosttan merhaba ş".to_owned())
+        o.iz_olaylari
+            .lock()
+            .unwrap()
+            .contains(&"hosttan merhaba ş".to_owned())
     })
     .await;
 
     // İzleyici → host.
     o.iz_pano.ayarla("izleyiciden selam");
-    kosul_bekle("izleyici panosu hosta gitmedi", || o.host_pano.icerik().as_deref() == Some("izleyiciden selam")).await;
-    assert_eq!(o.host_pano.yazilanlar(), vec!["izleyiciden selam".to_owned()]);
+    kosul_bekle("izleyici panosu hosta gitmedi", || {
+        o.host_pano.icerik().as_deref() == Some("izleyiciden selam")
+    })
+    .await;
+    assert_eq!(
+        o.host_pano.yazilanlar(),
+        vec!["izleyiciden selam".to_owned()]
+    );
     assert_eq!(o.iz_pano.yazilanlar(), vec!["hosttan merhaba ş".to_owned()]);
 }
 
@@ -259,30 +346,61 @@ async fn pano_izni_yoksa_gitmez() {
     o.host_pano.ayarla("gizli host metni");
     o.iz_pano.ayarla("gizli izleyici metni");
     tokio::time::sleep(Duration::from_millis(2000)).await;
-    assert!(o.host_pano.yazilanlar().is_empty(), "izinsiz host panosuna yazıldı");
-    assert!(o.iz_pano.yazilanlar().is_empty(), "izinsiz izleyici panosuna yazıldı");
+    assert!(
+        o.host_pano.yazilanlar().is_empty(),
+        "izinsiz host panosuna yazıldı"
+    );
+    assert!(
+        o.iz_pano.yazilanlar().is_empty(),
+        "izinsiz izleyici panosuna yazıldı"
+    );
     assert_eq!(o.host_pano.icerik().as_deref(), Some("gizli host metni"));
     assert_eq!(o.iz_pano.icerik().as_deref(), Some("gizli izleyici metni"));
-    assert!(o.iz_olaylari.lock().unwrap().is_empty(), "izinsiz Pano olayı geldi");
+    assert!(
+        o.iz_olaylari.lock().unwrap().is_empty(),
+        "izinsiz Pano olayı geldi"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn pano_dongu_yapmaz() {
     let o = pano_oturumu("630630", true).await;
     o.host_pano.ayarla("tek sefer");
-    kosul_bekle("host panosu izleyiciye gitmedi", || o.iz_pano.icerik().as_deref() == Some("tek sefer")).await;
+    kosul_bekle("host panosu izleyiciye gitmedi", || {
+        o.iz_pano.icerik().as_deref() == Some("tek sefer")
+    })
+    .await;
     // Birkaç yoklama turu bekle: izleyici gelen metni geri yollarsa host panosuna yazılır.
     tokio::time::sleep(Duration::from_millis(2000)).await;
-    assert!(o.host_pano.yazilanlar().is_empty(), "gelen metin hosta geri yankılandı: {:?}", o.host_pano.yazilanlar());
-    assert_eq!(o.iz_pano.yazilanlar(), vec!["tek sefer".to_owned()], "izleyiciye tekrar tekrar yazıldı");
+    assert!(
+        o.host_pano.yazilanlar().is_empty(),
+        "gelen metin hosta geri yankılandı: {:?}",
+        o.host_pano.yazilanlar()
+    );
+    assert_eq!(
+        o.iz_pano.yazilanlar(),
+        vec!["tek sefer".to_owned()],
+        "izleyiciye tekrar tekrar yazıldı"
+    );
 
     // Ters yön de yankılanmamalı.
     o.iz_pano.ayarla("geri yön");
-    kosul_bekle("izleyici panosu hosta gitmedi", || o.host_pano.icerik().as_deref() == Some("geri yön")).await;
+    kosul_bekle("izleyici panosu hosta gitmedi", || {
+        o.host_pano.icerik().as_deref() == Some("geri yön")
+    })
+    .await;
     tokio::time::sleep(Duration::from_millis(2000)).await;
-    assert_eq!(o.iz_pano.yazilanlar(), vec!["tek sefer".to_owned()], "host gelen metni izleyiciye geri yolladı");
+    assert_eq!(
+        o.iz_pano.yazilanlar(),
+        vec!["tek sefer".to_owned()],
+        "host gelen metni izleyiciye geri yolladı"
+    );
     assert_eq!(o.host_pano.yazilanlar(), vec!["geri yön".to_owned()]);
-    assert_eq!(o.iz_olaylari.lock().unwrap().as_slice(), ["tek sefer".to_owned()]);
+    assert_eq!(
+        o.iz_olaylari.lock().unwrap().as_slice(),
+        ["tek sefer".to_owned()]
+    );
+}
 // --- dosya aktarımı ---
 
 fn gecici_klasor(on: &str) -> PathBuf {
@@ -306,7 +424,9 @@ fn sha(b: &[u8]) -> Vec<u8> {
 /// Klasördeki dosya adları (sıralı).
 fn icindekiler(k: &std::path::Path) -> Vec<String> {
     let mut v: Vec<String> = match std::fs::read_dir(k) {
-        Ok(d) => d.map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect(),
+        Ok(d) => d
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect(),
         Err(_) => Vec::new(),
     };
     v.sort();
@@ -314,14 +434,26 @@ fn icindekiler(k: &std::path::Path) -> Vec<String> {
 }
 
 /// Host (alınan dosyalar `hedef` klasörüne) + kabul edilmiş izleyici.
-async fn dosya_oturumu(parola: &str, dosya_izni: bool, hedef: &std::path::Path) -> (host::Host, izleyici::Izleyici) {
+async fn dosya_oturumu(
+    parola: &str,
+    dosya_izni: bool,
+    hedef: &std::path::Path,
+) -> (host::Host, izleyici::Izleyici) {
     let mut a = ayar(parola);
     a.dosya_klasoru = Some(hedef.to_owned());
-    let mut h = host::baslat(a, Arc::new(SahteFabrika::new(64, 64))).await.unwrap();
+    let mut h = host::baslat(a, Arc::new(SahteFabrika::new(64, 64)))
+        .await
+        .unwrap();
     let (kod, parola) = hazir(&mut h).await;
     let mut i = izleyici::baglan(&kod, &parola, "Veli").await.unwrap();
     olay_bekle(&mut h, |o| matches!(o, HostOlay::Istek { .. })).await;
-    h.komut(HostKomut::Kabul(Izinler { kontrol: false, pano: false, dosya: dosya_izni })).await;
+    h.komut(HostKomut::Kabul(Izinler {
+        kontrol: false,
+        pano: false,
+        dosya: dosya_izni,
+        oyun_kolu: false,
+    }))
+    .await;
     match iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Kabul { .. })).await {
         IzleyiciOlay::Kabul { izinler, .. } => assert_eq!(izinler.dosya, dosya_izni),
         _ => unreachable!(),
@@ -334,7 +466,13 @@ async fn dosya_sonu(i: &mut izleyici::Izleyici) -> (u64, u64, String, Vec<u64>) 
     let mut ara = Vec::new();
     loop {
         match iz_bekle(i, |o| matches!(o, IzleyiciOlay::Dosya { .. })).await {
-            IzleyiciOlay::Dosya { gonderilen, toplam, bitti: true, hata, .. } => return (gonderilen, toplam, hata, ara),
+            IzleyiciOlay::Dosya {
+                gonderilen,
+                toplam,
+                bitti: true,
+                hata,
+                ..
+            } => return (gonderilen, toplam, hata, ara),
             IzleyiciOlay::Dosya { gonderilen, .. } => ara.push(gonderilen),
             _ => unreachable!(),
         }
@@ -353,12 +491,19 @@ async fn dosya_aktarilir() {
     let gorev = i.dosya_gonder(&yol);
     let (gonderilen, toplam, hata, ara) = dosya_sonu(&mut i).await;
     assert_eq!(hata, "");
-    assert_eq!((gonderilen, toplam), (icerik.len() as u64, icerik.len() as u64));
-    assert!(ara.windows(2).all(|w| w[0] <= w[1]), "ilerleme geri gitmemeli: {ara:?}");
+    assert_eq!(
+        (gonderilen, toplam),
+        (icerik.len() as u64, icerik.len() as u64)
+    );
+    assert!(
+        ara.windows(2).all(|w| w[0] <= w[1]),
+        "ilerleme geri gitmemeli: {ara:?}"
+    );
     let g = gorev.await.unwrap().unwrap();
     assert_eq!((g.baslangic, g.gonderilen), (0, icerik.len() as u64));
 
-    let (ad, alinan) = match olay_bekle(&mut h, |o| matches!(o, HostOlay::DosyaAlindi { .. })).await {
+    let (ad, alinan) = match olay_bekle(&mut h, |o| matches!(o, HostOlay::DosyaAlindi { .. })).await
+    {
         HostOlay::DosyaAlindi { ad, yol } => (ad, PathBuf::from(yol)),
         _ => unreachable!(),
     };
@@ -390,25 +535,44 @@ async fn dosya_kaldigi_yerden_devam() {
 
     // 1) Aktarım 1 000 000 bayttan sonra kesilir: host yazdığını saklar, asıl ad oluşmaz.
     const KES: u64 = 1_000_000;
-    let gorev = i.dosya_gonder_ayarli(yol.clone(), crate::dosya::GonderAyari { kes: Some(KES), sha_boz: false });
+    let gorev = i.dosya_gonder_ayarli(
+        yol.clone(),
+        crate::dosya::GonderAyari {
+            kes: Some(KES),
+            sha_boz: false,
+        },
+    );
     let (_, _, hata, _) = dosya_sonu(&mut i).await;
     assert_eq!(hata, crate::dosya::YARIDA_KALDI);
     assert!(gorev.await.unwrap().is_err());
     let yarimlar = icindekiler(&hedef);
     assert_eq!(yarimlar.len(), 1, "{yarimlar:?}");
     assert!(yarimlar[0].ends_with(".afudesk-parca"), "{yarimlar:?}");
-    assert_eq!(std::fs::metadata(hedef.join(&yarimlar[0])).unwrap().len(), KES);
+    assert_eq!(
+        std::fs::metadata(hedef.join(&yarimlar[0])).unwrap().len(),
+        KES
+    );
     assert!(!hedef.join("yarim.bin").exists());
 
     // 2) Yeniden gönder: yalnız kalan kısım gider.
     let gorev = i.dosya_gonder(&yol);
     let (gonderilen, toplam, hata, ara) = dosya_sonu(&mut i).await;
     assert_eq!(hata, "");
-    assert_eq!((gonderilen, toplam), (icerik.len() as u64, icerik.len() as u64));
-    assert!(ara.iter().all(|&g| g >= KES), "ilerleme devam noktasından başlamalı: {ara:?}");
+    assert_eq!(
+        (gonderilen, toplam),
+        (icerik.len() as u64, icerik.len() as u64)
+    );
+    assert!(
+        ara.iter().all(|&g| g >= KES),
+        "ilerleme devam noktasından başlamalı: {ara:?}"
+    );
     let g = gorev.await.unwrap().unwrap();
     assert_eq!(g.baslangic, KES);
-    assert_eq!(g.gonderilen, icerik.len() as u64 - KES, "yalnız kalan bayt gönderilmeli");
+    assert_eq!(
+        g.gonderilen,
+        icerik.len() as u64 - KES,
+        "yalnız kalan bayt gönderilmeli"
+    );
 
     match olay_bekle(&mut h, |o| matches!(o, HostOlay::DosyaAlindi { .. })).await {
         HostOlay::DosyaAlindi { ad, .. } => assert_eq!(ad, "yarim.bin"),
@@ -417,7 +581,11 @@ async fn dosya_kaldigi_yerden_devam() {
     let gelen = std::fs::read(hedef.join("yarim.bin")).unwrap();
     assert!(gelen == icerik, "içerik birebir aynı olmalı");
     assert_eq!(sha(&gelen), sha(&icerik));
-    assert_eq!(icindekiler(&hedef), ["yarim.bin"], "yarım dosya temizlenmeli");
+    assert_eq!(
+        icindekiler(&hedef),
+        ["yarim.bin"],
+        "yarım dosya temizlenmeli"
+    );
 
     let _ = std::fs::remove_dir_all(&hedef);
     let _ = std::fs::remove_dir_all(&kaynak);
@@ -434,7 +602,10 @@ async fn dosya_izni_yoksa_reddedilir() {
     let gorev = i.dosya_gonder(&yol);
     let (_, _, hata, _) = dosya_sonu(&mut i).await;
     assert_eq!(hata, "Karşı taraf dosya almaya izin vermedi.");
-    assert_eq!(gorev.await.unwrap().unwrap_err().to_string(), "Karşı taraf dosya almaya izin vermedi.");
+    assert_eq!(
+        gorev.await.unwrap().unwrap_err().to_string(),
+        "Karşı taraf dosya almaya izin vermedi."
+    );
     assert!(icindekiler(&hedef).is_empty(), "hiçbir şey yazılmamalı");
     let ek = tokio::time::timeout(Duration::from_millis(300), h.olaylar.recv()).await;
     assert!(!matches!(ek, Ok(Some(HostOlay::DosyaAlindi { .. }))));
@@ -454,21 +625,206 @@ async fn dosya_bozulursa_hata() {
     std::fs::write(&yol, &icerik).unwrap();
     let (mut h, mut i) = dosya_oturumu("600004", true, &hedef).await;
 
-    let gorev = i.dosya_gonder_ayarli(yol.clone(), crate::dosya::GonderAyari { kes: None, sha_boz: true });
+    let gorev = i.dosya_gonder_ayarli(
+        yol.clone(),
+        crate::dosya::GonderAyari {
+            kes: None,
+            sha_boz: true,
+        },
+    );
     let (_, _, hata, _) = dosya_sonu(&mut i).await;
     assert_eq!(hata, crate::dosya::BOZUK);
     assert!(gorev.await.unwrap().is_err());
     assert!(!hedef.join("bozuk.bin").exists(), "asıl ad oluşmamalı");
-    assert!(icindekiler(&hedef).is_empty(), "bozuk yarım dosya da silinmeli: {:?}", icindekiler(&hedef));
+    assert!(
+        icindekiler(&hedef).is_empty(),
+        "bozuk yarım dosya da silinmeli: {:?}",
+        icindekiler(&hedef)
+    );
     let ek = tokio::time::timeout(Duration::from_millis(300), h.olaylar.recv()).await;
     assert!(!matches!(ek, Ok(Some(HostOlay::DosyaAlindi { .. }))));
 
     // Aynı dosya doğru özetle gönderilince sorunsuz gelir.
     i.dosya_gonder(&yol);
     assert_eq!(dosya_sonu(&mut i).await.2, "");
-    assert_eq!(sha(&std::fs::read(hedef.join("bozuk.bin")).unwrap()), sha(&icerik));
+    assert_eq!(
+        sha(&std::fs::read(hedef.join("bozuk.bin")).unwrap()),
+        sha(&icerik)
+    );
 
     let _ = std::fs::remove_dir_all(&hedef);
     let _ = std::fs::remove_dir_all(&kaynak);
+}
 
+#[tokio::test(flavor = "multi_thread")]
+async fn oyun_kolu_hosta_ulasir() {
+    let fab = Arc::new(SahteFabrika::new(64, 64));
+    let durumlar = fab.kol_durumlari.clone();
+    let kaldirilan = fab.kol_kaldirilan.clone();
+    let mut h = host::baslat(ayar("606060"), fab).await.unwrap();
+    let (kod, parola) = hazir(&mut h).await;
+    let i = izleyici::baglan(&kod, &parola, "Oyuncu").await.unwrap();
+    olay_bekle(&mut h, |o| matches!(o, HostOlay::Istek { .. })).await;
+    h.komut(HostKomut::Kabul(Izinler {
+        kontrol: false,
+        pano: false,
+        dosya: false,
+        oyun_kolu: true,
+    }))
+    .await;
+    i.gonder(Girdi::Kol(crate::protokol::KolDurumu {
+        slot: 0,
+        sira: 1,
+        dugmeler: 0x1000,
+        sol_x: 0,
+        sol_y: 0,
+        sag_x: 0,
+        sag_y: 0,
+        sol_tetik: 0,
+        sag_tetik: 0,
+    }))
+    .await;
+    tokio::time::timeout(SURE, async {
+        while durumlar.lock().unwrap().is_empty() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(durumlar.lock().unwrap()[0].dugmeler, 0x1000);
+    i.kapat();
+    olay_bekle(&mut h, |o| matches!(o, HostOlay::Koptu { .. })).await;
+    assert_eq!(
+        *kaldirilan.lock().unwrap(),
+        vec![0],
+        "oturum sonunda sanal kol kaldırılmalı"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn oyun_kolu_izni_yoksa_uygulanmaz() {
+    let fab = Arc::new(SahteFabrika::new(64, 64));
+    let girdiler = fab.girdiler.clone();
+    let durumlar = fab.kol_durumlari.clone();
+    let mut h = host::baslat(ayar("616161"), fab).await.unwrap();
+    let (kod, parola) = hazir(&mut h).await;
+    let i = izleyici::baglan(&kod, &parola, "Oyuncu").await.unwrap();
+    olay_bekle(&mut h, |o| matches!(o, HostOlay::Istek { .. })).await;
+    h.komut(HostKomut::Kabul(Izinler {
+        kontrol: true,
+        pano: false,
+        dosya: false,
+        oyun_kolu: false,
+    }))
+    .await;
+    i.gonder(Girdi::Kol(crate::protokol::KolDurumu {
+        slot: 0,
+        sira: 1,
+        dugmeler: 1,
+        sol_x: 0,
+        sol_y: 0,
+        sag_x: 0,
+        sag_y: 0,
+        sol_tetik: 0,
+        sag_tetik: 0,
+    }))
+    .await;
+    i.gonder(Girdi::FareTus {
+        tus: FareTusu::Sol,
+        basili: true,
+    })
+    .await;
+    tokio::time::sleep(Duration::from_millis(250)).await;
+    assert!(durumlar.lock().unwrap().is_empty());
+    assert_eq!(
+        *girdiler.lock().unwrap(),
+        vec![Girdi::FareTus {
+            tus: FareTusu::Sol,
+            basili: true
+        }],
+        "fare kontrol izni çalışmaya devam etmeli"
+    );
+    h.komut(HostKomut::Kes).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn titresim_izleyiciye_doner() {
+    let fab = Arc::new(SahteFabrika::new(64, 64));
+    let titresim = fab.kol_titresim.clone();
+    let mut h = host::baslat(ayar("626262"), fab).await.unwrap();
+    let (kod, parola) = hazir(&mut h).await;
+    let mut i = izleyici::baglan(&kod, &parola, "Oyuncu").await.unwrap();
+    olay_bekle(&mut h, |o| matches!(o, HostOlay::Istek { .. })).await;
+    h.komut(HostKomut::Kabul(Izinler {
+        kontrol: true,
+        pano: false,
+        dosya: false,
+        oyun_kolu: true,
+    }))
+    .await;
+    iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Kabul { .. })).await;
+    titresim.lock().unwrap().push((0, 180, 75));
+    assert!(matches!(
+        iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Titresim { .. })).await,
+        IzleyiciOlay::Titresim {
+            slot: 0,
+            buyuk: 180,
+            kucuk: 75
+        }
+    ));
+    h.komut(HostKomut::Kes).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn eski_sirali_kol_durumu_atilir() {
+    let fab = Arc::new(SahteFabrika::new(64, 64));
+    let durumlar = fab.kol_durumlari.clone();
+    let kaldirilan = fab.kol_kaldirilan.clone();
+    let mut h = host::baslat(ayar("636363"), fab).await.unwrap();
+    let (kod, parola) = hazir(&mut h).await;
+    let mut i = izleyici::baglan(&kod, &parola, "Oyuncu").await.unwrap();
+    olay_bekle(&mut h, |o| matches!(o, HostOlay::Istek { .. })).await;
+    h.komut(HostKomut::Kabul(Izinler {
+        kontrol: false,
+        pano: false,
+        dosya: false,
+        oyun_kolu: true,
+    }))
+    .await;
+    iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Kabul { .. })).await;
+    let kol = |sira| {
+        Girdi::Kol(crate::protokol::KolDurumu {
+            slot: 0,
+            sira,
+            dugmeler: sira as u16,
+            sol_x: 0,
+            sol_y: 0,
+            sag_x: 0,
+            sag_y: 0,
+            sol_tetik: 0,
+            sag_tetik: 0,
+        })
+    };
+    i.gonder(kol(10)).await;
+    tokio::time::timeout(SURE, async {
+        while durumlar.lock().unwrap().last().map(|d| d.sira) != Some(10) {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    i.gonder(kol(9)).await;
+    tokio::time::sleep(Duration::from_millis(150)).await;
+    assert_eq!(
+        durumlar
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|d| d.sira)
+            .collect::<Vec<_>>(),
+        vec![10]
+    );
+    i.kapat();
+    olay_bekle(&mut h, |o| matches!(o, HostOlay::Koptu { .. })).await;
+    assert_eq!(*kaldirilan.lock().unwrap(), vec![0]);
 }

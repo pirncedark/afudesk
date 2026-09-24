@@ -1,6 +1,6 @@
 {
-  "zaman": "2026-09-24 13:47",
-  "commit": "285e14b",
+  "zaman": "2026-09-24 15:01",
+  "commit": "52ad66a",
   "sistemler": {
     "FASTPATH": {
       "ad": "Düşük gecikmeli görüntü ve ölçüm",
@@ -28,12 +28,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 12.3,
+              "sure_sn": 0.5,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 42 filtered out; finished in 0.00s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.00s"
               ]
             },
             {
@@ -42,12 +42,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.7,
+              "sure_sn": 0.6,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 42 filtered out; finished in 0.00s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.00s"
               ]
             },
             {
@@ -56,12 +56,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.3,
+              "sure_sn": 1.2,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 42 filtered out; finished in 0.71s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.63s"
               ]
             }
           ],
@@ -93,7 +93,7 @@
               "son_satirlar": [
                 "running 3 tests",
                 "...",
-                "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s"
+                "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 68 filtered out; finished in 0.00s"
               ]
             }
           ],
@@ -125,7 +125,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 6.9,
+              "sure_sn": 6.4,
               "gecti": true,
               "son_satirlar": [
                 "00:00 +0: loading C:/Users/afuuu/Desktop/afuproject/AfuDesk/app/test/arayuz_test.dart",
@@ -142,22 +142,22 @@
         },
         "gercek_gecikme": {
           "ad": "Yakalamadan izleyicide birleşmeye gerçek gecikme (saat farkı düzeltmeli)",
-          "durum": "TODO",
+          "durum": "DONE",
           "kanit": [
             {
               "dosya": "rust/src/zaman.rs",
               "desen": "fn saat_farki",
-              "bulundu": false
+              "bulundu": true
             },
             {
               "dosya": "rust/src/zaman.rs",
               "desen": "fn gecikme_ms",
-              "bulundu": false
+              "bulundu": true
             },
             {
               "dosya": "rust/src/protokol.rs",
               "desen": "yakalama_ms",
-              "bulundu": false
+              "bulundu": true
             }
           ],
           "testler": [
@@ -165,77 +165,63 @@
               "tur": "cargo",
               "filtre": "zaman::",
               "cikis": 0,
-              "gecen": 0,
+              "gecen": 3,
               "basarisiz": 0,
-              "sure_sn": 0.5,
-              "gecti": false,
+              "sure_sn": 0.6,
+              "gecti": true,
               "son_satirlar": [
-                "running 0 tests",
-                "",
-                "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+                "running 3 tests",
+                "...",
+                "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 68 filtered out; finished in 0.00s"
               ]
             }
           ],
-          "uygulandi": false,
-          "test_edildi": false,
-          "gecti": false,
+          "uygulandi": true,
+          "test_edildi": true,
+          "gecti": true,
           "basarisiz": false,
           "engel": ""
         },
         "rtt_yol_secimi": {
           "ad": "Bilinen adres adayları arasında en düşük RTT'li yolun seçimi",
-          "durum": "IN_PROGRESS",
+          "durum": "DONE",
           "kanit": [
             {
               "dosya": "rust/src/ag.rs",
               "desen": "fn en_iyi_yol",
-              "bulundu": false
+              "bulundu": true
             }
           ],
           "testler": [
             {
               "tur": "cargo",
-              "filtre": "en_iyi_yol",
+              "filtre": "en_dusuk_rtt_yolu_secer",
               "cikis": 0,
-              "gecen": 0,
+              "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.5,
-              "gecti": false,
-              "son_satirlar": [
-                "running 0 tests",
-                "",
-                "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
-              ]
-            },
-            {
-              "tur": "cargo",
-              "filtre": "ag::testler",
-              "cikis": 0,
-              "gecen": 4,
-              "basarisiz": 0,
-              "sure_sn": 2.5,
+              "sure_sn": 0.6,
               "gecti": true,
               "son_satirlar": [
-                "running 4 tests",
-                "....",
-                "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 2.01s"
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.00s"
               ]
             }
           ],
-          "uygulandi": false,
+          "uygulandi": true,
           "test_edildi": true,
-          "gecti": false,
+          "gecti": true,
           "basarisiz": false,
           "engel": ""
         },
         "wgc_yakalama": {
           "ad": "Windows Graphics Capture ile yakalama (xcap yedeği)",
-          "durum": "TODO",
+          "durum": "DONE",
           "kanit": [
             {
               "dosya": "rust/src/platform.rs",
               "desen": "WgcYakalayici",
-              "bulundu": false
+              "bulundu": true
             }
           ],
           "testler": [
@@ -243,20 +229,20 @@
               "tur": "cargo",
               "filtre": "gercek_wgc_yakalanir",
               "cikis": 0,
-              "gecen": 0,
+              "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.5,
-              "gecti": false,
+              "sure_sn": 3.4,
+              "gecti": true,
               "son_satirlar": [
-                "running 0 tests",
-                "",
-                "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 2.72s"
               ]
             }
           ],
-          "uygulandi": false,
-          "test_edildi": false,
-          "gecti": false,
+          "uygulandi": true,
+          "test_edildi": true,
+          "gecti": true,
           "basarisiz": false,
           "engel": ""
         }
@@ -268,36 +254,36 @@
       "maddeler": {
         "kol_protokolu": {
           "ad": "Kol durumu mesajı ve titreşim mesajı",
-          "durum": "IN_PROGRESS",
+          "durum": "DONE",
           "kanit": [
             {
               "dosya": "rust/src/protokol.rs",
               "desen": "KolDurumu",
-              "bulundu": false
+              "bulundu": true
             },
             {
               "dosya": "rust/src/protokol.rs",
               "desen": "Titresim",
-              "bulundu": false
+              "bulundu": true
             }
           ],
           "testler": [
             {
               "tur": "cargo",
-              "filtre": "protokol::",
+              "filtre": "dugme_maskesi_kol_durumunda_tasinir",
               "cikis": 0,
-              "gecen": 3,
+              "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.5,
+              "sure_sn": 0.7,
               "gecti": true,
               "son_satirlar": [
-                "running 3 tests",
-                "...",
-                "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s"
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.00s"
               ]
             }
           ],
-          "uygulandi": false,
+          "uygulandi": true,
           "test_edildi": true,
           "gecti": true,
           "basarisiz": false,
@@ -305,31 +291,45 @@
         },
         "datagram_girdi": {
           "ad": "Kol durumu QUIC datagram ile, eski sıra atılır (sarmal güvenli)",
-          "durum": "IN_PROGRESS",
+          "durum": "DONE",
           "kanit": [
             {
               "dosya": "rust/src/ag.rs",
               "desen": "datagram",
-              "bulundu": false
+              "bulundu": true
             }
           ],
           "testler": [
             {
               "tur": "cargo",
-              "filtre": "sira",
+              "filtre": "sira_sarmali_ve_eski_paket",
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.5,
+              "sure_sn": 0.9,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 42 filtered out; finished in 0.00s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.00s"
+              ]
+            },
+            {
+              "tur": "cargo",
+              "filtre": "uctan_uca::eski_sirali_kol_durumu_atilir",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 1.2,
+              "gecti": true,
+              "son_satirlar": [
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.52s"
               ]
             }
           ],
-          "uygulandi": false,
+          "uygulandi": true,
           "test_edildi": true,
           "gecti": true,
           "basarisiz": false,
@@ -337,31 +337,31 @@
         },
         "kol_okuma": {
           "ad": "İzleyicide fiziksel kolu okuma ve XInput düzenine eşleme",
-          "durum": "IN_PROGRESS",
+          "durum": "DONE",
           "kanit": [
             {
               "dosya": "rust/src/kol.rs",
               "desen": "gilrs",
-              "bulundu": false
+              "bulundu": true
             }
           ],
           "testler": [
             {
               "tur": "cargo",
-              "filtre": "kol::",
+              "filtre": "eksen_ve_tetik_sinir_eslemesi",
               "cikis": 0,
-              "gecen": 3,
+              "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.5,
+              "sure_sn": 0.6,
               "gecti": true,
               "son_satirlar": [
-                "running 3 tests",
-                "...",
-                "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s"
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.00s"
               ]
             }
           ],
-          "uygulandi": false,
+          "uygulandi": true,
           "test_edildi": true,
           "gecti": true,
           "basarisiz": false,
@@ -369,108 +369,150 @@
         },
         "sanal_kol": {
           "ad": "Host'ta sanal Xbox 360 kolu (ViGEmBus), yoksa açık uyarı",
-          "durum": "TODO",
+          "durum": "DONE",
           "kanit": [
             {
               "dosya": "rust/src/sanal_kol.rs",
               "desen": "KolSurucusu",
-              "bulundu": false
+              "bulundu": true
             },
             {
               "dosya": "rust/src/sanal_kol.rs",
               "desen": "ViGEmBus",
-              "bulundu": false
+              "bulundu": true
             }
           ],
           "testler": [
             {
               "tur": "cargo",
-              "filtre": "sanal_kol",
+              "filtre": "sanal_kol::testler::sahte_surucu_durumlari_kaydeder",
               "cikis": 0,
-              "gecen": 0,
+              "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.5,
-              "gecti": false,
+              "sure_sn": 0.6,
+              "gecti": true,
               "son_satirlar": [
-                "running 0 tests",
-                "",
-                "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.00s"
+              ]
+            },
+            {
+              "tur": "cargo",
+              "filtre": "sanal_kol::testler::gercek_vigem_kol_olusur",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 0.7,
+              "gecti": true,
+              "son_satirlar": [
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.02s"
+              ]
+            },
+            {
+              "tur": "cargo",
+              "filtre": "uctan_uca::oyun_kolu_hosta_ulasir",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 1.0,
+              "gecti": true,
+              "son_satirlar": [
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.38s"
               ]
             }
           ],
-          "uygulandi": false,
-          "test_edildi": false,
-          "gecti": false,
+          "uygulandi": true,
+          "test_edildi": true,
+          "gecti": true,
           "basarisiz": false,
           "engel": ""
         },
         "titresim_geri": {
           "ad": "Titreşimin izleyiciye geri gitmesi",
-          "durum": "TODO",
+          "durum": "DONE",
           "kanit": [
             {
               "dosya": "rust/src/host.rs",
               "desen": "Titresim",
-              "bulundu": false
+              "bulundu": true
             }
           ],
           "testler": [
             {
               "tur": "cargo",
-              "filtre": "titresim",
+              "filtre": "uctan_uca::titresim_izleyiciye_doner",
               "cikis": 0,
-              "gecen": 0,
+              "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.6,
-              "gecti": false,
+              "sure_sn": 1.0,
+              "gecti": true,
               "son_satirlar": [
-                "running 0 tests",
-                "",
-                "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.29s"
               ]
             }
           ],
-          "uygulandi": false,
-          "test_edildi": false,
-          "gecti": false,
+          "uygulandi": true,
+          "test_edildi": true,
+          "gecti": true,
           "basarisiz": false,
           "engel": ""
         },
         "kol_izni": {
           "ad": "Onay penceresinde 'Oyun kolu' izni",
-          "durum": "TODO",
+          "durum": "DONE",
           "kanit": [
             {
               "dosya": "rust/src/protokol.rs",
               "desen": "oyun_kolu",
-              "bulundu": false
+              "bulundu": true
             },
             {
               "dosya": "app/lib/sayfalar/baglanti_ver.dart",
-              "desen": "Oyun kolu",
-              "bulundu": false
+              "desen": "(?i)oyun kolu",
+              "bulundu": true
             }
           ],
           "testler": [
             {
-              "tur": "flutter",
-              "filtre": "oyun kolu",
-              "cikis": 79,
-              "gecen": 0,
+              "tur": "cargo",
+              "filtre": "uctan_uca::oyun_kolu_izni_yoksa_uygulanmaz",
+              "cikis": 0,
+              "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 4.8,
-              "gecti": false,
+              "sure_sn": 1.1,
+              "gecti": true,
+              "son_satirlar": [
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.45s"
+              ]
+            },
+            {
+              "tur": "flutter",
+              "filtre": "oyun kolu izin kutusu",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 6.2,
+              "gecti": true,
               "son_satirlar": [
                 "00:00 +0: loading C:/Users/afuuu/Desktop/afuproject/AfuDesk/app/test/arayuz_test.dart",
-                "No tests ran.",
-                "No tests match \"oyun kolu\"."
+                "00:00 +0: C:/Users/afuuu/Desktop/afuproject/AfuDesk/app/test/arayuz_test.dart: Bağlantı ver oyun kolu izin kutusu",
+                "00:01 +1: All tests passed!"
               ]
             }
           ],
-          "uygulandi": false,
-          "test_edildi": false,
-          "gecti": false,
-          "basarisiz": true,
+          "uygulandi": true,
+          "test_edildi": true,
+          "gecti": true,
+          "basarisiz": false,
           "engel": ""
         }
       }
@@ -481,65 +523,243 @@
       "maddeler": {
         "pano": {
           "ad": "Pano (metin) paylaşımı, izne bağlı",
-          "durum": "TODO",
+          "durum": "DONE",
           "kanit": [
             {
               "dosya": "rust/src/pano.rs",
-              "desen": "fn ",
-              "bulundu": false
+              "desen": "pub trait Pano",
+              "bulundu": true
+            },
+            {
+              "dosya": "app/lib/sayfalar/baglanti_ver.dart",
+              "desen": "(?i)pano paylaşımı",
+              "bulundu": true
             }
           ],
           "testler": [
             {
               "tur": "cargo",
-              "filtre": "pano",
+              "filtre": "pano::testler::degisiklik_algilanir",
               "cikis": 0,
-              "gecen": 0,
+              "gecen": 1,
               "basarisiz": 0,
               "sure_sn": 0.6,
-              "gecti": false,
+              "gecti": true,
               "son_satirlar": [
-                "running 0 tests",
-                "",
-                "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.00s"
+              ]
+            },
+            {
+              "tur": "cargo",
+              "filtre": "pano::testler::buyuk_metin_reddedilir",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 0.7,
+              "gecti": true,
+              "son_satirlar": [
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.00s"
+              ]
+            },
+            {
+              "tur": "cargo",
+              "filtre": "uctan_uca::pano_iki_yonlu_gider",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 2.9,
+              "gecti": true,
+              "son_satirlar": [
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 2.23s"
+              ]
+            },
+            {
+              "tur": "cargo",
+              "filtre": "uctan_uca::pano_izni_yoksa_gitmez",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 2.8,
+              "gecti": true,
+              "son_satirlar": [
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 2.21s"
+              ]
+            },
+            {
+              "tur": "cargo",
+              "filtre": "uctan_uca::pano_dongu_yapmaz",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 5.8,
+              "gecti": true,
+              "son_satirlar": [
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 5.23s"
+              ]
+            },
+            {
+              "tur": "flutter",
+              "filtre": "pano izin kutusu varsayılan kapalı",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 8.1,
+              "gecti": true,
+              "son_satirlar": [
+                "00:00 +0: loading C:/Users/afuuu/Desktop/afuproject/AfuDesk/app/test/arayuz_test.dart",
+                "00:00 +0: C:/Users/afuuu/Desktop/afuproject/AfuDesk/app/test/arayuz_test.dart: Bağlantı ver pano izin kutusu varsayılan kapalı",
+                "00:01 +1: All tests passed!"
               ]
             }
           ],
-          "uygulandi": false,
-          "test_edildi": false,
-          "gecti": false,
+          "uygulandi": true,
+          "test_edildi": true,
+          "gecti": true,
           "basarisiz": false,
           "engel": ""
         },
         "dosya_aktarimi": {
           "ad": "Dosya aktarımı (ayrı düşük öncelikli akış, kaldığı yerden devam)",
-          "durum": "TODO",
+          "durum": "DONE",
           "kanit": [
             {
               "dosya": "rust/src/dosya.rs",
-              "desen": "fn ",
-              "bulundu": false
+              "desen": "fn guvenli_ad",
+              "bulundu": true
+            },
+            {
+              "dosya": "app/lib/sayfalar/oturum.dart",
+              "desen": "(?i)dosya gönder",
+              "bulundu": true
             }
           ],
           "testler": [
             {
               "tur": "cargo",
-              "filtre": "dosya",
+              "filtre": "dosya::testler::guvenli_ad_temizler",
               "cikis": 0,
-              "gecen": 0,
+              "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.4,
-              "gecti": false,
+              "sure_sn": 0.8,
+              "gecti": true,
               "son_satirlar": [
-                "running 0 tests",
-                "",
-                "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.00s"
+              ]
+            },
+            {
+              "tur": "cargo",
+              "filtre": "dosya::testler::cakismada_numara_eklenir",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 0.7,
+              "gecti": true,
+              "son_satirlar": [
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.00s"
+              ]
+            },
+            {
+              "tur": "cargo",
+              "filtre": "uctan_uca::dosya_aktarilir",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 1.0,
+              "gecti": true,
+              "son_satirlar": [
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.29s"
+              ]
+            },
+            {
+              "tur": "cargo",
+              "filtre": "uctan_uca::dosya_kaldigi_yerden_devam",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 0.9,
+              "gecti": true,
+              "son_satirlar": [
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.25s"
+              ]
+            },
+            {
+              "tur": "cargo",
+              "filtre": "uctan_uca::dosya_izni_yoksa_reddedilir",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 0.9,
+              "gecti": true,
+              "son_satirlar": [
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.29s"
+              ]
+            },
+            {
+              "tur": "cargo",
+              "filtre": "uctan_uca::dosya_bozulursa_hata",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 0.9,
+              "gecti": true,
+              "son_satirlar": [
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.22s"
+              ]
+            },
+            {
+              "tur": "flutter",
+              "filtre": "dosya alma izin kutusu varsayılan kapalı",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 6.1,
+              "gecti": true,
+              "son_satirlar": [
+                "00:00 +0: loading C:/Users/afuuu/Desktop/afuproject/AfuDesk/app/test/arayuz_test.dart",
+                "00:00 +0: C:/Users/afuuu/Desktop/afuproject/AfuDesk/app/test/arayuz_test.dart: Bağlantı ver dosya alma izin kutusu varsayılan kapalı",
+                "00:01 +1: All tests passed!"
+              ]
+            },
+            {
+              "tur": "flutter",
+              "filtre": "dosya gönderme ilerlemesi gösterilir",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 6.0,
+              "gecti": true,
+              "son_satirlar": [
+                "00:00 +0: loading C:/Users/afuuu/Desktop/afuproject/AfuDesk/app/test/arayuz_test.dart",
+                "00:00 +0: C:/Users/afuuu/Desktop/afuproject/AfuDesk/app/test/arayuz_test.dart: Oturum dosya gönderme ilerlemesi gösterilir",
+                "00:01 +1: All tests passed!"
               ]
             }
           ],
-          "uygulandi": false,
-          "test_edildi": false,
-          "gecti": false,
+          "uygulandi": true,
+          "test_edildi": true,
+          "gecti": true,
           "basarisiz": false,
           "engel": ""
         },
@@ -565,7 +785,7 @@
               "son_satirlar": [
                 "running 0 tests",
                 "",
-                "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+                "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 71 filtered out; finished in 0.00s"
               ]
             }
           ],
@@ -597,7 +817,7 @@
               "son_satirlar": [
                 "running 0 tests",
                 "",
-                "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s"
+                "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 71 filtered out; finished in 0.00s"
               ]
             }
           ],

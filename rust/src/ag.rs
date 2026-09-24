@@ -14,7 +14,10 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 /// RTT'si en düşük bağlantı adayının dizinini döndürür.
 pub fn en_iyi_yol(adaylar: &[(usize, Duration)]) -> Option<usize> {
-    adaylar.iter().min_by_key(|(_, rtt)| *rtt).map(|(indeks, _)| *indeks)
+    adaylar
+        .iter()
+        .min_by_key(|(_, rtt)| *rtt)
+        .map(|(indeks, _)| *indeks)
 }
 
 #[cfg(test)]
@@ -23,7 +26,13 @@ mod yol_testleri {
 
     #[test]
     fn en_dusuk_rtt_yolu_secer() {
-        assert_eq!(en_iyi_yol(&[(0, Duration::from_millis(80)), (1, Duration::from_millis(12))]), Some(1));
+        assert_eq!(
+            en_iyi_yol(&[
+                (0, Duration::from_millis(80)),
+                (1, Duration::from_millis(12))
+            ]),
+            Some(1)
+        );
         assert_eq!(en_iyi_yol(&[]), None);
     }
 }
@@ -35,7 +44,10 @@ pub struct Kimlik {
 }
 
 pub fn parmak_izi(der: &[u8]) -> String {
-    Sha256::digest(der).iter().map(|b| format!("{b:02x}")).collect()
+    Sha256::digest(der)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 pub fn yeni_kimlik() -> Result<Kimlik> {
@@ -43,7 +55,11 @@ pub fn yeni_kimlik() -> Result<Kimlik> {
     let sertifika = CertificateDer::from(s.cert.der().to_vec());
     let anahtar = PrivatePkcs8KeyDer::from(s.key_pair.serialize_der());
     let parmak_izi = parmak_izi(&sertifika);
-    Ok(Kimlik { sertifika, anahtar, parmak_izi })
+    Ok(Kimlik {
+        sertifika,
+        anahtar,
+        parmak_izi,
+    })
 }
 
 fn saglayici() -> Arc<CryptoProvider> {
@@ -52,6 +68,7 @@ fn saglayici() -> Arc<CryptoProvider> {
 
 fn tasima() -> Arc<quinn::TransportConfig> {
     let mut t = quinn::TransportConfig::default();
+    t.datagram_receive_buffer_size(Some(64 * 1024));
     t.keep_alive_interval(Some(Duration::from_secs(5)));
     t.max_idle_timeout(Some(Duration::from_secs(20).try_into().expect("süre")));
     Arc::new(t)
@@ -90,7 +107,9 @@ impl ServerCertVerifier for ParmakIziDogrulayici {
         if parmak_izi(end_entity) == self.beklenen {
             Ok(ServerCertVerified::assertion())
         } else {
-            Err(rustls::Error::General("sertifika parmak izi koddakiyle uyuşmuyor".into()))
+            Err(rustls::Error::General(
+                "sertifika parmak izi koddakiyle uyuşmuyor".into(),
+            ))
         }
     }
 
@@ -109,11 +128,18 @@ impl ServerCertVerifier for ParmakIziDogrulayici {
         c: &CertificateDer<'_>,
         d: &DigitallySignedStruct,
     ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        rustls::crypto::verify_tls13_signature(m, c, d, &self.saglayici.signature_verification_algorithms)
+        rustls::crypto::verify_tls13_signature(
+            m,
+            c,
+            d,
+            &self.saglayici.signature_verification_algorithms,
+        )
     }
 
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        self.saglayici.signature_verification_algorithms.supported_schemes()
+        self.saglayici
+            .signature_verification_algorithms
+            .supported_schemes()
     }
 }
 
@@ -134,14 +160,25 @@ pub fn istemci_yapilandirmasi(parmak_izi: &str) -> Result<quinn::ClientConfig> {
 }
 
 /// Adresleri paralel dener; ilk başarılı bağlantı kazanır.
-pub async fn baglan(adresler: &[String], parmak_izi: &str, sure: Duration) -> Result<quinn::Connection> {
+pub async fn baglan(
+    adresler: &[String],
+    parmak_izi: &str,
+    sure: Duration,
+) -> Result<quinn::Connection> {
     anyhow::ensure!(!adresler.is_empty(), "Kodda adres yok.");
     let cfg = istemci_yapilandirmasi(parmak_izi)?;
     let mut gorevler = tokio::task::JoinSet::new();
     let mut son_hata = String::from("Karşı tarafa ulaşılamadı.");
     for a in adresler {
-        let Ok(hedef) = a.parse::<SocketAddr>() else { continue };
-        let yerel: SocketAddr = if hedef.is_ipv6() { "[::]:0" } else { "0.0.0.0:0" }.parse()?;
+        let Ok(hedef) = a.parse::<SocketAddr>() else {
+            continue;
+        };
+        let yerel: SocketAddr = if hedef.is_ipv6() {
+            "[::]:0"
+        } else {
+            "0.0.0.0:0"
+        }
+        .parse()?;
         let ep = match quinn::Endpoint::client(yerel) {
             Ok(e) => e,
             Err(e) => {
@@ -152,7 +189,9 @@ pub async fn baglan(adresler: &[String], parmak_izi: &str, sure: Duration) -> Re
         let cfg = cfg.clone();
         gorevler.spawn(async move {
             let c = ep.connect_with(cfg, hedef, "afudesk")?;
-            let b = tokio::time::timeout(sure, c).await.context("zaman aşımı")??;
+            let b = tokio::time::timeout(sure, c)
+                .await
+                .context("zaman aşımı")??;
             Ok::<_, anyhow::Error>(b)
         });
     }
@@ -184,7 +223,11 @@ pub async fn baglan(adresler: &[String], parmak_izi: &str, sure: Duration) -> Re
         }
     }
     if !basarililar.is_empty() {
-        let rttler: Vec<_> = basarililar.iter().enumerate().map(|(i, c)| (i, c.rtt())).collect();
+        let rttler: Vec<_> = basarililar
+            .iter()
+            .enumerate()
+            .map(|(i, c)| (i, c.rtt()))
+            .collect();
         let secilen = en_iyi_yol(&rttler).expect("bağlantı adayı var");
         let kazanan = basarililar.swap_remove(secilen);
         for aday in basarililar {
@@ -229,7 +272,9 @@ mod testler {
     async fn dogru_parmak_izi_baglanir() {
         let k = yeni_kimlik().unwrap();
         let (_ep, adres) = yankici(&k).await;
-        let c = baglan(&[adres], &k.parmak_izi, Duration::from_secs(5)).await.unwrap();
+        let c = baglan(&[adres], &k.parmak_izi, Duration::from_secs(5))
+            .await
+            .unwrap();
         let (mut w, mut r) = c.open_bi().await.unwrap();
         w.write_all(b"merhaba").await.unwrap();
         w.finish().unwrap();
@@ -241,8 +286,13 @@ mod testler {
         let k = yeni_kimlik().unwrap();
         let sahte = yeni_kimlik().unwrap();
         let (_ep, adres) = yankici(&k).await;
-        let h = baglan(&[adres], &sahte.parmak_izi, Duration::from_secs(5)).await.unwrap_err();
-        assert!(h.to_string().starts_with("Güvenlik kontrolü başarısız"), "{h}");
+        let h = baglan(&[adres], &sahte.parmak_izi, Duration::from_secs(5))
+            .await
+            .unwrap_err();
+        assert!(
+            h.to_string().starts_with("Güvenlik kontrolü başarısız"),
+            "{h}"
+        );
     }
 
     #[tokio::test]
@@ -250,16 +300,24 @@ mod testler {
         let k = yeni_kimlik().unwrap();
         let (_ep, adres) = yankici(&k).await;
         let adresler = vec!["127.0.0.1:9".to_owned(), "gecersiz".to_owned(), adres];
-        assert!(baglan(&adresler, &k.parmak_izi, Duration::from_secs(5)).await.is_ok());
+        assert!(baglan(&adresler, &k.parmak_izi, Duration::from_secs(5))
+            .await
+            .is_ok());
     }
 
     #[tokio::test]
     async fn hic_ulasilamazsa_anlasilir_hata() {
         let k = yeni_kimlik().unwrap();
-        let h = baglan(&["127.0.0.1:9".to_owned()], &k.parmak_izi, Duration::from_secs(2))
-            .await
-            .unwrap_err();
+        let h = baglan(
+            &["127.0.0.1:9".to_owned()],
+            &k.parmak_izi,
+            Duration::from_secs(2),
+        )
+        .await
+        .unwrap_err();
         assert!(h.to_string().starts_with("Karşı tarafa ulaşılamadı"), "{h}");
-        assert!(baglan(&[], &k.parmak_izi, Duration::from_secs(1)).await.is_err());
+        assert!(baglan(&[], &k.parmak_izi, Duration::from_secs(1))
+            .await
+            .is_err());
     }
 }

@@ -17,8 +17,11 @@ pub trait Yakalayici {
 }
 
 fn unix_ms() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default().as_millis().min(u64::MAX as u128) as u64
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .min(u64::MAX as u128) as u64
 }
 
 pub trait Enjektor: Send {
@@ -30,6 +33,7 @@ pub trait Fabrika: Send + Sync {
     fn yakalayici(&self) -> Result<Box<dyn Yakalayici>>;
     fn enjektor(&self) -> Result<Box<dyn Enjektor>>;
     fn pano(&self) -> Result<Box<dyn Pano>>;
+    fn kol_surucusu(&self) -> Result<Box<dyn crate::sanal_kol::KolSurucusu>>;
 }
 
 #[cfg(not(target_os = "android"))]
@@ -55,6 +59,9 @@ pub mod masaustu {
         fn pano(&self) -> Result<Box<dyn Pano>> {
             Ok(Box::new(crate::pano::ArboardPano::new()?))
         }
+        fn kol_surucusu(&self) -> Result<Box<dyn crate::sanal_kol::KolSurucusu>> {
+            Ok(Box::new(crate::sanal_kol::ViGEmSurucusu::yeni()?))
+        }
     }
 
     #[cfg(windows)]
@@ -76,7 +83,9 @@ pub mod masaustu {
         type Flags = std::sync::Arc<(std::sync::Mutex<Option<(Goruntu, u64)>>, std::sync::Condvar)>;
         type Error = WgcHata;
 
-        fn new(ctx: windows_capture::capture::Context<Self::Flags>) -> std::result::Result<Self, Self::Error> {
+        fn new(
+            ctx: windows_capture::capture::Context<Self::Flags>,
+        ) -> std::result::Result<Self, Self::Error> {
             Ok(Self { kare: ctx.flags })
         }
 
@@ -92,7 +101,14 @@ pub mod masaustu {
             let mut duz = Vec::new();
             let piksel = tampon.as_nopadding_buffer(&mut duz).to_vec();
             let (kilit, kosul) = &*self.kare;
-            *kilit.lock().unwrap() = Some((Goruntu { genislik, yukseklik, rgba: piksel }, yakalama_ms));
+            *kilit.lock().unwrap() = Some((
+                Goruntu {
+                    genislik,
+                    yukseklik,
+                    rgba: piksel,
+                },
+                yakalama_ms,
+            ));
             kosul.notify_all();
             Ok(())
         }
@@ -101,18 +117,31 @@ pub mod masaustu {
     #[cfg(windows)]
     impl WgcYakalayici {
         pub fn new() -> Result<Self> {
-            use windows_capture::{capture::GraphicsCaptureApiHandler, monitor::Monitor, settings::{
-                ColorFormat, CursorCaptureSettings, DirtyRegionSettings, DrawBorderSettings,
-                MinimumUpdateIntervalSettings, SecondaryWindowSettings, Settings,
-            }};
-            let kare = std::sync::Arc::new((std::sync::Mutex::new(None), std::sync::Condvar::new()));
+            use windows_capture::{
+                capture::GraphicsCaptureApiHandler,
+                monitor::Monitor,
+                settings::{
+                    ColorFormat, CursorCaptureSettings, DirtyRegionSettings, DrawBorderSettings,
+                    MinimumUpdateIntervalSettings, SecondaryWindowSettings, Settings,
+                },
+            };
+            let kare =
+                std::sync::Arc::new((std::sync::Mutex::new(None), std::sync::Condvar::new()));
             let ayarlar = Settings::new(
-                Monitor::primary()?, CursorCaptureSettings::Default, DrawBorderSettings::Default,
-                SecondaryWindowSettings::Default, MinimumUpdateIntervalSettings::Default,
-                DirtyRegionSettings::Default, ColorFormat::Rgba8, kare.clone(),
+                Monitor::primary()?,
+                CursorCaptureSettings::Default,
+                DrawBorderSettings::Default,
+                SecondaryWindowSettings::Default,
+                MinimumUpdateIntervalSettings::Default,
+                DirtyRegionSettings::Default,
+                ColorFormat::Rgba8,
+                kare.clone(),
             );
             let kontrol = WgcIsleyici::start_free_threaded(ayarlar)?;
-            Ok(Self { kare, _kontrol: kontrol })
+            Ok(Self {
+                kare,
+                _kontrol: kontrol,
+            })
         }
     }
 
@@ -125,8 +154,11 @@ pub mod masaustu {
         fn yakala_zamanli(&mut self) -> Result<(Goruntu, u64)> {
             let (kilit, kosul) = &*self.kare;
             let kare = kilit.lock().unwrap();
-            let (kare, _) = kosul.wait_timeout_while(kare, std::time::Duration::from_millis(500), |v| v.is_none()).unwrap();
-            kare.clone().ok_or_else(|| anyhow::anyhow!("WGC ilk kareyi 500 ms içinde vermedi"))
+            let (kare, _) = kosul
+                .wait_timeout_while(kare, std::time::Duration::from_millis(500), |v| v.is_none())
+                .unwrap();
+            kare.clone()
+                .ok_or_else(|| anyhow::anyhow!("WGC ilk kareyi 500 ms içinde vermedi"))
         }
     }
 
@@ -150,7 +182,11 @@ pub mod masaustu {
     impl Yakalayici for XcapYakalayici {
         fn yakala(&mut self) -> Result<Goruntu> {
             let r = self.ekran.capture_image()?;
-            Ok(Goruntu { genislik: r.width(), yukseklik: r.height(), rgba: r.into_raw() })
+            Ok(Goruntu {
+                genislik: r.width(),
+                yukseklik: r.height(),
+                rgba: r.into_raw(),
+            })
         }
     }
 
@@ -225,7 +261,14 @@ pub mod masaustu {
                         crate::protokol::FareTusu::Sag => Button::Right,
                         crate::protokol::FareTusu::Orta => Button::Middle,
                     };
-                    self.e.button(b, if *basili { Direction::Press } else { Direction::Release })?;
+                    self.e.button(
+                        b,
+                        if *basili {
+                            Direction::Press
+                        } else {
+                            Direction::Release
+                        },
+                    )?;
                 }
                 Girdi::Kaydir { dx, dy } => {
                     if *dy != 0 {
@@ -237,7 +280,14 @@ pub mod masaustu {
                 }
                 Girdi::Tus { ad, basili } => {
                     if let Some(k) = tus_coz(ad) {
-                        self.e.key(k, if *basili { Direction::Press } else { Direction::Release })?;
+                        self.e.key(
+                            k,
+                            if *basili {
+                                Direction::Press
+                            } else {
+                                Direction::Release
+                            },
+                        )?;
                     }
                 }
                 Girdi::Metin(m) => {
@@ -245,6 +295,7 @@ pub mod masaustu {
                         self.e.text(m)?;
                     }
                 }
+                Girdi::Kol(_) => {}
             }
             Ok(())
         }
@@ -269,19 +320,39 @@ pub mod masaustu {
         fn gercek_ekran_yakalanir() {
             let mut y = XcapYakalayici::new().expect("ekran bulunamadı");
             let a = y.yakala().expect("yakalama başarısız");
-            assert!(a.genislik >= 640 && a.yukseklik >= 480, "{}x{}", a.genislik, a.yukseklik);
+            assert!(
+                a.genislik >= 640 && a.yukseklik >= 480,
+                "{}x{}",
+                a.genislik,
+                a.yukseklik
+            );
             assert_eq!(a.rgba.len(), (a.genislik * a.yukseklik * 4) as usize);
             let b = y.yakala().unwrap();
             assert_eq!((a.genislik, a.yukseklik), (b.genislik, b.yukseklik));
             // Tamamen siyah değil (yakalama gerçekten piksel döndürüyor).
-            assert!(a.rgba.chunks_exact(4).any(|p| p[0] > 10 || p[1] > 10 || p[2] > 10));
+            assert!(a
+                .rgba
+                .chunks_exact(4)
+                .any(|p| p[0] > 10 || p[1] > 10 || p[2] > 10));
             // Gerçek ekran + kodlayıcı: 1 tam kare üretilebilmeli, süresi ölçülür.
             let t0 = std::time::Instant::now();
             let yayin = crate::goruntu::yayin_boyutu(a.clone());
-            let k = crate::goruntu::Kodlayici::new(70).kodla(&yayin).unwrap().unwrap();
+            let k = crate::goruntu::Kodlayici::new(70)
+                .kodla(&yayin)
+                .unwrap()
+                .unwrap();
             let sure = t0.elapsed();
             let bayt: usize = k.dosemeler.iter().map(|d| d.jpeg.len()).sum();
-            eprintln!("ekran {}x{} -> yayın {}x{}, tam kare {} döşeme, {} KB, {:?}", a.genislik, a.yukseklik, yayin.genislik, yayin.yukseklik, k.dosemeler.len(), bayt / 1024, sure);
+            eprintln!(
+                "ekran {}x{} -> yayın {}x{}, tam kare {} döşeme, {} KB, {:?}",
+                a.genislik,
+                a.yukseklik,
+                yayin.genislik,
+                yayin.yukseklik,
+                k.dosemeler.len(),
+                bayt / 1024,
+                sure
+            );
         }
 
         #[cfg(windows)]
@@ -293,7 +364,10 @@ pub mod masaustu {
             let son_sure = std::time::Instant::now() + std::time::Duration::from_secs(15);
             loop {
                 match wgc.yakala() {
-                    Ok(g) => { assert!(g.genislik > 0 && g.yukseklik > 0); break; }
+                    Ok(g) => {
+                        assert!(g.genislik > 0 && g.yukseklik > 0);
+                        break;
+                    }
                     Err(e) if std::time::Instant::now() < son_sure => {
                         let _ = e;
                     }
@@ -334,11 +408,21 @@ pub mod sahte {
         pub boyut: (u32, u32),
         /// Host panosu; test içeriği değiştirip yazılanları okuyabilir (klonlar paylaşır).
         pub pano: SahtePano,
+        pub kol_durumlari: Arc<Mutex<Vec<crate::protokol::KolDurumu>>>,
+        pub kol_titresim: crate::sanal_kol::TitresimKuyrugu,
+        pub kol_kaldirilan: Arc<Mutex<Vec<u8>>>,
     }
 
     impl SahteFabrika {
         pub fn new(g: u32, y: u32) -> Self {
-            Self { girdiler: Default::default(), boyut: (g, y), pano: SahtePano::default() }
+            Self {
+                girdiler: Default::default(),
+                boyut: (g, y),
+                pano: SahtePano::default(),
+                kol_durumlari: Default::default(),
+                kol_titresim: Default::default(),
+                kol_kaldirilan: Default::default(),
+            }
         }
     }
 
@@ -355,11 +439,19 @@ pub mod sahte {
             // Sol üst döşemeye sayaçla değişen bir kare çiz; gerisi sabit gri.
             for (i, p) in rgba.chunks_exact_mut(4).enumerate() {
                 let (xx, yy) = (i as u32 % g, i as u32 / g);
-                let v = if xx < 32 && yy < 32 { (self.sayac * 40 % 256) as u8 } else { 128 };
+                let v = if xx < 32 && yy < 32 {
+                    (self.sayac * 40 % 256) as u8
+                } else {
+                    128
+                };
                 p.copy_from_slice(&[v, v, v, 255]);
             }
             std::thread::sleep(std::time::Duration::from_millis(20));
-            Ok(Goruntu { genislik: g, yukseklik: y, rgba })
+            Ok(Goruntu {
+                genislik: g,
+                yukseklik: y,
+                rgba,
+            })
         }
     }
 
@@ -373,8 +465,18 @@ pub mod sahte {
     }
 
     impl Fabrika for SahteFabrika {
+        fn kol_surucusu(&self) -> Result<Box<dyn crate::sanal_kol::KolSurucusu>> {
+            Ok(Box::new(crate::sanal_kol::SahteKolSurucusu::yeni(
+                self.kol_durumlari.clone(),
+                self.kol_titresim.clone(),
+                self.kol_kaldirilan.clone(),
+            )))
+        }
         fn yakalayici(&self) -> Result<Box<dyn Yakalayici>> {
-            Ok(Box::new(SahteEkran { boyut: self.boyut, sayac: 0 }))
+            Ok(Box::new(SahteEkran {
+                boyut: self.boyut,
+                sayac: 0,
+            }))
         }
         fn enjektor(&self) -> Result<Box<dyn Enjektor>> {
             Ok(Box::new(KayitEnjektor(self.girdiler.clone())))

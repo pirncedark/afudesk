@@ -126,8 +126,9 @@ void main() {
       expect(find.text('Veli bağlanmak istiyor'), findsOneWidget);
       await t.tap(find.byKey(const Key('istek_kabul')));
       await gec(t);
-      expect(m.cagrilar, contains('kabul:true'));
-      expect(m.sonPano, isFalse, reason: 'pano kutusu işaretlenmeden izin verilmez');
+expect(m.cagrilar, contains('kabul:true:true'));
+      expect(m.sonPano, isFalse, reason: 'pano kutusu i?aretlenmeden izin verilmez');
+      expect(m.sonOyunKolu, isTrue);
       m.host.add(const HostOlay('baglandi', ad: 'Veli', kontrol: true));
       await t.pump();
       expect(find.text('Veli ekranını görüyor'), findsOneWidget);
@@ -144,8 +145,9 @@ void main() {
       await t.pump();
       await t.tap(find.byKey(const Key('istek_kabul')));
       await gec(t);
-      expect(m.cagrilar, contains('kabul:false'));
+      expect(m.cagrilar, contains('kabul:false:true'));
       expect(m.sonPano, isFalse);
+      expect(m.sonOyunKolu, isTrue);
     });
 
     testWidgets('pano izin kutusu varsayılan kapalı', (t) async {
@@ -161,11 +163,37 @@ void main() {
       expect(t.widget<CheckboxListTile>(kutu).value, isTrue);
       await t.tap(find.byKey(const Key('istek_kabul')));
       await gec(t);
-      expect(m.cagrilar, contains('kabul:true'));
+      expect(m.cagrilar, contains('kabul:true:true'));
       expect(m.sonPano, isTrue);
       m.host.add(const HostOlay('baglandi', ad: 'Veli', kontrol: true, pano: true));
       await t.pump();
       expect(find.byKey(const Key('ver_pano')), findsOneWidget);
+
+      expect(m.cagrilar, contains('kabul:true:true'));
+    });
+
+    testWidgets('oyun kolu izin kutusu', (t) async {
+      final m = await verAc(t);
+      m.host.add(const HostOlay('istek', ad: 'Veli'));
+      await gec(t);
+      final kutu = find.byKey(const Key('istek_oyun_kolu'));
+      expect(t.widget<CheckboxListTile>(kutu).value, isTrue);
+      await t.tap(kutu);
+      await t.pump();
+      expect(t.widget<CheckboxListTile>(kutu).value, isFalse);
+      await t.tap(find.byKey(const Key('istek_kabul')));
+      await gec(t);
+      expect(m.cagrilar, contains('kabul:true:false'));
+    });
+
+    testWidgets('oyun kolu sürücü uyarısı', (t) async {
+      final m = await verAc(t);
+      m.host.add(const HostOlay('baglandi', ad: 'Veli', oyunKolu: true));
+      await t.pump();
+      m.host.add(const HostOlay('uyari', metin: 'Oyun kolu sürücüsü gerekli'));
+      await t.pump();
+      expect(find.text('Oyun kolu sürücüsü gerekli'), findsOneWidget);
+
     });
 
     testWidgets('gelen istek: reddet', (t) async {
@@ -188,7 +216,7 @@ void main() {
           reason: 'kontrol kutusunun varsayılanı değişmemeli');
       await t.tap(find.byKey(const Key('istek_kabul')));
       await gec(t);
-      expect(m.cagrilar, contains('kabul:true'));
+      expect(m.cagrilar, contains('kabul:true:true'));
       expect(m.sonDosyaIzni, isFalse, reason: 'dokunulmazsa dosya izni verilmemeli');
       m.host.add(const HostOlay('baglandi', ad: 'Veli', kontrol: true));
       await t.pump();
@@ -353,6 +381,16 @@ void main() {
       await kareBekle(t, m);
       expect(find.byKey(const Key('oturum_kare')), findsOneWidget);
       expect(m.kareOnayi, 1, reason: 'kare çizilince çekirdeğe haber verilmeli');
+    });
+
+    testWidgets('uzak kol algılanınca oturum başlığında P2 çipi görünür', (t) async {
+      final m = await oturumAc(t);
+      m.izleyici.add(IzleyiciOlay('kabul', kontrol: true, genislik: 20, yukseklik: 10));
+      await t.pump();
+      expect(find.byKey(const Key('oturum_p2')), findsNothing);
+      m.izleyici.add(IzleyiciOlay('kol'));
+      await t.pump();
+      expect(find.text('🎮 P2'), findsOneWidget);
     });
 
     Future<Rect> goruntuAlani(WidgetTester t, SahteMotor m, {bool kontrol = true}) async {

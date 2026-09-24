@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 pub const ALPN: &[u8] = b"afudesk/1";
-pub const SURUM: u32 = 1;
+pub const SURUM: u32 = 2;
 /// Tek mesaj için üst sınır (kötü niyetli uzunluk alanına karşı).
 pub const AZAMI_MESAJ: usize = 32 * 1024 * 1024;
 
@@ -21,14 +21,40 @@ pub enum FareTusu {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Girdi {
     /// Ekran boyutundan bağımsız, 0.0..=1.0 aralığında konum.
-    FareKonum { x: f32, y: f32 },
-    FareTus { tus: FareTusu, basili: bool },
+    FareKonum {
+        x: f32,
+        y: f32,
+    },
+    FareTus {
+        tus: FareTusu,
+        basili: bool,
+    },
     /// Satır cinsinden kaydırma; pozitif = aşağı / sağ.
-    Kaydir { dx: i32, dy: i32 },
+    Kaydir {
+        dx: i32,
+        dy: i32,
+    },
     /// Adlandırılmış tuş ("Enter", "Backspace", "Ctrl", "a", "ş" ...).
-    Tus { ad: String, basili: bool },
+    Tus {
+        ad: String,
+        basili: bool,
+    },
     /// Doğrudan metin yazma (mobil klavye için).
     Metin(String),
+    Kol(KolDurumu),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct KolDurumu {
+    pub slot: u8,
+    pub sira: u32,
+    pub dugmeler: u16,
+    pub sol_x: i16,
+    pub sol_y: i16,
+    pub sag_x: i16,
+    pub sag_y: i16,
+    pub sol_tetik: u8,
+    pub sag_tetik: u8,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -39,30 +65,57 @@ pub struct Izinler {
     /// yalnız kendini tanımlayan biçimlerde (JSON vb.) işe yarar.
     #[serde(default)]
     pub dosya: bool,
+    #[serde(default)]
+    pub oyun_kolu: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Kontrol {
     /// İzleyici → host, ilk mesaj.
-    Merhaba { surum: u32, bilet: String, ad: String },
+    Merhaba {
+        surum: u32,
+        bilet: String,
+        ad: String,
+    },
     /// Host → izleyici.
-    Kabul { izinler: Izinler, genislik: u32, yukseklik: u32 },
+    Kabul {
+        izinler: Izinler,
+        genislik: u32,
+        yukseklik: u32,
+    },
     Red(String),
     Girdi(Girdi),
     Pano(String),
     Kapat(String),
-    SaatSor { izleyici_ms: u64 },
-    SaatCevap { izleyici_ms: u64, host_ms: u64 },
+    SaatSor {
+        izleyici_ms: u64,
+    },
+    SaatCevap {
+        izleyici_ms: u64,
+        host_ms: u64,
+    },
     /// İzleyici → host, dosya akışının ilk mesajı.
-    DosyaBaslik { kimlik: [u8; 16], ad: String, boyut: u64, sha256: [u8; 32] },
+    DosyaBaslik {
+        kimlik: [u8; 16],
+        ad: String,
+        boyut: u64,
+        sha256: [u8; 32],
+    },
     /// Host → izleyici: bu bayttan itibaren gönder (yarım dosya varsa > 0).
-    DosyaDevam { baslangic: u64 },
+    DosyaDevam {
+        baslangic: u64,
+    },
     /// İzleyici → host: sıradaki dosya parçası (en çok `dosya::PARCA` bayt).
     DosyaParca(Vec<u8>),
     /// Host → izleyici: dosya eksiksiz geldi, SHA-256 doğru, yerine taşındı.
     DosyaTamam,
     DosyaHata(String),
 
+    Titresim {
+        slot: u8,
+        buyuk: u8,
+        kucuk: u8,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -119,12 +172,18 @@ mod testler {
     #[tokio::test]
     async fn yaz_oku_gidis_donus() {
         let (mut a, mut b) = tokio::io::duplex(1 << 20);
-        let m = Kontrol::Girdi(Girdi::Tus { ad: "ş".into(), basili: true });
+        let m = Kontrol::Girdi(Girdi::Tus {
+            ad: "ş".into(),
+            basili: true,
+        });
         yaz(&mut a, &m).await.unwrap();
         yaz(&mut a, &Kontrol::Kapat("bitti".into())).await.unwrap();
         drop(a);
         assert_eq!(oku::<_, Kontrol>(&mut b).await.unwrap(), Some(m));
-        assert_eq!(oku::<_, Kontrol>(&mut b).await.unwrap(), Some(Kontrol::Kapat("bitti".into())));
+        assert_eq!(
+            oku::<_, Kontrol>(&mut b).await.unwrap(),
+            Some(Kontrol::Kapat("bitti".into()))
+        );
         assert_eq!(oku::<_, Kontrol>(&mut b).await.unwrap(), None);
     }
 

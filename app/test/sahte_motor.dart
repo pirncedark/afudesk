@@ -12,6 +12,7 @@ class SahteMotor implements Motor {
   String? sonKod, sonParola;
   bool? sonPano;
   bool? sonDosyaIzni;
+  bool? sonOyunKolu;
   String? secilecekDosya;
   final gonderilenDosyalar = <String>[];
   int kareOnayi = 0;
@@ -30,10 +31,11 @@ class SahteMotor implements Motor {
   }
 
   @override
-  Future<void> hostKabul({required bool kontrol, bool pano = false, bool dosya = false}) async {
+Future<void> hostKabul({required bool kontrol, bool pano = false, bool dosya = false, bool oyunKolu = false}) async {
     sonPano = pano;
     sonDosyaIzni = dosya;
-    cagrilar.add('kabul:$kontrol');
+    sonOyunKolu = oyunKolu;
+    cagrilar.add('kabul:$kontrol:$oyunKolu');
   }
   @override
   Future<void> hostRed() async => cagrilar.add('red');

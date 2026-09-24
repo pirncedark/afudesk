@@ -9,8 +9,7 @@ pub fn saat_farki(gonderim_ms: u64, host_ms: u64, alim_ms: u64) -> i64 {
 /// Yakalama anından izleyicide birleştirilene dek geçen süre.
 pub fn gecikme_ms(simdi_izleyici_ms: u64, fark: i64, yakalama_ms: u64) -> u32 {
     let yakalama_izleyici = yakalama_ms as i128 - fark as i128;
-    (simdi_izleyici_ms as i128 - yakalama_izleyici)
-        .clamp(0, u32::MAX as i128) as u32
+    (simdi_izleyici_ms as i128 - yakalama_izleyici).clamp(0, u32::MAX as i128) as u32
 }
 
 #[cfg(test)]

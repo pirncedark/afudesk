@@ -61,7 +61,11 @@ impl Esitleyici {
 
     /// Karşıdan gelen metni panoya yazar; yazılan metin tekrar gönderilmez.
     pub fn gelen(&mut self, metin: &str) -> Result<()> {
-        anyhow::ensure!(sinir_icinde(metin), "pano metni çok büyük: {} bayt", metin.len());
+        anyhow::ensure!(
+            sinir_icinde(metin),
+            "pano metni çok büyük: {} bayt",
+            metin.len()
+        );
         if metin.is_empty() {
             return Ok(());
         }
@@ -142,7 +146,10 @@ mod testler {
         assert!(!degisti(&s("a"), &None), "boşalma gönderilmez");
         assert!(!degisti(&None, &None));
         assert!(!degisti(&None, &s("")), "boş metin gönderilmez");
-        assert!(!degisti(&s("a\nb"), &s("a\r\nb")), "satır sonu farkı değişiklik değil");
+        assert!(
+            !degisti(&s("a\nb"), &s("a\r\nb")),
+            "satır sonu farkı değişiklik değil"
+        );
 
         // Eşitleyici: başlangıç içeriği gitmez, değişiklik bir kez gider.
         let p = SahtePano::default();
@@ -177,10 +184,17 @@ mod testler {
         assert_eq!(e.yokla(), None, "büyük metin gönderilmez");
         assert_eq!(e.yokla(), None, "her yoklamada yeniden denenmez");
         p.ayarla("küçük");
-        assert_eq!(e.yokla(), Some("küçük".to_owned()), "sonraki küçük metin gider");
+        assert_eq!(
+            e.yokla(),
+            Some("küçük".to_owned()),
+            "sonraki küçük metin gider"
+        );
 
         assert!(e.gelen(&buyuk).is_err(), "gelen büyük metin reddedilir");
-        assert!(p.yazilanlar().is_empty(), "reddedilen metin panoya yazılmaz");
+        assert!(
+            p.yazilanlar().is_empty(),
+            "reddedilen metin panoya yazılmaz"
+        );
         assert!(e.gelen(&sinirda).is_ok());
         assert_eq!(p.yazilanlar().len(), 1);
     }

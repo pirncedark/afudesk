@@ -26,7 +26,8 @@ pub const PARCA: usize = 256 * 1024;
 /// Yarım dosyaların uzantısı: `<kimlik-hex>.afudesk-parca`.
 pub const YARIM_UZANTI: &str = "afudesk-parca";
 pub const IZIN_YOK: &str = "Karşı taraf dosya almaya izin vermedi.";
-pub const YARIDA_KALDI: &str = "Aktarım yarıda kesildi; yeniden gönderince kaldığı yerden devam eder.";
+pub const YARIDA_KALDI: &str =
+    "Aktarım yarıda kesildi; yeniden gönderince kaldığı yerden devam eder.";
 pub const BOZUK: &str = "Dosya bozuk geldi (SHA-256 uyuşmuyor); yeniden gönder.";
 /// Başlık/devam yanıtı ve parçalar arası azami bekleme.
 const YANIT_SURESI: Duration = Duration::from_secs(20);
@@ -54,7 +55,13 @@ pub fn guvenli_ad(ad: &str) -> String {
     let mut s: String = son
         .chars()
         .filter(|c| !c.is_control())
-        .map(|c| if matches!(c, '<' | '>' | ':' | '"' | '|' | '?' | '*') { '_' } else { c })
+        .map(|c| {
+            if matches!(c, '<' | '>' | ':' | '"' | '|' | '?' | '*') {
+                '_'
+            } else {
+                c
+            }
+        })
         .collect();
     s = s.trim().trim_end_matches(['.', ' ']).to_owned();
     if s.chars().all(|c| c == '.') {
@@ -69,7 +76,11 @@ pub fn guvenli_ad(ad: &str) -> String {
     }
     if s.chars().count() > AZAMI_AD {
         let (govde, uzanti) = bol(&s);
-        let uzanti: String = if uzanti.chars().count() <= 20 { uzanti.to_owned() } else { String::new() };
+        let uzanti: String = if uzanti.chars().count() <= 20 {
+            uzanti.to_owned()
+        } else {
+            String::new()
+        };
         let kalan = AZAMI_AD - uzanti.chars().count();
         s = govde.chars().take(kalan).collect::<String>() + &uzanti;
     }
@@ -173,7 +184,11 @@ pub struct Alici {
 
 impl Alici {
     pub fn new(klasor: PathBuf, izin: bool) -> Arc<Self> {
-        Arc::new(Self { klasor, izin, surenler: Default::default() })
+        Arc::new(Self {
+            klasor,
+            izin,
+            surenler: Default::default(),
+        })
     }
 }
 
@@ -199,7 +214,11 @@ fn ret(m: &str) -> Ret {
 }
 
 /// Tek bir dosya akışını işler. Başarılıysa (gösterilen ad, son yol) döner.
-pub async fn al(alici: &Alici, mut w: quinn::SendStream, mut r: quinn::RecvStream) -> Option<(String, PathBuf)> {
+pub async fn al(
+    alici: &Alici,
+    mut w: quinn::SendStream,
+    mut r: quinn::RecvStream,
+) -> Option<(String, PathBuf)> {
     let sonuc = al_ic(alici, &mut w, &mut r).await;
     let yanit = match &sonuc {
         Ok(_) => Kontrol::DosyaTamam,
@@ -212,9 +231,19 @@ pub async fn al(alici: &Alici, mut w: quinn::SendStream, mut r: quinn::RecvStrea
     sonuc.ok()
 }
 
-async fn al_ic(alici: &Alici, w: &mut quinn::SendStream, r: &mut quinn::RecvStream) -> Result<(String, PathBuf), Ret> {
+async fn al_ic(
+    alici: &Alici,
+    w: &mut quinn::SendStream,
+    r: &mut quinn::RecvStream,
+) -> Result<(String, PathBuf), Ret> {
     let baslik = tokio::time::timeout(YANIT_SURESI, protokol::oku::<_, Kontrol>(r)).await;
-    let Ok(Ok(Some(Kontrol::DosyaBaslik { kimlik, ad, boyut, sha256 }))) = baslik else {
+    let Ok(Ok(Some(Kontrol::DosyaBaslik {
+        kimlik,
+        ad,
+        boyut,
+        sha256,
+    }))) = baslik
+    else {
         return Err(ret("Geçersiz dosya başlığı."));
     };
     if !alici.izin {
@@ -227,7 +256,11 @@ async fn al_ic(alici: &Alici, w: &mut quinn::SendStream, r: &mut quinn::RecvStre
     let ad = guvenli_ad(&ad);
     tokio::fs::create_dir_all(&alici.klasor).await?;
     let yarim = yarim_yol(&alici.klasor, &kimlik);
-    let mevcut = tokio::fs::metadata(&yarim).await.ok().filter(|m| m.is_file()).map(|m| m.len());
+    let mevcut = tokio::fs::metadata(&yarim)
+        .await
+        .ok()
+        .filter(|m| m.is_file())
+        .map(|m| m.len());
     let baslangic = devam_noktasi(mevcut, boyut);
 
     // Yarım dosyadaki önek zaten doğru sırayla yazılmıştır: özetine oradan devam edilir.
@@ -237,14 +270,20 @@ async fn al_ic(alici: &Alici, w: &mut quinn::SendStream, r: &mut quinn::RecvStre
         if okunan != baslangic {
             return Err(ret("Yarım dosya okunamadı."));
         }
-        let mut f = tokio::fs::OpenOptions::new().write(true).open(&yarim).await?;
+        let mut f = tokio::fs::OpenOptions::new()
+            .write(true)
+            .open(&yarim)
+            .await?;
         f.set_len(baslangic).await?;
         f.seek(std::io::SeekFrom::Start(baslangic)).await?;
         (h, f)
     } else {
         (Sha256::new(), tokio::fs::File::create(&yarim).await?)
     };
-    if protokol::yaz(w, &Kontrol::DosyaDevam { baslangic }).await.is_err() {
+    if protokol::yaz(w, &Kontrol::DosyaDevam { baslangic })
+        .await
+        .is_err()
+    {
         return Err(ret(YARIDA_KALDI));
     }
 
@@ -325,13 +364,23 @@ pub(crate) async fn gonder(
     }
     let kimlik = kimlik_uret(&ad, boyut, &sha256);
     let (mut w, mut r) = c.open_bi().await.context("Bağlantı koptu.")?;
-    protokol::yaz(&mut w, &Kontrol::DosyaBaslik { kimlik, ad: ad.clone(), boyut, sha256 }).await?;
-    let baslangic = match tokio::time::timeout(YANIT_SURESI, protokol::oku::<_, Kontrol>(&mut r)).await {
-        Ok(Ok(Some(Kontrol::DosyaDevam { baslangic }))) if baslangic <= boyut => baslangic,
-        Ok(Ok(Some(Kontrol::DosyaHata(m)))) => bail!(m),
-        Err(_) => bail!("Karşı taraf dosya aktarımını desteklemiyor ya da yanıt vermedi."),
-        _ => bail!("Dosya aktarımı başlatılamadı."),
-    };
+    protokol::yaz(
+        &mut w,
+        &Kontrol::DosyaBaslik {
+            kimlik,
+            ad: ad.clone(),
+            boyut,
+            sha256,
+        },
+    )
+    .await?;
+    let baslangic =
+        match tokio::time::timeout(YANIT_SURESI, protokol::oku::<_, Kontrol>(&mut r)).await {
+            Ok(Ok(Some(Kontrol::DosyaDevam { baslangic }))) if baslangic <= boyut => baslangic,
+            Ok(Ok(Some(Kontrol::DosyaHata(m)))) => bail!(m),
+            Err(_) => bail!("Karşı taraf dosya aktarımını desteklemiyor ya da yanıt vermedi."),
+            _ => bail!("Dosya aktarımı başlatılamadı."),
+        };
     let mut f = tokio::fs::File::open(yol).await?;
     f.seek(std::io::SeekFrom::Start(baslangic)).await?;
     let mut konum = baslangic;
@@ -344,15 +393,20 @@ pub(crate) async fn gonder(
         if n == 0 {
             bail!("Dosya gönderilirken değişti.");
         }
-        protokol::yaz(&mut w, &Kontrol::DosyaParca(buf[..n].to_vec())).await.context("Bağlantı koptu.")?;
+        protokol::yaz(&mut w, &Kontrol::DosyaParca(buf[..n].to_vec()))
+            .await
+            .context("Bağlantı koptu.")?;
         konum += n as u64;
         ilerleme(konum, boyut);
     }
     let _ = w.finish();
     match tokio::time::timeout(SONUC_SURESI, protokol::oku::<_, Kontrol>(&mut r)).await {
-        Ok(Ok(Some(Kontrol::DosyaTamam))) => {
-            Ok(Gonderim { ad, toplam: boyut, baslangic, gonderilen: konum - baslangic })
-        }
+        Ok(Ok(Some(Kontrol::DosyaTamam))) => Ok(Gonderim {
+            ad,
+            toplam: boyut,
+            baslangic,
+            gonderilen: konum - baslangic,
+        }),
         Ok(Ok(Some(Kontrol::DosyaHata(m)))) => bail!(m),
         _ => bail!("{YARIDA_KALDI}"),
     }
@@ -408,11 +462,23 @@ mod testler {
             move |a| liste.contains(&a)
         }
         assert_eq!(cakismasiz_ad("rapor.pdf", var(&[])), "rapor.pdf");
-        assert_eq!(cakismasiz_ad("rapor.pdf", var(&["rapor.pdf"])), "rapor (1).pdf");
-        assert_eq!(cakismasiz_ad("rapor.pdf", var(&["rapor.pdf", "rapor (1).pdf", "rapor (2).pdf"])), "rapor (3).pdf");
+        assert_eq!(
+            cakismasiz_ad("rapor.pdf", var(&["rapor.pdf"])),
+            "rapor (1).pdf"
+        );
+        assert_eq!(
+            cakismasiz_ad(
+                "rapor.pdf",
+                var(&["rapor.pdf", "rapor (1).pdf", "rapor (2).pdf"])
+            ),
+            "rapor (3).pdf"
+        );
         assert_eq!(cakismasiz_ad("README", var(&["README"])), "README (1)");
         assert_eq!(cakismasiz_ad(".bashrc", var(&[".bashrc"])), ".bashrc (1)");
-        assert_eq!(cakismasiz_ad("arsiv.tar.gz", var(&["arsiv.tar.gz"])), "arsiv.tar (1).gz");
+        assert_eq!(
+            cakismasiz_ad("arsiv.tar.gz", var(&["arsiv.tar.gz"])),
+            "arsiv.tar (1).gz"
+        );
         // Gerçek dosya sistemiyle.
         let k = std::env::temp_dir().join(format!("afudesk_cakisma_{}", rand::random::<u64>()));
         std::fs::create_dir_all(&k).unwrap();
@@ -427,7 +493,11 @@ mod testler {
         assert_eq!(devam_noktasi(Some(0), 100), 0);
         assert_eq!(devam_noktasi(Some(40), 100), 40);
         assert_eq!(devam_noktasi(Some(100), 100), 100);
-        assert_eq!(devam_noktasi(Some(101), 100), 0, "fazla uzun yarım dosya: baştan");
+        assert_eq!(
+            devam_noktasi(Some(101), 100),
+            0,
+            "fazla uzun yarım dosya: baştan"
+        );
     }
 
     #[test]

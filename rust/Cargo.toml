@@ -1,6 +1,6 @@
 [package]
 name = "afudesk_core"
-version = "1.1.0"
+version = "1.2.0"
 edition = "2021"
 license = "MIT"
 description = "AfuDesk çekirdeği: sunucusuz, tek kodla doğrudan bağlanan uzak masaüstü"
@@ -33,10 +33,13 @@ dirs = "6"
 [target.'cfg(not(target_os = "android"))'.dependencies]
 xcap = "0.9"
 enigo = "0.6"
+gilrs = "0.11"
 arboard = { version = "3", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 windows-capture = "2.0.1"
+vigem-client = { version = "0.1", features = ["unstable_xtarget_notification"] }
+
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

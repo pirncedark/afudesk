@@ -45,6 +45,7 @@ pub struct HostOlayi {
     pub dosya: bool,
     /// dosya: al?nan dosyan?n tam yolu.
     pub yol: String,
+    pub oyun_kolu: bool,
 }
 
 /// ?zleyici olay?. `tur`: bekliyor | kabul | kare | istatistik | koptu | hata | pano | dosya.
@@ -67,6 +68,9 @@ pub struct IzleyiciOlayi {
     pub gonderilen: u64,
     pub toplam: u64,
     pub bitti: bool,
+    pub slot: u8,
+    pub buyuk: u8,
+    pub kucuk: u8,
 }
 
 /// Girdi. `tur`: konum | fare | kaydir | tus | metin.
@@ -90,11 +94,12 @@ fn host_dto(o: HostOlay) -> HostOlayi {
         }
         HostOlay::Istek { ad } => HostOlayi { tur: "istek".into(), ad, ..Default::default() },
         HostOlay::Baglandi { ad, izinler } => HostOlayi {
-            tur: "baglandi".into(), ad, kontrol: izinler.kontrol, pano: izinler.pano, dosya: izinler.dosya, ..Default::default()
+            tur: "baglandi".into(), ad, kontrol: izinler.kontrol, pano: izinler.pano, dosya: izinler.dosya, oyun_kolu: izinler.oyun_kolu, ..Default::default()
         },
         HostOlay::Koptu { sebep } => HostOlayi { tur: "koptu".into(), metin: sebep, ..Default::default() },
         HostOlay::Hata(m) => HostOlayi { tur: "hata".into(), metin: m, ..Default::default() },
         HostOlay::DosyaAlindi { ad, yol } => HostOlayi { tur: "dosya".into(), ad, yol, ..Default::default() },
+        HostOlay::Uyari(m) => HostOlayi { tur: "uyari".into(), metin: m, ..Default::default() },
     }
 }
 
@@ -153,8 +158,8 @@ fn host_komut(k: HostKomut) {
     }
 }
 
-pub fn host_kabul(kontrol: bool, pano: bool, dosya: bool) {
-    host_komut(HostKomut::Kabul(Izinler { kontrol, pano, dosya }));
+pub fn host_kabul(kontrol: bool, pano: bool, dosya: bool, oyun_kolu: bool) {
+    host_komut(HostKomut::Kabul(Izinler { kontrol, pano, dosya, oyun_kolu }));
 }
 
 pub fn host_red() {
@@ -217,6 +222,8 @@ pub fn izleyici_baglan(kod: String, parola: String, ad: String, olaylar: StreamS
                 IzleyiciOlay::Dosya { ad, gonderilen, toplam, bitti, hata } => IzleyiciOlayi {
                     tur: "dosya".into(), ad, gonderilen, toplam, bitti, metin: hata, ..Default::default()
                 },
+                IzleyiciOlay::KolAlgilandi => IzleyiciOlayi { tur: "kol".into(), ..Default::default() },
+                IzleyiciOlay::Titresim { slot, buyuk, kucuk } => IzleyiciOlayi { tur: "titresim".into(), slot, buyuk, kucuk, ..Default::default() },
             };
             if olaylar.add(dto).is_err() {
                 break;

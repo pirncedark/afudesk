@@ -43,6 +43,14 @@ Because AfuDesk has no central server, the sharing device must be **directly rea
 
 While giving access, the app shows which case applies ("Reachable from the internet" or "Reachable only from the same network").
 
+## Oyun Modu
+
+Game Mode makes a remote gamepad appear on the host as a virtual Xbox controller. Install the [ViGEmBus driver](https://github.com/nefarius/ViGEmBus/releases) before using it on Windows.
+
+## Pano
+
+Clipboard sharing can send copied text in both directions when the host grants permission. It is disabled by default and only shares text changes made after permission is granted.
+
 ## Security
 
 - The code is encrypted with the password using **Argon2id** (64 MiB) + **XChaCha20‑Poly1305**. Without the password the code cannot be read or changed.
@@ -109,6 +117,14 @@ AfuDesk'te merkezi sunucu olmadığı için ekranını paylaşan cihaza **doğru
 | Operatör CGNAT / çift modem, UPnP ve IPv6 yok | ❌ İnternet üzerinden bağlanılamaz |
 
 Uygulama bağlantı verirken hangi durumda olduğunu ekranda yazar ("İnternetten ulaşılabilir" ya da "Yalnız aynı ağdan ulaşılabilir").
+
+## Oyun Modu
+
+Oyun Modu'nda uzak oyun kolu, host'ta sanal bir Xbox kolu olarak görünür. Windows'ta kullanmadan önce [ViGEmBus sürücüsünü](https://github.com/nefarius/ViGEmBus/releases) kur.
+
+## Pano
+
+Pano paylaşımı, host izin verdiğinde kopyalanan metinleri iki yönde gönderebilir. Varsayılan olarak kapalıdır ve yalnızca izin verildikten sonra yapılan metin değişikliklerini paylaşır.
 
 ## Güvenlik
 

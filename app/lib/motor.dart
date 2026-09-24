@@ -9,29 +9,12 @@ import 'src/rust/api/afudesk.dart' as rust;
 
 /// Host tarafı olayı.
 class HostOlay {
-  final String tur; // hazir | istek | baglandi | koptu | hata | dosya
-  final String kod;
-  final String parola;
-  final String erisim;
-  final String ad;
-  final String metin;
-  final bool kontrol;
-  final bool pano;
-  final bool dosya;
-  final String yol;
-  const HostOlay(this.tur,
-      {this.kod = '',
-      this.parola = '',
-      this.erisim = '',
-      this.ad = '',
-      this.metin = '',
-      this.kontrol = false,
-      this.pano = false,
-      this.dosya = false,
-      this.yol = ''});
+  final String tur, kod, parola, erisim, ad, metin, yol;
+  final bool kontrol, pano, dosya, oyunKolu;
+  const HostOlay(this.tur, {this.kod = '', this.parola = '', this.erisim = '', this.ad = '', this.metin = '',
+    this.kontrol = false, this.pano = false, this.dosya = false, this.yol = '', this.oyunKolu = false});
 }
 
-/// İzleyici tarafı olayı.
 class IzleyiciOlay {
   final String tur; // bekliyor | kabul | kare | istatistik | koptu | hata | pano | dosya
   final int rttMs;
@@ -95,7 +78,7 @@ abstract class Motor {
   /// Dokunmatik kontrol kipi (telefon/tablet).
   bool get dokunmatik;
   Stream<HostOlay> hostBaslat({required String ad, String parola = '', bool upnp = true});
-  Future<void> hostKabul({required bool kontrol, bool pano = false, bool dosya = false});
+Future<void> hostKabul({required bool kontrol, bool pano = false, bool dosya = false, bool oyunKolu = false});
   Future<void> hostRed();
   Future<void> hostKes();
   Future<void> hostDurdur();
@@ -130,11 +113,12 @@ class RustMotor implements Motor {
           kontrol: o.kontrol,
           pano: o.pano,
           dosya: o.dosya,
-          yol: o.yol));
+          yol: o.yol,
+          oyunKolu: o.oyunKolu));
 
   @override
-  Future<void> hostKabul({required bool kontrol, bool pano = false, bool dosya = false}) =>
-      rust.hostKabul(kontrol: kontrol, pano: pano, dosya: dosya);
+  Future<void> hostKabul({required bool kontrol, bool pano = false, bool dosya = false, bool oyunKolu = false}) =>
+      rust.hostKabul(kontrol: kontrol, pano: pano, dosya: dosya, oyunKolu: oyunKolu);
   @override
   Future<void> hostRed() => rust.hostRed();
   @override

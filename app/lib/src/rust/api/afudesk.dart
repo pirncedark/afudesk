@@ -25,8 +25,17 @@ Stream<HostOlayi> hostBaslat({
   upnp: upnp,
 );
 
-Future<void> hostKabul({required bool kontrol, required bool pano}) =>
-    RustLib.instance.api.crateApiAfudeskHostKabul(kontrol: kontrol, pano: pano);
+Future<void> hostKabul({
+  required bool kontrol,
+  required bool pano,
+  required bool dosya,
+  required bool oyunKolu,
+}) => RustLib.instance.api.crateApiAfudeskHostKabul(
+  kontrol: kontrol,
+  pano: pano,
+  dosya: dosya,
+  oyunKolu: oyunKolu,
+);
 
 Future<void> hostRed() => RustLib.instance.api.crateApiAfudeskHostRed();
 
@@ -52,6 +61,10 @@ void kareCizildi() => RustLib.instance.api.crateApiAfudeskKareCizildi();
 
 Future<void> izleyiciGirdi({required GirdiOlayi g}) =>
     RustLib.instance.api.crateApiAfudeskIzleyiciGirdi(g: g);
+
+/// Dosyayı karşı tarafa gönderir; ilerleme/sonuç izleyici akışına `tur = "dosya"` olarak gelir.
+Future<void> izleyiciDosyaGonder({required String yol}) =>
+    RustLib.instance.api.crateApiAfudeskIzleyiciDosyaGonder(yol: yol);
 
 Future<void> izleyiciKapat() =>
     RustLib.instance.api.crateApiAfudeskIzleyiciKapat();
@@ -109,7 +122,7 @@ class GirdiOlayi {
           metin == other.metin;
 }
 
-/// Host olayı. `tur`: hazir | istek | baglandi | koptu | hata.
+/// Host olayı. `tur`: hazir | istek | baglandi | koptu | hata | dosya.
 class HostOlayi {
   final String tur;
   final String kod;
@@ -121,6 +134,13 @@ class HostOlayi {
   final bool kontrol;
   final bool pano;
 
+  /// baglandi: dosya alma izni.
+  final bool dosya;
+
+  /// dosya: al?nan dosyan?n tam yolu.
+  final String yol;
+  final bool oyunKolu;
+
   const HostOlayi({
     required this.tur,
     required this.kod,
@@ -131,6 +151,9 @@ class HostOlayi {
     required this.metin,
     required this.kontrol,
     required this.pano,
+    required this.dosya,
+    required this.yol,
+    required this.oyunKolu,
   });
 
   static Future<HostOlayi> default_() =>
@@ -146,7 +169,10 @@ class HostOlayi {
       ad.hashCode ^
       metin.hashCode ^
       kontrol.hashCode ^
-      pano.hashCode;
+      pano.hashCode ^
+      dosya.hashCode ^
+      yol.hashCode ^
+      oyunKolu.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -161,10 +187,13 @@ class HostOlayi {
           ad == other.ad &&
           metin == other.metin &&
           kontrol == other.kontrol &&
-          pano == other.pano;
+          pano == other.pano &&
+          dosya == other.dosya &&
+          yol == other.yol &&
+          oyunKolu == other.oyunKolu;
 }
 
-/// İzleyici olayı. `tur`: bekliyor | kabul | kare | istatistik | koptu | hata | pano.
+/// ?zleyici olay?. `tur`: bekliyor | kabul | kare | istatistik | koptu | hata | pano | dosya.
 class IzleyiciOlayi {
   final String tur;
   final int rttMs;
@@ -178,6 +207,17 @@ class IzleyiciOlayi {
   final int yukseklik;
   final Uint8List rgba;
 
+  /// kabul: dosya gönderme izni.
+  final bool dosya;
+
+  /// dosya: gönderilen/toplam bayt; `bitti` ise `metin` boşsa başarılı, doluysa hata.
+  final BigInt gonderilen;
+  final BigInt toplam;
+  final bool bitti;
+  final int slot;
+  final int buyuk;
+  final int kucuk;
+
   const IzleyiciOlayi({
     required this.tur,
     required this.rttMs,
@@ -190,6 +230,13 @@ class IzleyiciOlayi {
     required this.genislik,
     required this.yukseklik,
     required this.rgba,
+    required this.dosya,
+    required this.gonderilen,
+    required this.toplam,
+    required this.bitti,
+    required this.slot,
+    required this.buyuk,
+    required this.kucuk,
   });
 
   static Future<IzleyiciOlayi> default_() =>
@@ -207,7 +254,14 @@ class IzleyiciOlayi {
       pano.hashCode ^
       genislik.hashCode ^
       yukseklik.hashCode ^
-      rgba.hashCode;
+      rgba.hashCode ^
+      dosya.hashCode ^
+      gonderilen.hashCode ^
+      toplam.hashCode ^
+      bitti.hashCode ^
+      slot.hashCode ^
+      buyuk.hashCode ^
+      kucuk.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -224,5 +278,12 @@ class IzleyiciOlayi {
           pano == other.pano &&
           genislik == other.genislik &&
           yukseklik == other.yukseklik &&
-          rgba == other.rgba;
+          rgba == other.rgba &&
+          dosya == other.dosya &&
+          gonderilen == other.gonderilen &&
+          toplam == other.toplam &&
+          bitti == other.bitti &&
+          slot == other.slot &&
+          buyuk == other.buyuk &&
+          kucuk == other.kucuk;
 }

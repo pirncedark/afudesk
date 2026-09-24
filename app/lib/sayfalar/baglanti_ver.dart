@@ -31,6 +31,9 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
   bool _bagliPano = false;
   bool _bagliDosya = false;
   final _alinanlar = <(String, String)>[];
+  bool _bagliOyunKolu = false;
+  bool _kolSurucusuYok = false;
+
   DateTime _bitis = DateTime.now();
   Timer? _sayac;
   bool _istekAcik = false;
@@ -73,6 +76,7 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
       case 'istek':
         _istekGoster(o.ad);
       case 'baglandi':
+        _kolSurucusuYok = false;
         setState(() {
           _asama = _Asama.bagli;
           _bagliAd = o.ad;
@@ -80,6 +84,8 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
           _bagliPano = o.pano;
           _bagliDosya = o.dosya;
           _alinanlar.clear();
+          _bagliOyunKolu = o.oyunKolu;
+
         });
       case 'dosya':
         setState(() => _alinanlar.insert(0, (o.ad, o.yol)));
@@ -93,6 +99,9 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
           _asama = _Asama.hata;
           _hata = o.metin;
         });
+      case 'uyari':
+        _kolSurucusuYok = true;
+        _mesaj(o.metin);
     }
   }
 
@@ -100,6 +109,7 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
     if (_istekAcik) return;
     _istekAcik = true;
     final sonuc = await showDialog<IstekKarari?>(
+
       context: context,
       barrierDismissible: false,
       builder: (_) => IstekPenceresi(ad: ad),
@@ -108,7 +118,7 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
     if (sonuc == null) {
       await widget.motor.hostRed();
     } else {
-      await widget.motor.hostKabul(kontrol: sonuc.kontrol, pano: sonuc.pano, dosya: sonuc.dosya);
+await widget.motor.hostKabul(kontrol: sonuc.kontrol, pano: sonuc.pano, dosya: sonuc.dosya, oyunKolu: sonuc.oyunKolu);
     }
   }
 
@@ -211,6 +221,7 @@ const SizedBox(height: 4),
                   ]),
                 ),
               ],
+Text('Oyun kolu: ${_kolSurucusuYok ? 'sürücü yok' : (_bagliOyunKolu ? 'açık' : 'kapalı')}', key: const Key('ver_oyun_kolu')),
 
               const SizedBox(height: 18),
               FilledButton.icon(
@@ -297,13 +308,16 @@ const SizedBox(height: 4),
   }
 }
 
+class IstekKarari {
   final bool kontrol;
   final bool pano;
   final bool dosya;
-  const IstekKarari({required this.kontrol, required this.pano, required this.dosya});
+  final bool oyunKolu;
+  const IstekKarari({required this.kontrol, required this.pano, required this.dosya, required this.oyunKolu});
 }
 
 /// Gelen bağlantı isteği. Sonuç: null = reddet, [IstekKarari] = kabul (+izinler).
+
 class IstekPenceresi extends StatefulWidget {
   final String ad;
   final Duration sure;
@@ -317,6 +331,7 @@ class _IstekPenceresiDurum extends State<IstekPenceresi> {
   bool _kontrol = true;
   bool _pano = false;
   bool _dosya = false;
+  bool _oyunKolu = true;
   late int _kalan = widget.sure.inSeconds;
   Timer? _t;
 
@@ -361,13 +376,22 @@ class _IstekPenceresiDurum extends State<IstekPenceresi> {
           onChanged: (v) => setState(() => _pano = v ?? false),
           title: const Text('Pano paylaşımı'),
           subtitle: const Text('Kopyalanan metinler iki yönde paylaşılır.', style: TextStyle(fontSize: 12)),
-key: const Key('istek_dosya'),
+        ),
+        CheckboxListTile(
+          key: const Key('istek_dosya'),
           contentPadding: EdgeInsets.zero,
           value: _dosya,
           onChanged: (v) => setState(() => _dosya = v ?? false),
           title: const Text('Dosya almaya izin ver'),
           subtitle: const Text('Gelen dosyalar İndirilenler\\AfuDesk klasörüne kaydedilir.',
               style: TextStyle(color: Renk.soluk, fontSize: 12)),
+        ),
+        CheckboxListTile(
+          key: const Key('istek_oyun_kolu'),
+          contentPadding: EdgeInsets.zero,
+          value: _oyunKolu,
+          onChanged: (v) => setState(() => _oyunKolu = v ?? false),
+          title: const Text('Oyun kolu'),
 
         ),
         Text('$_kalan sn içinde yanıt vermezsen reddedilir.', style: const TextStyle(color: Renk.soluk, fontSize: 12)),
@@ -375,8 +399,10 @@ key: const Key('istek_dosya'),
       actions: [
         TextButton(key: const Key('istek_red'), onPressed: () => Navigator.pop(context, null), child: const Text('Reddet')),
         FilledButton(
-key: const Key('istek_kabul'), onPressed: () => Navigator.pop(context, IstekKarari(kontrol: _kontrol, pano: _pano, dosya: _dosya)),
-            child: const Text('Kabul et')),
+          key: const Key('istek_kabul'),
+          onPressed: () => Navigator.pop(context, IstekKarari(kontrol: _kontrol, pano: _pano, dosya: _dosya, oyunKolu: _oyunKolu)),
+          child: const Text('Kabul et'),
+        ),
       ],
     );
   }
