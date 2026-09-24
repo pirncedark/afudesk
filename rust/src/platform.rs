@@ -1,6 +1,6 @@
-//! Platforma bağlı parçalar: ekran yakalama ve girdi enjeksiyonu.
-//! Testler sahte uygulamaları kullanır; gerçek uygulamalar masaüstünde xcap + enigo.
-use crate::{goruntu::Goruntu, protokol::Girdi};
+//! Platforma bağlı parçalar: ekran yakalama, girdi enjeksiyonu ve pano.
+//! Testler sahte uygulamaları kullanır; gerçek uygulamalar masaüstünde xcap + enigo + arboard.
+use crate::{goruntu::Goruntu, pano::Pano, protokol::Girdi};
 use anyhow::Result;
 
 /// Send değil: bazı platform tutamaçları iş parçacığına bağlıdır; yakalayıcı
@@ -29,6 +29,7 @@ pub trait Enjektor: Send {
 pub trait Fabrika: Send + Sync {
     fn yakalayici(&self) -> Result<Box<dyn Yakalayici>>;
     fn enjektor(&self) -> Result<Box<dyn Enjektor>>;
+    fn pano(&self) -> Result<Box<dyn Pano>>;
 }
 
 #[cfg(not(target_os = "android"))]
@@ -50,6 +51,9 @@ pub mod masaustu {
         }
         fn enjektor(&self) -> Result<Box<dyn Enjektor>> {
             Ok(Box::new(EnigoEnjektor::new()?))
+        }
+        fn pano(&self) -> Result<Box<dyn Pano>> {
+            Ok(Box::new(crate::pano::ArboardPano::new()?))
         }
     }
 
@@ -319,19 +323,22 @@ pub mod masaustu {
     }
 }
 
-/// Testler için: renk değiştiren sahte ekran ve girdileri kaydeden enjektör.
+/// Testler için: renk değiştiren sahte ekran, girdileri kaydeden enjektör ve bellekte pano.
 pub mod sahte {
     use super::*;
+    use crate::pano::SahtePano;
     use std::sync::{Arc, Mutex};
 
     pub struct SahteFabrika {
         pub girdiler: Arc<Mutex<Vec<Girdi>>>,
         pub boyut: (u32, u32),
+        /// Host panosu; test içeriği değiştirip yazılanları okuyabilir (klonlar paylaşır).
+        pub pano: SahtePano,
     }
 
     impl SahteFabrika {
         pub fn new(g: u32, y: u32) -> Self {
-            Self { girdiler: Default::default(), boyut: (g, y) }
+            Self { girdiler: Default::default(), boyut: (g, y), pano: SahtePano::default() }
         }
     }
 
@@ -371,6 +378,9 @@ pub mod sahte {
         }
         fn enjektor(&self) -> Result<Box<dyn Enjektor>> {
             Ok(Box::new(KayitEnjektor(self.girdiler.clone())))
+        }
+        fn pano(&self) -> Result<Box<dyn Pano>> {
+            Ok(Box::new(self.pano.clone()))
         }
     }
 }

@@ -2,6 +2,7 @@
 use crate::{
     ag, goruntu::Birlestirici,
     kod,
+    pano::{self, Esitleyici, Pano, PANO_ARALIGI},
     protokol::{self, Girdi, Izinler, Kare, Kontrol, SURUM},
     zaman,
 };
@@ -19,6 +20,8 @@ pub enum IzleyiciOlay {
     /// Saniyede bir: bağlantı gidiş-dönüş süresi ve ekrana gelen kare hızı.
     Istatistik { rtt_ms: u32, fps: u32, gecikme_ms: u32 },
     Koptu { sebep: String },
+    /// Karşı taraftan pano metni geldi (izleyicinin panosu varsa oraya da yazıldı).
+    Pano(String),
 }
 
 pub struct Izleyici {
@@ -42,9 +45,15 @@ impl Izleyici {
 }
 
 pub async fn baglan(kod_metni: &str, parola: &str, ad: &str) -> Result<Izleyici> {
+    baglan_panolu(kod_metni, parola, ad, None).await
+}
+
+/// `pano`: izleyicinin kendi panosu. `None` (ör. Android) ise yalnız host → izleyici yönü
+/// çalışır; gelen metin `IzleyiciOlay::Pano` ile arayüze bildirilir.
+pub async fn baglan_panolu(kod_metni: &str, parola: &str, ad: &str, pano: Option<Box<dyn Pano>>) -> Result<Izleyici> {
     let d = kod::coz(kod_metni, parola, kod::simdi())?;
     let c = ag::baglan(&d.adresler, &d.parmak_izi, Duration::from_secs(6)).await?;
-    let (mut w, mut r) = c.open_bi().await?;
+    let (mut w, r) = c.open_bi().await?;
     protokol::yaz(&mut w, &Kontrol::Merhaba { surum: SURUM, bilet: d.bilet.clone(), ad: ad.to_owned() }).await?;
     let (olay_tx, olaylar) = mpsc::channel(4);
     let (girdi, mut girdi_rx) = mpsc::channel::<Girdi>(256);
@@ -55,7 +64,7 @@ pub async fn baglan(kod_metni: &str, parola: &str, ad: &str) -> Result<Izleyici>
     let fark2 = saat_farki.clone();
     let esit2 = saat_esitlendi.clone();
     tokio::spawn(async move {
-        let sebep = calis(&c2, &mut w, &mut r, &olay_tx, &mut girdi_rx, fark2, esit2).await;
+        let sebep = calis(&c2, &mut w, r, &olay_tx, &mut girdi_rx, pano, fark2, esit2).await;
         c2.close(0u32.into(), b"bitti");
         let _ = olay_tx.send(IzleyiciOlay::Koptu { sebep }).await;
     });
@@ -65,38 +74,41 @@ pub async fn baglan(kod_metni: &str, parola: &str, ad: &str) -> Result<Izleyici>
 async fn calis(
     c: &quinn::Connection,
     w: &mut quinn::SendStream,
-    r: &mut quinn::RecvStream,
+    mut r: quinn::RecvStream,
     olay: &mpsc::Sender<IzleyiciOlay>,
     girdi: &mut mpsc::Receiver<Girdi>,
+    pano: Option<Box<dyn Pano>>,
     saat_farki: Arc<AtomicI64>,
     saat_esitlendi: Arc<AtomicBool>,
 ) -> String {
-    // Onay: karşı taraf 60 sn içinde karar verir.
-    let ilk = tokio::time::timeout(Duration::from_secs(75), protokol::oku::<_, Kontrol>(r)).await;
+    let ilk = tokio::time::timeout(Duration::from_secs(75), protokol::oku::<_, Kontrol>(&mut r)).await;
     let izinler = match ilk {
         Ok(Ok(Some(Kontrol::Kabul { izinler, genislik, yukseklik }))) => {
             let _ = olay.send(IzleyiciOlay::Kabul { izinler: izinler.clone(), genislik, yukseklik }).await;
             izinler
         }
         Ok(Ok(Some(Kontrol::Red(s)))) => return s,
-        Err(_) => return "Karşı taraf yanıt vermedi.".into(),
-        _ => return "Bağlantı koptu.".into(),
+        Err(_) => return "Kar?? taraf yan?t vermedi.".into(),
+        _ => return "Ba?lant? koptu.".into(),
     };
+    let (gelen_tx, mut gelen_rx) = mpsc::channel::<Kontrol>(16);
+    let okuyucu = tokio::spawn(async move {
+        while let Ok(Some(m)) = protokol::oku::<_, Kontrol>(&mut r).await {
+            if gelen_tx.send(m).await.is_err() { break; }
+        }
+    });
     let c2 = c.clone();
     let olay2 = olay.clone();
     let fark2 = saat_farki.clone();
     let esit2 = saat_esitlendi.clone();
     let mut goruntu = tokio::spawn(async move {
-        // Her kare ayrı akışta gelir; akışlar paralel okunur, birleştirici sırayı korur.
         let (kare_tx, mut kare_rx) = mpsc::channel::<Kare>(8);
         let c3 = c2.clone();
         tokio::spawn(async move {
             while let Ok(mut akis) = c3.accept_uni().await {
                 let tx = kare_tx.clone();
                 tokio::spawn(async move {
-                    if let Ok(Some(k)) = protokol::oku::<_, Kare>(&mut akis).await {
-                        let _ = tx.send(k).await;
-                    }
+                    if let Ok(Some(k)) = protokol::oku::<_, Kare>(&mut akis).await { let _ = tx.send(k).await; }
                 });
             }
         });
@@ -110,16 +122,9 @@ async fn calis(
             if esit2.load(Ordering::Relaxed) {
                 gecikmeler.push_back((simdi, zaman::gecikme_ms(unix_ms(), fark2.load(Ordering::Relaxed), k.yakalama_ms)));
             }
-            while gecikmeler.front().is_some_and(|(t, _)| simdi.duration_since(*t) > Duration::from_secs(1)) {
-                gecikmeler.pop_front();
-            }
+            while gecikmeler.front().is_some_and(|(t, _)| simdi.duration_since(*t) > Duration::from_secs(1)) { gecikmeler.pop_front(); }
             sayac += 1;
-            // Arayüz yavaşsa kare düşür (en yenisi önemli).
-            let _ = olay2.try_send(IzleyiciOlay::Kare {
-                genislik: b.goruntu.genislik,
-                yukseklik: b.goruntu.yukseklik,
-                rgba: b.goruntu.rgba.clone(),
-            });
+            let _ = olay2.try_send(IzleyiciOlay::Kare { genislik: b.goruntu.genislik, yukseklik: b.goruntu.yukseklik, rgba: b.goruntu.rgba.clone() });
             if son.elapsed() >= Duration::from_secs(1) {
                 let fps = (sayac as f64 / son.elapsed().as_secs_f64()).round() as u32;
                 let rtt_ms = c2.rtt().as_millis().min(u32::MAX as u128) as u32;
@@ -133,39 +138,54 @@ async fn calis(
         }
         Ok::<_, anyhow::Error>(())
     });
+    let mut pano = match pano {
+        Some(p) if izinler.pano => Some(tokio::task::block_in_place(|| Esitleyici::new(p))),
+        _ => None,
+    };
+    let mut pano_saat = tokio::time::interval(PANO_ARALIGI);
+    pano_saat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut saat_olcum = tokio::time::interval(Duration::from_secs(2));
     saat_olcum.tick().await;
-    loop {
+    let sonuc = loop {
         tokio::select! {
-            s = &mut goruntu => {
-                return match s { Ok(Err(e)) => format!("Görüntü akışı kesildi: {e}"), _ => "Bağlantı kapandı.".into() };
-            }
+            s = &mut goruntu => break match s { Ok(Err(e)) => format!("G?r?nt? ak??? kesildi: {e}"), _ => "Ba?lant? kapand?.".into() },
             g = girdi.recv() => match g {
                 Some(g) => {
                     if !izinler.kontrol { continue; }
-                    if protokol::yaz(w, &Kontrol::Girdi(g)).await.is_err() { return "Bağlantı koptu.".into(); }
+                    if protokol::yaz(w, &Kontrol::Girdi(g)).await.is_err() { break "Ba?lant? koptu.".into(); }
                 }
-                None => return "Bağlantı kapandı.".into(),
+                None => break "Ba?lant? kapand?.".into(),
             },
             _ = saat_olcum.tick() => {
                 let izleyici_ms = unix_ms();
-                if protokol::yaz(w, &Kontrol::SaatSor { izleyici_ms }).await.is_err() {
-                    return "Bağlantı koptu.".into();
-                }
+                if protokol::yaz(w, &Kontrol::SaatSor { izleyici_ms }).await.is_err() { break "Ba?lant? koptu.".into(); }
             }
-            m = protokol::oku::<_, Kontrol>(r) => match m {
-                Ok(Some(Kontrol::Kapat(s))) => return s,
-                Ok(Some(Kontrol::SaatCevap { izleyici_ms, host_ms })) => {
+            m = gelen_rx.recv() => match m {
+                Some(Kontrol::Kapat(s)) => break s,
+                Some(Kontrol::SaatCevap { izleyici_ms, host_ms }) => {
                     let alim_ms = unix_ms();
                     saat_farki.store(zaman::saat_farki(izleyici_ms, host_ms, alim_ms), Ordering::Relaxed);
                     saat_esitlendi.store(true, Ordering::Relaxed);
                 }
-                Ok(Some(_)) => {}
-                _ => return "Bağlantı koptu.".into(),
+                Some(Kontrol::Pano(metin)) => {
+                    if !izinler.pano || metin.is_empty() || !pano::sinir_icinde(&metin) { continue; }
+                    if let Some(p) = pano.as_mut() { let _ = tokio::task::block_in_place(|| p.gelen(&metin)); }
+                    let _ = olay.send(IzleyiciOlay::Pano(metin)).await;
+                }
+                Some(_) => {}
+                None => break "Ba?lant? koptu.".into(),
             },
-            _ = c.closed() => return "Bağlantı kapandı.".into(),
+            _ = pano_saat.tick(), if pano.is_some() => {
+                let yeni = pano.as_mut().and_then(|p| tokio::task::block_in_place(|| p.yokla()));
+                if let Some(metin) = yeni {
+                    if protokol::yaz(w, &Kontrol::Pano(metin)).await.is_err() { break "Ba?lant? koptu.".into(); }
+                }
+            }
+            _ = c.closed() => break "Ba?lant? kapand?.".into(),
         }
-    }
+    };
+    okuyucu.abort();
+    sonuc
 }
 
 fn unix_ms() -> u64 {

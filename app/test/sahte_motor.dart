@@ -10,6 +10,8 @@ class SahteMotor implements Motor {
   final girdiler = <Girdi>[];
   Object? baglanHatasi;
   String? sonKod, sonParola;
+  /// Son `hostKabul` çağrısındaki pano izni.
+  bool? sonPano;
   int kareOnayi = 0;
   @override
   bool baglantiVerilebilir = true;
@@ -26,7 +28,10 @@ class SahteMotor implements Motor {
   }
 
   @override
-  Future<void> hostKabul({required bool kontrol}) async => cagrilar.add('kabul:$kontrol');
+  Future<void> hostKabul({required bool kontrol, bool pano = false}) async {
+    sonPano = pano;
+    cagrilar.add('kabul:$kontrol');
+  }
   @override
   Future<void> hostRed() async => cagrilar.add('red');
   @override

@@ -25,8 +25,8 @@ Stream<HostOlayi> hostBaslat({
   upnp: upnp,
 );
 
-Future<void> hostKabul({required bool kontrol}) =>
-    RustLib.instance.api.crateApiAfudeskHostKabul(kontrol: kontrol);
+Future<void> hostKabul({required bool kontrol, required bool pano}) =>
+    RustLib.instance.api.crateApiAfudeskHostKabul(kontrol: kontrol, pano: pano);
 
 Future<void> hostRed() => RustLib.instance.api.crateApiAfudeskHostRed();
 
@@ -119,6 +119,7 @@ class HostOlayi {
   final String ad;
   final String metin;
   final bool kontrol;
+  final bool pano;
 
   const HostOlayi({
     required this.tur,
@@ -129,6 +130,7 @@ class HostOlayi {
     required this.ad,
     required this.metin,
     required this.kontrol,
+    required this.pano,
   });
 
   static Future<HostOlayi> default_() =>
@@ -143,7 +145,8 @@ class HostOlayi {
       adresler.hashCode ^
       ad.hashCode ^
       metin.hashCode ^
-      kontrol.hashCode;
+      kontrol.hashCode ^
+      pano.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -157,10 +160,11 @@ class HostOlayi {
           adresler == other.adresler &&
           ad == other.ad &&
           metin == other.metin &&
-          kontrol == other.kontrol;
+          kontrol == other.kontrol &&
+          pano == other.pano;
 }
 
-/// İzleyici olayı. `tur`: bekliyor | kabul | kare | istatistik | koptu | hata.
+/// İzleyici olayı. `tur`: bekliyor | kabul | kare | istatistik | koptu | hata | pano.
 class IzleyiciOlayi {
   final String tur;
   final int rttMs;
@@ -169,6 +173,7 @@ class IzleyiciOlayi {
   final String ad;
   final String metin;
   final bool kontrol;
+  final bool pano;
   final int genislik;
   final int yukseklik;
   final Uint8List rgba;
@@ -181,6 +186,7 @@ class IzleyiciOlayi {
     required this.ad,
     required this.metin,
     required this.kontrol,
+    required this.pano,
     required this.genislik,
     required this.yukseklik,
     required this.rgba,
@@ -198,6 +204,7 @@ class IzleyiciOlayi {
       ad.hashCode ^
       metin.hashCode ^
       kontrol.hashCode ^
+      pano.hashCode ^
       genislik.hashCode ^
       yukseklik.hashCode ^
       rgba.hashCode;
@@ -214,6 +221,7 @@ class IzleyiciOlayi {
           ad == other.ad &&
           metin == other.metin &&
           kontrol == other.kontrol &&
+          pano == other.pano &&
           genislik == other.genislik &&
           yukseklik == other.yukseklik &&
           rgba == other.rgba;

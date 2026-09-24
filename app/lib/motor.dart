@@ -14,24 +14,27 @@ class HostOlay {
   final String ad;
   final String metin;
   final bool kontrol;
+  final bool pano;
   const HostOlay(this.tur,
       {this.kod = '',
       this.parola = '',
       this.erisim = '',
       this.ad = '',
       this.metin = '',
-      this.kontrol = false});
+      this.kontrol = false,
+      this.pano = false});
 }
 
 /// İzleyici tarafı olayı.
 class IzleyiciOlay {
-  final String tur; // bekliyor | kabul | kare | istatistik | koptu | hata
+  final String tur; // bekliyor | kabul | kare | istatistik | koptu | hata | pano
   final int rttMs;
   final int gecikmeMs;
   final int fps;
   final String ad;
   final String metin;
   final bool kontrol;
+  final bool pano;
   final int genislik;
   final int yukseklik;
   final Uint8List rgba;
@@ -42,6 +45,7 @@ class IzleyiciOlay {
       this.ad = '',
       this.metin = '',
       this.kontrol = false,
+      this.pano = false,
       this.genislik = 0,
       this.yukseklik = 0,
       Uint8List? rgba})
@@ -75,7 +79,8 @@ abstract class Motor {
   /// Dokunmatik kontrol kipi (telefon/tablet).
   bool get dokunmatik;
   Stream<HostOlay> hostBaslat({required String ad, String parola = '', bool upnp = true});
-  Future<void> hostKabul({required bool kontrol});
+  /// `pano`: iki yönlü metin pano paylaşımı (varsayılan kapalı — gizlilik).
+  Future<void> hostKabul({required bool kontrol, bool pano = false});
   Future<void> hostRed();
   Future<void> hostKes();
   Future<void> hostDurdur();
@@ -103,10 +108,12 @@ class RustMotor implements Motor {
           erisim: o.erisim,
           ad: o.ad,
           metin: o.metin,
-          kontrol: o.kontrol));
+          kontrol: o.kontrol,
+          pano: o.pano));
 
   @override
-  Future<void> hostKabul({required bool kontrol}) => rust.hostKabul(kontrol: kontrol);
+  Future<void> hostKabul({required bool kontrol, bool pano = false}) =>
+      rust.hostKabul(kontrol: kontrol, pano: pano);
   @override
   Future<void> hostRed() => rust.hostRed();
   @override
@@ -120,6 +127,7 @@ class RustMotor implements Motor {
           ad: o.ad,
           metin: o.metin,
           kontrol: o.kontrol,
+          pano: o.pano,
           genislik: o.genislik,
           yukseklik: o.yukseklik,
           rttMs: o.rttMs,

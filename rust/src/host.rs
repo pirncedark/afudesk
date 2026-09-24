@@ -1,9 +1,11 @@
 //! Bağlantı veren taraf. Kendi QUIC sunucusunu açar, kodu üretir, gelen isteği
-//! kullanıcı onayına sunar, onaylanırsa ekranı yayınlar ve (izin varsa) girdiyi uygular.
+//! kullanıcı onayına sunar, onaylanırsa ekranı yayınlar ve (izin varsa) girdiyi uygular,
+//! panoyu karşı tarafla paylaşır.
 use crate::{
     adres::{self, UpnpDurum},
     ag, goruntu::Kodlayici,
     kod::{self, Davet},
+    pano::{Esitleyici, PANO_ARALIGI},
     platform::Fabrika,
     protokol::{self, Izinler, Kontrol, SURUM},
 };
@@ -406,7 +408,25 @@ async fn oturum(
         Ok::<_, anyhow::Error>(())
     });
 
+    // Kontrol akışı ayrı görevde okunur: `oku` iptale dayanıklı değil (yarım okunan mesaj
+    // akışı bozar), select! içindeki zamanlayıcılar onu kesmemeli.
+    let (gelen_tx, mut gelen_rx) = mpsc::channel::<Kontrol>(16);
+    let okuyucu = tokio::spawn(async move {
+        while let Ok(Some(m)) = protokol::oku::<_, Kontrol>(&mut r).await {
+            if gelen_tx.send(m).await.is_err() {
+                break;
+            }
+        }
+    });
     let mut enjektor = if izinler.kontrol { fabrika.enjektor().ok() } else { None };
+    // Pano yalnız izin verildiyse açılır; izin yoksa hiçbir yönde metin geçmez.
+    let mut pano = if izinler.pano {
+        fabrika.pano().ok().map(|p| tokio::task::block_in_place(|| Esitleyici::new(p)))
+    } else {
+        None
+    };
+    let mut pano_saat = tokio::time::interval(PANO_ARALIGI);
+    pano_saat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let sonuc = loop {
         tokio::select! {
             _ = &mut *durdur => { c.close(0u32.into(), b"durdu"); break Oturum::Durdur; }
@@ -420,21 +440,35 @@ async fn oturum(
                 }
                 _ => {}
             },
-            m = protokol::oku::<_, Kontrol>(&mut r) => match m {
-                Ok(Some(Kontrol::Girdi(g))) => {
+            m = gelen_rx.recv() => match m {
+                Some(Kontrol::Girdi(g)) => {
                     if let Some(e) = enjektor.as_mut() {
                         let _ = tokio::task::block_in_place(|| e.uygula(&g));
                     }
                 }
-                Ok(Some(Kontrol::SaatSor { izleyici_ms })) => {
+                Some(Kontrol::SaatSor { izleyici_ms }) => {
                     let host_ms = unix_ms();
                     let _ = protokol::yaz(&mut w, &Kontrol::SaatCevap { izleyici_ms, host_ms }).await;
                 }
-                Ok(Some(Kontrol::Kapat(_))) | Ok(None) | Err(_) => break Oturum::Bitti("İzleyici bağlantıyı kapattı.".into()),
-                Ok(Some(_)) => {}
+                Some(Kontrol::Pano(metin)) => {
+                    if let Some(p) = pano.as_mut() {
+                        let _ = tokio::task::block_in_place(|| p.gelen(&metin));
+                    }
+                }
+                Some(Kontrol::Kapat(_)) | None => break Oturum::Bitti("?zleyici ba?lant?y? kapatt?.".into()),
+                Some(_) => {}
             },
+            _ = pano_saat.tick(), if pano.is_some() => {
+                let yeni = pano.as_mut().and_then(|p| tokio::task::block_in_place(|| p.yokla()));
+                if let Some(metin) = yeni {
+                    if protokol::yaz(&mut w, &Kontrol::Pano(metin)).await.is_err() {
+                        break Oturum::Bitti("Bağlantı koptu.".into());
+                    }
+                }
+            }
         }
     };
+    okuyucu.abort();
     yayin_dur.store(true, std::sync::atomic::Ordering::Relaxed);
     yayin.abort();
     sonuc
