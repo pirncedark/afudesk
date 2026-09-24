@@ -1,8 +1,14 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// Sürüm imzası: CI key.properties dosyasını secret'lardan yazar. Yoksa debug anahtarı.
+val anahtarDosyasi = rootProject.file("key.properties")
+val anahtar = Properties().apply { if (anahtarDosyasi.exists()) anahtarDosyasi.inputStream().use { load(it) } }
 
 android {
     namespace = "com.afu.afudesk"
@@ -15,7 +21,6 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.afu.afudesk"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
@@ -29,11 +34,21 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (anahtarDosyasi.exists()) {
+            create("afu") {
+                storeFile = file(anahtar.getProperty("storeFile"))
+                storePassword = anahtar.getProperty("storePassword")
+                keyAlias = anahtar.getProperty("keyAlias")
+                keyPassword = anahtar.getProperty("keyPassword")
+                storeType = "pkcs12"
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (anahtarDosyasi.exists()) signingConfigs.getByName("afu") else signingConfigs.getByName("debug")
         }
     }
 }

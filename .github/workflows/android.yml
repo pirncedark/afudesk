@@ -1,0 +1,54 @@
+name: Android
+
+on:
+  push:
+    branches: [main]
+    paths: ["app/**", "rust/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.9
+          channel: stable
+      - name: İmza anahtarı
+        working-directory: app/android
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_PAROLA: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > afudesk.p12
+            printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=afudesk\nkeyPassword=%s\n' \
+              "$PWD/afudesk.p12" "$KEYSTORE_PAROLA" "$KEYSTORE_PAROLA" > key.properties
+          fi
+      - name: APK derle
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter build apk --release
+          cp build/app/outputs/flutter-apk/app-release.apk AfuDesk-android.apk
+          sha256sum AfuDesk-android.apk | sed 's|  .*|  AfuDesk-android.apk|' > AfuDesk-android.apk.sha256
+          cat AfuDesk-android.apk.sha256
+      - name: İmza doğrula
+        working-directory: app
+        run: |
+          APKSIGNER=$(ls $ANDROID_HOME/build-tools/*/apksigner | sort -V | tail -1)
+          $APKSIGNER verify --print-certs AfuDesk-android.apk | head -5
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AfuDesk-android
+          path: |
+            app/AfuDesk-android.apk
+            app/AfuDesk-android.apk.sha256
