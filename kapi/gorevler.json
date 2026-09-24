@@ -7,33 +7,117 @@
       "maddeler": {
         "kare_basina_akis": {
           "ad": "Her kare ayrı QUIC akışında, geciken kare iptal + döşemeleri yeniden gönderme",
-          "kanit": [["rust/src/host.rs", "AZAMI_UCUSTA"], ["rust/src/goruntu.rs", "fn yeniden_gonder"]],
-          "testler": [["cargo", "iptal_edilen_kare_dosemeleri_yeniden_gider"], ["cargo", "sirasiz_gelen_eski_kare_yeniyi_ezmez"], ["cargo", "uctan_uca::tam_akis_goruntu_ve_girdi"]]
+          "kanit": [
+            [
+              "rust/src/host.rs",
+              "AZAMI_UCUSTA"
+            ],
+            [
+              "rust/src/goruntu.rs",
+              "fn yeniden_gonder"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "iptal_edilen_kare_dosemeleri_yeniden_gider"
+            ],
+            [
+              "cargo",
+              "sirasiz_gelen_eski_kare_yeniyi_ezmez"
+            ],
+            [
+              "cargo",
+              "uctan_uca::tam_akis_goruntu_ve_girdi"
+            ]
+          ]
         },
         "otomatik_kalite": {
           "ad": "RTT ve iptal sayısına göre otomatik kalite/FPS",
-          "kanit": [["rust/src/host.rs", "pub fn uyarla"]],
-          "testler": [["cargo", "uyarlama_testleri"]]
+          "kanit": [
+            [
+              "rust/src/host.rs",
+              "pub fn uyarla"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "uyarlama_testleri"
+            ]
+          ]
         },
         "gecikme_gostergesi": {
           "ad": "Oturumda RTT/FPS göstergesi",
-          "kanit": [["rust/src/izleyici.rs", "Istatistik"], ["app/lib/sayfalar/oturum.dart", "oturum_istatistik"]],
-          "testler": [["flutter", "gecikme göstergesi"]]
+          "kanit": [
+            [
+              "rust/src/izleyici.rs",
+              "Istatistik"
+            ],
+            [
+              "app/lib/sayfalar/oturum.dart",
+              "oturum_istatistik"
+            ]
+          ],
+          "testler": [
+            [
+              "flutter",
+              "gecikme göstergesi"
+            ]
+          ]
         },
         "gercek_gecikme": {
           "ad": "Yakalamadan izleyicide birleşmeye gerçek gecikme (saat farkı düzeltmeli)",
-          "kanit": [["rust/src/zaman.rs", "fn saat_farki"], ["rust/src/zaman.rs", "fn gecikme_ms"], ["rust/src/protokol.rs", "yakalama_ms"]],
-          "testler": [["cargo", "zaman::"]]
+          "kanit": [
+            [
+              "rust/src/zaman.rs",
+              "fn saat_farki"
+            ],
+            [
+              "rust/src/zaman.rs",
+              "fn gecikme_ms"
+            ],
+            [
+              "rust/src/protokol.rs",
+              "yakalama_ms"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "zaman::"
+            ]
+          ]
         },
         "rtt_yol_secimi": {
           "ad": "Bilinen adres adayları arasında en düşük RTT'li yolun seçimi",
-          "kanit": [["rust/src/ag.rs", "fn en_iyi_yol"]],
-          "testler": [["cargo", "en_iyi_yol"], ["cargo", "ag::testler"]]
+          "kanit": [
+            [
+              "rust/src/ag.rs",
+              "fn en_iyi_yol"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "en_iyi_yol"
+            ]
+          ]
         },
         "wgc_yakalama": {
           "ad": "Windows Graphics Capture ile yakalama (xcap yedeği)",
-          "kanit": [["rust/src/platform.rs", "WgcYakalayici"]],
-          "testler": [["cargo", "gercek_wgc_yakalanir"]]
+          "kanit": [
+            [
+              "rust/src/platform.rs",
+              "WgcYakalayici"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "gercek_wgc_yakalanir"
+            ]
+          ]
         }
       }
     },
@@ -43,33 +127,121 @@
       "maddeler": {
         "kol_protokolu": {
           "ad": "Kol durumu mesajı ve titreşim mesajı",
-          "kanit": [["rust/src/protokol.rs", "KolDurumu"], ["rust/src/protokol.rs", "Titresim"]],
-          "testler": [["cargo", "protokol::"]]
+          "kanit": [
+            [
+              "rust/src/protokol.rs",
+              "KolDurumu"
+            ],
+            [
+              "rust/src/protokol.rs",
+              "Titresim"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "dugme_maskesi_kol_durumunda_tasinir"
+            ]
+          ]
         },
         "datagram_girdi": {
           "ad": "Kol durumu QUIC datagram ile, eski sıra atılır (sarmal güvenli)",
-          "kanit": [["rust/src/ag.rs", "datagram"]],
-          "testler": [["cargo", "sira"]]
+          "kanit": [
+            [
+              "rust/src/ag.rs",
+              "datagram"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "sira_sarmali_ve_eski_paket"
+            ],
+            [
+              "cargo",
+              "uctan_uca::eski_sirali_kol_durumu_atilir"
+            ]
+          ]
         },
         "kol_okuma": {
           "ad": "İzleyicide fiziksel kolu okuma ve XInput düzenine eşleme",
-          "kanit": [["rust/src/kol.rs", "gilrs"]],
-          "testler": [["cargo", "kol::"]]
+          "kanit": [
+            [
+              "rust/src/kol.rs",
+              "gilrs"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "eksen_ve_tetik_sinir_eslemesi"
+            ]
+          ]
         },
         "sanal_kol": {
           "ad": "Host'ta sanal Xbox 360 kolu (ViGEmBus), yoksa açık uyarı",
-          "kanit": [["rust/src/sanal_kol.rs", "KolSurucusu"], ["rust/src/sanal_kol.rs", "ViGEmBus"]],
-          "testler": [["cargo", "sanal_kol"]]
+          "kanit": [
+            [
+              "rust/src/sanal_kol.rs",
+              "KolSurucusu"
+            ],
+            [
+              "rust/src/sanal_kol.rs",
+              "ViGEmBus"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "sanal_kol::testler::sahte_surucu_durumlari_kaydeder"
+            ],
+            [
+              "cargo",
+              "sanal_kol::testler::gercek_vigem_kol_olusur"
+            ],
+            [
+              "cargo",
+              "uctan_uca::oyun_kolu_hosta_ulasir"
+            ]
+          ]
         },
         "titresim_geri": {
           "ad": "Titreşimin izleyiciye geri gitmesi",
-          "kanit": [["rust/src/host.rs", "Titresim"]],
-          "testler": [["cargo", "titresim"]]
+          "kanit": [
+            [
+              "rust/src/host.rs",
+              "Titresim"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "uctan_uca::titresim_izleyiciye_doner"
+            ]
+          ]
         },
         "kol_izni": {
           "ad": "Onay penceresinde 'Oyun kolu' izni",
-          "kanit": [["rust/src/protokol.rs", "oyun_kolu"], ["app/lib/sayfalar/baglanti_ver.dart", "Oyun kolu"]],
-          "testler": [["flutter", "oyun kolu"]]
+          "kanit": [
+            [
+              "rust/src/protokol.rs",
+              "oyun_kolu"
+            ],
+            [
+              "app/lib/sayfalar/baglanti_ver.dart",
+              "(?i)oyun kolu"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "uctan_uca::oyun_kolu_izni_yoksa_uygulanmaz"
+            ],
+            [
+              "flutter",
+              "oyun kolu izin kutusu"
+            ]
+          ]
         }
       }
     },
@@ -79,23 +251,63 @@
       "maddeler": {
         "pano": {
           "ad": "Pano (metin) paylaşımı, izne bağlı",
-          "kanit": [["rust/src/pano.rs", "fn "]],
-          "testler": [["cargo", "pano"]]
+          "kanit": [
+            [
+              "rust/src/pano.rs",
+              "fn "
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "pano"
+            ]
+          ]
         },
         "dosya_aktarimi": {
           "ad": "Dosya aktarımı (ayrı düşük öncelikli akış, kaldığı yerden devam)",
-          "kanit": [["rust/src/dosya.rs", "fn "]],
-          "testler": [["cargo", "dosya"]]
+          "kanit": [
+            [
+              "rust/src/dosya.rs",
+              "fn "
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "dosya"
+            ]
+          ]
         },
         "donanim_h264": {
           "ad": "Donanımsal H.264 (NVENC/QSV/AMF) algılama ve düşük gecikmeli kodlama",
-          "kanit": [["rust/src/kodek.rs", "H264"]],
-          "testler": [["cargo", "kodek"]]
+          "kanit": [
+            [
+              "rust/src/kodek.rs",
+              "H264"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "kodek"
+            ]
+          ]
         },
         "otomatik_cozunurluk": {
           "ad": "Ağa göre otomatik çözünürlük",
-          "kanit": [["rust/src/host.rs", "cozunurluk"]],
-          "testler": [["cargo", "cozunurluk"]]
+          "kanit": [
+            [
+              "rust/src/host.rs",
+              "cozunurluk"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "cozunurluk"
+            ]
+          ]
         }
       }
     }
