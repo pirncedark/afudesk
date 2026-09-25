@@ -1,6 +1,6 @@
 [package]
 name = "afudesk_core"
-version = "1.2.0"
+version = "1.3.0"
 edition = "2021"
 license = "MIT"
 description = "AfuDesk çekirdeği: sunucusuz, tek kodla doğrudan bağlanan uzak masaüstü"
@@ -29,6 +29,7 @@ igd-next = { version = "0.16", features = ["aio_tokio"] }
 log = "0.4"
 rayon = "1"
 dirs = "6"
+tempfile = "3"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 xcap = "0.9"

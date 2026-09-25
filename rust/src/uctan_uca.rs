@@ -18,6 +18,7 @@ fn ayar(parola: &str) -> HostAyar {
         parola: parola.into(),
         yalniz_yerel: true,
         dosya_klasoru: None,
+        kimlik_dosyasi: None,
     }
 }
 

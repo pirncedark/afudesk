@@ -1,6 +1,6 @@
 # AfuDesk Görev Kapısı — Denetim
 
-Tarih: 2026-09-24 15:01  ·  Commit: `52ad66a`
+Tarih: 2026-09-25 04:37  ·  Commit: `09e8b59`
 
 ## FASTPATH — Düşük gecikmeli görüntü ve ölçüm
 
@@ -39,10 +39,21 @@ Zorunlu: 4 · Tamam: 2 · Eksik: 2
 | Donanımsal H.264 (NVENC/QSV/AMF) algılama ve düşük gecikmeli kodlama | ⬜ TODO | ❌ | ❌ | kod yok: H264; test geçmedi/yok: kodek |
 | Ağa göre otomatik çözünürlük | ⬜ TODO | ❌ | ❌ | kod yok: cozunurluk; test geçmedi/yok: cozunurluk |
 
+## KAYITLI_CIHAZLAR — Kay?tl? (g?venilen) cihazlar
+
+Zorunlu: 4 · Tamam: 2 · Eksik: 2
+
+| Madde | Durum | Kod | Test | Not |
+|---|---|---|---|---|
+| Kal?c? cihaz kimli?i ve TLS sertifikas? | ✅ DONE | ✅ | ✅ |  |
+| Atomik JSON e?le?me kayd? | ✅ DONE | ✅ | ✅ |  |
+| Kay?tl? cihaz kimlik/jeton do?rulamas? | 🟡 IN_PROGRESS | ✅ | ❌ | test geçmedi/yok: uctan_uca::kayitli_cihaz_kodsuz_baglanir, uctan_uca::kayitli_cihaz_onaysiz_baglanamaz, uctan_uca::kaldirilan_cihaz_reddedilir, uctan_uca::yanlis_jeton_reddedilir, uctan_uca::host_sertifikasi_degisirse_reddedilir |
+| Kay?tl? cihazlar? y?netme aray?z? | ⬜ TODO | ❌ | ❌ | kod yok: Kay?tl? cihazlar, G?venilen cihazlar; test geçmedi/yok: kay?tl? cihazlar listesi, kay?tl? cihaz? unut, g?venilen cihaz? kald?r |
+
 ## Toplam
 
 | İSTENEN | UYGULANAN | TEST EDİLEN | GEÇEN | BAŞARISIZ | ENGELLİ | EKSİK | TEST EDİLMEYEN |
 |---|---|---|---|---|---|---|---|
-| 16 | 14 | 14 | 14 | 0 | 0 | 2 | 2 |
+| 20 | 17 | 16 | 16 | 1 | 0 | 4 | 4 |
 
 **SONUÇ: ❌ NOT_READY**

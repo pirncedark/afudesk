@@ -132,7 +132,8 @@ pub fn host_baslat(ad: String, parola: String, upnp: bool, olaylar: StreamSink<H
     let fab: Arc<dyn afudesk_core::platform::Fabrika> = Arc::new(afudesk_core::platform::masaustu::Gercek);
     #[cfg(not(target_os = "android"))]
     {
-    let mut h = match rt().block_on(host::baslat(HostAyar { ad, port: 0, upnp, parola, yalniz_yerel: false, dosya_klasoru: None }, fab)) {
+    let kimlik_dosyasi = dirs::data_local_dir().map(|p| p.join("AfuDesk").join("cihaz.json"));
+    let mut h = match rt().block_on(host::baslat(HostAyar { ad, port: 0, upnp, parola, yalniz_yerel: false, dosya_klasoru: None, kimlik_dosyasi }, fab)) {
         Ok(h) => h,
         Err(e) => return hata(&olaylar, format!("Bağlantı açılamadı: {e}")),
     };

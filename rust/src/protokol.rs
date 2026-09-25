@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 pub const ALPN: &[u8] = b"afudesk/1";
-pub const SURUM: u32 = 2;
+pub const SURUM: u32 = 3;
 /// Tek mesaj için üst sınır (kötü niyetli uzunluk alanına karşı).
 pub const AZAMI_MESAJ: usize = 32 * 1024 * 1024;
 
@@ -115,6 +115,21 @@ pub enum Kontrol {
         slot: u8,
         buyuk: u8,
         kucuk: u8,
+    },
+    /// Yeni istemcinin kalıcı kimliği ile eşleşme jetonu.
+    MerhabaKayitli {
+        surum: u32,
+        cihaz: String,
+        jeton: String,
+        ad: String,
+    },
+    /// Onaylanmış eşleştirme anahtarı (kontrol enumunun sonuna eklendi).
+    KayitJetonu {
+        host_kimlik: String,
+        host_ad: String,
+        adresler: Vec<String>,
+        parmak_izi: String,
+        jeton: String,
     },
 }
 

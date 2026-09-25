@@ -91,6 +91,8 @@ pub struct HostAyar {
     pub yalniz_yerel: bool,
     /// Alınan dosyaların klasörü; `None` = İndirilenler\AfuDesk.
     pub dosya_klasoru: Option<PathBuf>,
+    /// Kalıcı TLS kimliği için dosya yolu; üretimde Dart uygulama veri dizinini verir.
+    pub kimlik_dosyasi: Option<PathBuf>,
 }
 
 pub struct Host {
@@ -142,7 +144,10 @@ pub async fn baslat(ayar: HostAyar, fabrika: Arc<dyn Fabrika>) -> Result<Host> {
     let (olay_tx, olaylar) = mpsc::channel(32);
     let (komut, komut_rx) = mpsc::channel(8);
     let (durdur_tx, durdur_rx) = oneshot::channel();
-    let kimlik = ag::yeni_kimlik()?;
+    let kimlik = match ayar.kimlik_dosyasi.as_deref() {
+        Some(p) => crate::kimlik::yukle_veya_uret(p, &ayar.ad)?.tls,
+        None => ag::yeni_kimlik()?,
+    };
     let ep4 = bagla_port(&kimlik, ayar.port)?;
     let port = ep4.local_addr()?.port();
     // IPv6 aynı portta ayrı uç nokta (Windows'ta çift yığın varsayılan değil); açılamazsa önemsiz.

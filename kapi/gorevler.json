@@ -366,6 +366,116 @@
           ]
         }
       }
+    },
+    "KAYITLI_CIHAZLAR": {
+      "ad": "Kay?tl? (g?venilen) cihazlar",
+      "zorunlu": true,
+      "maddeler": {
+        "kalici_kimlik": {
+          "ad": "Kal?c? cihaz kimli?i ve TLS sertifikas?",
+          "kanit": [
+            [
+              "rust/src/kimlik.rs",
+              "yukle_veya_uret"
+            ],
+            [
+              "rust/src/host.rs",
+              "kimlik_dosyasi"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "kimlik::testler::cihaz_kimligi_kalici"
+            ]
+          ]
+        },
+        "eslesme_kaydi": {
+          "ad": "Atomik JSON e?le?me kayd?",
+          "kanit": [
+            [
+              "rust/src/guvenilen.rs",
+              "pub struct HostKaydi"
+            ],
+            [
+              "rust/src/guvenilen.rs",
+              "NamedTempFile"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "guvenilen::testler::kayit_gidis_donus"
+            ],
+            [
+              "cargo",
+              "guvenilen::testler::atomik_yazma"
+            ]
+          ]
+        },
+        "kayitsiz_kod": {
+          "ad": "Kay?tl? cihaz kimlik/jeton do?rulamas?",
+          "kanit": [
+            [
+              "rust/src/protokol.rs",
+              "MerhabaKayitli"
+            ],
+            [
+              "rust/src/host.rs",
+              "sabit_zamanli_esit"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "uctan_uca::kayitli_cihaz_kodsuz_baglanir"
+            ],
+            [
+              "cargo",
+              "uctan_uca::kayitli_cihaz_onaysiz_baglanamaz"
+            ],
+            [
+              "cargo",
+              "uctan_uca::kaldirilan_cihaz_reddedilir"
+            ],
+            [
+              "cargo",
+              "uctan_uca::yanlis_jeton_reddedilir"
+            ],
+            [
+              "cargo",
+              "uctan_uca::host_sertifikasi_degisirse_reddedilir"
+            ]
+          ]
+        },
+        "ui": {
+          "ad": "Kay?tl? cihazlar? y?netme aray?z?",
+          "kanit": [
+            [
+              "app/lib/sayfalar/ana.dart",
+              "Kay?tl? cihazlar"
+            ],
+            [
+              "app/lib/sayfalar/baglanti_ver.dart",
+              "G?venilen cihazlar"
+            ]
+          ],
+          "testler": [
+            [
+              "flutter",
+              "kay?tl? cihazlar listesi"
+            ],
+            [
+              "flutter",
+              "kay?tl? cihaz? unut"
+            ],
+            [
+              "flutter",
+              "g?venilen cihaz? kald?r"
+            ]
+          ]
+        }
+      }
     }
   }
 }

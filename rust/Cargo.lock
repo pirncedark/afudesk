@@ -20,7 +20,7 @@ dependencies = [
 
 [[package]]
 name = "afudesk_core"
-version = "1.2.0"
+version = "1.3.0"
 dependencies = [
  "anyhow",
  "arboard",
@@ -43,6 +43,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "tempfile",
  "thiserror",
  "tokio",
  "vigem-client",
