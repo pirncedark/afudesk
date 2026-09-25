@@ -475,6 +475,34 @@ expect(m.cagrilar, contains('kabul:true:true'));
       expect(t.widget<Text>(find.byKey(const Key('oturum_istatistik'))).data, '350 ms · 8 fps');
     });
 
+    testWidgets('relay üzerinden gelince "aktarmalı" yazar, doğrudan olunca yazmaz', (t) async {
+      final m = await oturumAc(t);
+      await goruntuAlani(t, m);
+      m.izleyici.add(IzleyiciOlay('istatistik', rttMs: 90, fps: 12, metin: 'relay'));
+      await t.pump();
+      expect(t.widget<Text>(find.byKey(const Key('oturum_istatistik'))).data, '90 ms · 12 fps · aktarmalı');
+      m.izleyici.add(IzleyiciOlay('istatistik', rttMs: 4, fps: 20, metin: 'doğrudan'));
+      await t.pump();
+      expect(t.widget<Text>(find.byKey(const Key('oturum_istatistik'))).data, '4 ms · 20 fps');
+    });
+
+    testWidgets('bağlantı kopunca yeniden bağlanma gösterilir, oturum kapanmaz', (t) async {
+      final m = await oturumAc(t);
+      await goruntuAlani(t, m);
+      m.izleyici.add(IzleyiciOlay('istatistik', rttMs: 20, fps: 15));
+      await t.pump();
+      m.izleyici.add(IzleyiciOlay('yeniden', metin: 'Bağlantı koptu, yeniden bağlanılıyor… (1)'));
+      await t.pump();
+      expect(find.byKey(const Key('oturum_yeniden')), findsOneWidget);
+      expect(find.byKey(const Key('oturum_istatistik')), findsNothing);
+      m.izleyici.add(IzleyiciOlay('kabul', kontrol: true));
+      await t.pump();
+      expect(find.byKey(const Key('oturum_yeniden')), findsNothing, reason: 'geri dönünce kalkar');
+      m.izleyici.add(IzleyiciOlay('istatistik', rttMs: 20, fps: 15));
+      await t.pump();
+      expect(find.byKey(const Key('oturum_istatistik')), findsOneWidget);
+    });
+
     testWidgets('karşıdan pano gelince kısa bildirim gösterilir', (t) async {
       final m = await oturumAc(t);
       await goruntuAlani(t, m);

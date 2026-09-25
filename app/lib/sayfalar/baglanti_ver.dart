@@ -102,6 +102,9 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
       case 'uyari':
         _kolSurucusuYok = true;
         _mesaj(o.metin);
+      case 'yeniden':
+        // Oturum sürüyor sayılır; izleyici dönünce 'baglandi' yeniden gelir.
+        _mesaj(o.metin);
     }
   }
 

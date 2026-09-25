@@ -29,7 +29,7 @@ static IZLEYICI: Mutex<Option<Arc<izleyici::Izleyici>>> = Mutex::new(None);
 /// Dart son kareyi çizdi mi? (en-yeni-kazanır geri basıncı)
 static KARE_SERBEST: AtomicBool = AtomicBool::new(true);
 
-/// Host olayı. `tur`: hazir | istek | baglandi | koptu | hata | dosya.
+/// Host olayı. `tur`: hazir | istek | baglandi | koptu | hata | dosya | uyari | yeniden.
 #[derive(Debug, Clone, Default)]
 pub struct HostOlayi {
     pub tur: String,
@@ -43,12 +43,12 @@ pub struct HostOlayi {
     pub pano: bool,
     /// baglandi: dosya alma izni.
     pub dosya: bool,
-    /// dosya: al?nan dosyan?n tam yolu.
+    /// dosya: alınan dosyanın tam yolu.
     pub yol: String,
     pub oyun_kolu: bool,
 }
 
-/// ?zleyici olay?. `tur`: bekliyor | kabul | kare | istatistik | koptu | hata | pano | dosya.
+/// İzleyici olayı. `tur`: bekliyor | kabul | kare | istatistik (metin = yol) | yeniden | koptu | hata | pano | dosya.
 #[derive(Debug, Clone, Default)]
 pub struct IzleyiciOlayi {
     pub tur: String,
@@ -100,6 +100,11 @@ fn host_dto(o: HostOlay) -> HostOlayi {
         HostOlay::Hata(m) => HostOlayi { tur: "hata".into(), metin: m, ..Default::default() },
         HostOlay::DosyaAlindi { ad, yol } => HostOlayi { tur: "dosya".into(), ad, yol, ..Default::default() },
         HostOlay::Uyari(m) => HostOlayi { tur: "uyari".into(), metin: m, ..Default::default() },
+        HostOlay::YenidenBekleniyor => HostOlayi {
+            tur: "yeniden".into(),
+            metin: "Bağlantı koptu; karşı taraf yeniden bağlanıyor…".into(),
+            ..Default::default()
+        },
     }
 }
 
@@ -132,7 +137,7 @@ pub fn host_baslat(ad: String, parola: String, upnp: bool, olaylar: StreamSink<H
     let fab: Arc<dyn afudesk_core::platform::Fabrika> = Arc::new(afudesk_core::platform::masaustu::Gercek);
     #[cfg(not(target_os = "android"))]
     {
-    let mut h = match rt().block_on(host::baslat(HostAyar { ad, port: 0, upnp, parola, yalniz_yerel: false, dosya_klasoru: None }, fab)) {
+    let mut h = match rt().block_on(host::baslat(HostAyar { ad, upnp, parola, yalniz_yerel: false, dosya_klasoru: None }, fab)) {
         Ok(h) => h,
         Err(e) => return hata(&olaylar, format!("Bağlantı açılamadı: {e}")),
     };
@@ -214,9 +219,15 @@ pub fn izleyici_baglan(kod: String, parola: String, ad: String, olaylar: StreamS
                     }
                     IzleyiciOlayi { tur: "kare".into(), genislik, yukseklik, rgba, ..Default::default() }
                 }
-                IzleyiciOlay::Istatistik { rtt_ms, fps, gecikme_ms } => {
-                    IzleyiciOlayi { tur: "istatistik".into(), rtt_ms, fps, gecikme_ms, ..Default::default() }
+                // metin: kullanılan yol ("doğrudan" | "relay").
+                IzleyiciOlay::Istatistik { rtt_ms, fps, gecikme_ms, yol } => {
+                    IzleyiciOlayi { tur: "istatistik".into(), rtt_ms, fps, gecikme_ms, metin: yol, ..Default::default() }
                 }
+                IzleyiciOlay::YenidenBaglaniyor { deneme } => IzleyiciOlayi {
+                    tur: "yeniden".into(),
+                    metin: format!("Bağlantı koptu, yeniden bağlanılıyor… ({deneme})"),
+                    ..Default::default()
+                },
                 IzleyiciOlay::Koptu { sebep } => IzleyiciOlayi { tur: "koptu".into(), metin: sebep, ..Default::default() },
                 IzleyiciOlay::Pano(metin) => IzleyiciOlayi { tur: "pano".into(), metin, ..Default::default() },
                 IzleyiciOlay::Dosya { ad, gonderilen, toplam, bitti, hata } => IzleyiciOlayi {

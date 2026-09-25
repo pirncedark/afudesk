@@ -905,7 +905,7 @@ async fn izleyici_kapatinca_yeniden_baglanmaz_host_yeni_kod_uretir() {
     }
     // Host devam beklemeden oturumu bitirir ve yeni kod verir.
     let o = olay_bekle(&mut h, |o| {
-        matches!(o, HostOlay::Koptu { .. } | HostOlay::Uyari(_))
+        matches!(o, HostOlay::Koptu { .. } | HostOlay::YenidenBekleniyor)
     })
     .await;
     assert!(matches!(o, HostOlay::Koptu { .. }), "{o:?}");

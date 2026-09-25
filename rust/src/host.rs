@@ -78,6 +78,8 @@ pub enum HostOlay {
         yol: String,
     },
     Uyari(String),
+    /// Bağlantı istemeden koptu; izleyicinin geri dönmesi bekleniyor (`DEVAM_SURESI`).
+    YenidenBekleniyor,
 }
 
 pub enum HostKomut {
@@ -212,11 +214,7 @@ async fn calis(
     'kod: loop {
         // Kopan oturum: yeni kod üretmeden önce izleyicinin geri dönmesini bekle.
         if let Some(d) = devam.take() {
-            let _ = olay
-                .send(HostOlay::Uyari(
-                    "Bağlantı koptu; karşı taraf yeniden bağlanıyor…".into(),
-                ))
-                .await;
+            let _ = olay.send(HostOlay::YenidenBekleniyor).await;
             let bitis = tokio::time::Instant::now() + DEVAM_SURESI;
             let sonuc = loop {
                 let gelen = tokio::select! {
