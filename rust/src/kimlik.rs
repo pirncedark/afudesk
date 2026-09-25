@@ -1,77 +1,86 @@
-//! Kalıcı cihaz kimliği ve TLS sertifikası.
-use crate::ag::{self, Kimlik};
+//! Kalıcı cihaz kimliği: iroh gizli anahtarı. Açık anahtar (uç kimliği) cihazın kimliğidir
+//! ve her bağlantıda el sıkışmada doğrulanır; kayıtlı cihazlar bu kimlikle tanınır.
+//! Host ve izleyici ayrı anahtar kullanır (aynı anda ikisi de açık olabilir).
 use anyhow::{Context, Result};
-use rand::RngCore;
+use iroh::{EndpointId, SecretKey};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
+pub const HOST_DOSYASI: &str = "kimlik_host.json";
+pub const IZLEYICI_DOSYASI: &str = "kimlik_izleyici.json";
+
 #[derive(Serialize, Deserialize)]
 struct Kalici {
-    cihaz: String,
-    ad: String,
-    sertifika: Vec<u8>,
-    anahtar: Vec<u8>,
+    v: u8,
+    /// 32 bayt gizli anahtar (hex).
+    gizli_anahtar: String,
 }
+
 pub struct CihazKimligi {
-    pub cihaz: String,
-    pub ad: String,
-    pub tls: Kimlik,
+    pub gizli: SecretKey,
 }
-pub fn yukle_veya_uret(yol: &Path, ad: &str) -> Result<CihazKimligi> {
+
+impl CihazKimligi {
+    pub fn kimlik(&self) -> EndpointId {
+        self.gizli.public()
+    }
+}
+
+fn hex(b: &[u8]) -> String {
+    b.iter().map(|x| format!("{x:02x}")).collect()
+}
+
+fn hex_coz(s: &str) -> Option<[u8; 32]> {
+    let s = s.trim();
+    if s.len() != 64 {
+        return None;
+    }
+    let mut out = [0u8; 32];
+    for (i, b) in out.iter_mut().enumerate() {
+        *b = u8::from_str_radix(&s[i * 2..i * 2 + 2], 16).ok()?;
+    }
+    Some(out)
+}
+
+/// Dosyada kimlik varsa yükler, yoksa (ya da bozuksa) yenisini üretip atomik olarak yazar.
+pub fn yukle_veya_uret(yol: &Path) -> Result<CihazKimligi> {
     if let Ok(b) = fs::read(yol) {
-        if let Ok(k) = serde_json::from_slice::<Kalici>(&b) {
+        if let Some(anahtar) = serde_json::from_slice::<Kalici>(&b)
+            .ok()
+            .and_then(|k| hex_coz(&k.gizli_anahtar))
+        {
             return Ok(CihazKimligi {
-                cihaz: k.cihaz,
-                ad: k.ad,
-                tls: Kimlik {
-                    parmak_izi: ag::parmak_izi(&k.sertifika),
-                    sertifika: rustls::pki_types::CertificateDer::from(k.sertifika),
-                    anahtar: rustls::pki_types::PrivatePkcs8KeyDer::from(k.anahtar),
-                },
+                gizli: SecretKey::from_bytes(&anahtar),
             });
         }
     }
-    let tls = ag::yeni_kimlik()?;
-    let mut id = [0u8; 16];
-    rand::thread_rng().fill_bytes(&mut id);
-    let cihaz = id.iter().map(|x| format!("{x:02x}")).collect::<String>();
+    let gizli = SecretKey::generate();
     let k = Kalici {
-        cihaz: cihaz.clone(),
-        ad: ad.into(),
-        sertifika: tls.sertifika.to_vec(),
-        anahtar: tls.anahtar.secret_pkcs8_der().to_vec(),
+        v: 1,
+        gizli_anahtar: hex(&gizli.to_bytes()),
     };
-    let parent = yol.parent().unwrap_or(Path::new("."));
-    fs::create_dir_all(parent)?;
-    use std::io::Write;
-    let mut tmp = tempfile::NamedTempFile::new_in(parent)?;
-    tmp.write_all(&serde_json::to_vec(&k)?)?;
-    tmp.persist(yol)
-        .map_err(|e| e.error)
+    crate::guvenilen::atomik_yaz(yol, &serde_json::to_vec(&k)?)
         .context("cihaz kimliği kaydedilemedi")?;
-    Ok(CihazKimligi {
-        cihaz,
-        ad: ad.into(),
-        tls,
-    })
+    Ok(CihazKimligi { gizli })
 }
+
 #[cfg(test)]
 mod testler {
     use super::*;
-    use std::time::{SystemTime, UNIX_EPOCH};
+
     #[test]
     fn cihaz_kimligi_kalici() {
-        let p = std::env::temp_dir().join(format!(
-            "afu-id-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        let a = yukle_veya_uret(&p, "Bilgisayar").unwrap();
-        let b = yukle_veya_uret(&p, "Yeni ad").unwrap();
-        assert_eq!(a.cihaz, b.cihaz);
-        assert_eq!(a.tls.parmak_izi, b.tls.parmak_izi);
-        let _ = std::fs::remove_file(p);
+        let klasor = crate::guvenilen::testler::gecici_yol("kimlik");
+        let p = klasor.join(HOST_DOSYASI);
+        let a = yukle_veya_uret(&p).unwrap();
+        let b = yukle_veya_uret(&p).unwrap();
+        assert_eq!(a.kimlik(), b.kimlik(), "ikinci yüklemede aynı kimlik");
+        let c = yukle_veya_uret(&klasor.join(IZLEYICI_DOSYASI)).unwrap();
+        assert_ne!(a.kimlik(), c.kimlik(), "host ve izleyici ayrı kimlik");
+        // Bozuk dosya: yeni kimlik üretilir, uygulama çökmez.
+        std::fs::write(&p, b"bozuk").unwrap();
+        let d = yukle_veya_uret(&p).unwrap();
+        assert_ne!(a.kimlik(), d.kimlik());
+        let _ = std::fs::remove_dir_all(klasor);
     }
 }

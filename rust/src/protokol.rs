@@ -1,13 +1,14 @@
-//! Tel protokolü: QUIC akışları üzerinde uzunluk önekli (u32 BE) bincode mesajları.
-//! Kontrol akışı (çift yönlü): Merhaba/Kabul/Red/Girdi/Pano/Kapat.
+//! Tel protokolü: iroh (QUIC) akışları üzerinde uzunluk önekli (u32 BE) bincode mesajları.
+//! Kontrol akışı (çift yönlü): Merhaba|MerhabaKayitli|Devam / DevamJetonu+Kabul(+KayitJetonu) / Red /
+//! Girdi / Pano / Kapat.
 //! Görüntü akışı (tek yönlü, host → izleyici): Kare.
 //! Dosya akışı (çift yönlü, izleyici açar; dosya başına bir akış):
 //! DosyaBaslik → DosyaDevam | DosyaHata, sonra DosyaParca… ve DosyaTamam | DosyaHata.
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-pub const ALPN: &[u8] = b"afudesk/1";
-pub const SURUM: u32 = 3;
+pub const ALPN: &[u8] = b"afudesk/2";
+pub const SURUM: u32 = 4;
 /// Tek mesaj için üst sınır (kötü niyetli uzunluk alanına karşı).
 pub const AZAMI_MESAJ: usize = 32 * 1024 * 1024;
 
@@ -116,19 +117,28 @@ pub enum Kontrol {
         buyuk: u8,
         kucuk: u8,
     },
-    /// Yeni istemcinin kalıcı kimliği ile eşleşme jetonu.
-    MerhabaKayitli {
+    /// Host → izleyici, `Kabul`'den hemen önce: bağlantı istemeden koparsa izleyici bu
+    /// jetonla onay sorulmadan geri dönebilir (yalnız aynı cihaz kimliğiyle, kısa süre).
+    DevamJetonu(String),
+    /// İzleyici → host, kopan oturuma dönüş (Merhaba yerine ilk mesaj).
+    Devam {
         surum: u32,
-        cihaz: String,
         jeton: String,
         ad: String,
     },
-    /// Onaylanmış eşleştirme anahtarı (kontrol enumunun sonuna eklendi).
+    /// İzleyici → host, kayıtlı cihaz olarak bağlanma (kod yerine eşleşme jetonu).
+    /// Cihaz kimliği mesajda değil, el sıkışmada doğrulanan uç kimliğindedir.
+    MerhabaKayitli {
+        surum: u32,
+        jeton: String,
+        ad: String,
+    },
+    /// Host → izleyici, kodla yapılan onaylı ilk oturumda (Kabul'den sonra): bundan sonra
+    /// kodsuz bağlanabilmek için eşleşme jetonu ve host'a ulaşma bilgisi.
     KayitJetonu {
-        host_kimlik: String,
         host_ad: String,
         adresler: Vec<String>,
-        parmak_izi: String,
+        relaylar: Vec<String>,
         jeton: String,
     },
 }

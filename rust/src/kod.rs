@@ -11,6 +11,8 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 
 pub const GECERLILIK_SN: i64 = 600;
+/// Kod yükünün sürümü. 3: iroh taşıması (kimlik + relay).
+pub const DAVET_SURUMU: u8 = 3;
 const ONEK: &str = "AFU2.";
 const TUZ: usize = 16;
 const NONCE: usize = 24;
@@ -24,10 +26,14 @@ pub struct Davet {
     pub v: u8,
     /// Bağlantı veren tarafın görünen adı.
     pub ad: String,
-    /// Denenecek adresler, öncelik sırasıyla ("192.168.1.5:47000", "[2a02::1]:47000").
+    /// Doğrudan denenecek adresler ("192.168.1.5:47000", "[2a02::1]:47000", dış adres).
     pub adresler: Vec<String>,
-    /// Sunucu sertifikasının SHA-256 parmak izi (hex).
+    /// Bağlantı veren cihazın iroh uç kimliği (açık anahtar, 64 hex). El sıkışmada
+    /// doğrulanır; kodu değiştiremeyen biri başka cihazı araya sokamaz.
     pub parmak_izi: String,
+    /// Buluşma/yedek yol için relay adresleri. Doğrudan yol yoksa trafik buradan akar.
+    #[serde(default)]
+    pub relaylar: Vec<String>,
     /// Tek kullanımlık bilet (hex); bağlanan taraf ilk mesajda gönderir.
     pub bilet: String,
     /// Unix saniye.
@@ -113,7 +119,7 @@ pub fn coz(kod: &str, parola: &str, simdi: i64) -> Result<Davet, KodHata> {
         )
         .map_err(|_| KodHata::ParolaYanlis)?;
     let d: Davet = serde_json::from_slice(&json).map_err(|_| KodHata::Bozuk)?;
-    if d.v != 2 {
+    if d.v != DAVET_SURUMU {
         return Err(KodHata::Surum);
     }
     if simdi > d.bitis {
@@ -147,10 +153,11 @@ mod testler {
 
     fn ornek() -> Davet {
         Davet {
-            v: 2,
+            v: DAVET_SURUMU,
             ad: "Ali'nin PC'si".into(),
             adresler: vec!["192.168.1.5:47000".into(), "[2a02:e0::1]:47000".into()],
             parmak_izi: "ab".repeat(32),
+            relaylar: vec!["https://euc1-1.relay.n0.iroh.link./".into()],
             bilet: yeni_bilet(),
             bitis: 1_000 + GECERLILIK_SN,
         }
@@ -210,6 +217,25 @@ mod testler {
         assert_eq!(coz("AFU1.abcdef", "123456", 1_000), Err(KodHata::Surum));
         let yarim = &k[..k.len() / 2];
         assert!(coz(yarim, "123456", 1_000).is_err());
+    }
+
+    #[test]
+    fn eski_surum_kod_anlasilir_hata_verir() {
+        let mut d = ornek();
+        d.v = 2;
+        let k = kodla(&d, "123456").unwrap();
+        assert_eq!(coz(&k, "123456", 1_000), Err(KodHata::Surum));
+    }
+
+    #[test]
+    fn relaysiz_eski_yuk_de_cozulur() {
+        // `relaylar` alanı olmayan JSON yük: varsayılan boş liste.
+        let json = serde_json::json!({
+            "v": DAVET_SURUMU, "ad": "a", "adresler": [], "parmak_izi": "ab",
+            "bilet": "b", "bitis": 5
+        });
+        let d: Davet = serde_json::from_value(json).unwrap();
+        assert!(d.relaylar.is_empty());
     }
 
     #[test]

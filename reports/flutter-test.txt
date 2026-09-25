@@ -1,0 +1,144 @@
+Resolving dependencies...
+Downloading packages...
+  clock 1.1.2 (1.1.3 available)
+  cross_file 0.3.5+5 (0.4.0 available)
+  matcher 0.12.19 (0.12.20 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.0 (1.19.0 available)
+  stack_trace 1.12.1 (1.12.2 available)
+  test_api 0.7.11 (0.7.14 available)
+  vector_math 2.2.0 (2.4.3 available)
+Got dependencies!
+8 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+flutter : Package file_selector:windows references file_selector_windows:windows as the default plugin, but the package
+ does not exist, or is not a plugin package.
+At line:2 char:172
++ ...  $LASTEXITCODE; flutter test *> '../reports/flutter-test.txt'; $tests ...
++                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Package file_se...plugin package.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+Ask the maintainers of file_selector to either avoid referencing a default implementation via `platforms: windows: defa
+ult_package: file_selector_windows` or create a plugin named file_selector_windows.
+
+Package url_launcher:windows references url_launcher_windows:windows as the default plugin, but the package does not ex
+ist, or is not a plugin package.
+Ask the maintainers of url_launcher to either avoid referencing a default implementation via `platforms: windows: defau
+lt_package: url_launcher_windows` or create a plugin named url_launcher_windows.
+
+Package url_launcher:windows references url_launcher_windows:windows as the default plugin, but the package does not ex
+ist, or is not a plugin package.
+Ask the maintainers of url_launcher to either avoid referencing a default implementation via `platforms: windows: defau
+lt_package: url_launcher_windows` or create a plugin named url_launcher_windows.
+
+Package file_selector:windows references file_selector_windows:windows as the default plugin, but the package does not
+exist, or is not a plugin package.
+Ask the maintainers of file_selector to either avoid referencing a default implementation via `platforms: windows: defa
+ult_package: file_selector_windows` or create a plugin named file_selector_windows.
+
+00:00 +0: loading C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart
+Package url_launcher:windows references url_launcher_windows:windows as the default plugin, but the package does not ex
+ist, or is not a plugin package.
+Ask the maintainers of url_launcher to either avoid referencing a default implementation via `platforms: windows: defau
+lt_package: url_launcher_windows` or create a plugin named url_launcher_windows.
+
+Package file_selector:windows references file_selector_windows:windows as the default plugin, but the package does not
+exist, or is not a plugin package.
+Ask the maintainers of file_selector to either avoid referencing a default implementation via `platforms: windows: defa
+ult_package: file_selector_windows` or create a plugin named file_selector_windows.
+
+Package url_launcher:windows references url_launcher_windows:windows as the default plugin, but the package does not ex
+ist, or is not a plugin package.
+Ask the maintainers of url_launcher to either avoid referencing a default implementation via `platforms: windows: defau
+lt_package: url_launcher_windows` or create a plugin named url_launcher_windows.
+
+Package file_selector:windows references file_selector_windows:windows as the default plugin, but the package does not
+exist, or is not a plugin package.
+Ask the maintainers of file_selector to either avoid referencing a default implementation via `platforms: windows: defa
+ult_package: file_selector_windows` or create a plugin named file_selector_windows.
+
+Package url_launcher:windows references url_launcher_windows:windows as the default plugin, but the package does not ex
+ist, or is not a plugin package.
+Ask the maintainers of url_launcher to either avoid referencing a default implementation via `platforms: windows: defau
+lt_package: url_launcher_windows` or create a plugin named url_launcher_windows.
+
+Package file_selector:windows references file_selector_windows:windows as the default plugin, but the package does not
+exist, or is not a plugin package.
+Ask the maintainers of file_selector to either avoid referencing a default implementation via `platforms: windows: defa
+ult_package: file_selector_windows` or create a plugin named file_selector_windows.
+
+Package url_launcher:windows references url_launcher_windows:windows as the default plugin, but the package does not ex
+ist, or is not a plugin package.
+Ask the maintainers of url_launcher to either avoid referencing a default implementation via `platforms: windows: defau
+lt_package: url_launcher_windows` or create a plugin named url_launcher_windows.
+
+Package file_selector:windows references file_selector_windows:windows as the default plugin, but the package does not
+exist, or is not a plugin package.
+Ask the maintainers of file_selector to either avoid referencing a default implementation via `platforms: windows: defa
+ult_package: file_selector_windows` or create a plugin named file_selector_windows.
+
+00:00 +0: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Ana ekran iki seçenek ve Afu uygulamaları görünür
+00:00 +1: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Ana ekran iki seçenek ve Afu uygulamaları görünür
+00:00 +2: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Ana ekran iki seçenek ve Afu uygulamaları görünür
+00:00 +3: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Ana ekran iki seçenek ve Afu uygulamaları görünür
+00:00 +4: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Ana ekran iki seçenek ve Afu uygulamaları görünür
+00:00 +5: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Ana ekran iki seçenek ve Afu uygulamaları görünür
+00:00 +6: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Ana ekran iki seçenek ve Afu uygulamaları görünür
+00:00 +7: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Ana ekran iki seçenek ve Afu uygulamaları görünür
+00:00 +8: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Ana ekran iki seçenek ve Afu uygulamaları görünür
+00:00 +9: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Ana ekran iki seçenek ve Afu uygulamaları görünür
+00:00 +10: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Ana ekran iki seçenek ve Afu uygulamaları görünür
+00:00 +11: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Ana ekran iki seçenek ve Afu uygulamaları görünür
+00:00 +12: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Ana ekran iki seçenek ve Afu uygulamaları görünür
+00:01 +13: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/dokunmatik_arayuz_test.dart: telefonda "Bağlantı ver" devre dışı, "Bağlan" üstte
+00:01 +14: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/dokunmatik_arayuz_test.dart: telefonda "Bağlantı ver" devre dışı, "Bağlan" üstte
+00:01 +15: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/dokunmatik_arayuz_test.dart: telefonda "Bağlantı ver" devre dışı, "Bağlan" üstte
+00:01 +16: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Ana ekran Afu uygulama çipi doğru adresi açar
+00:01 +17: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/dokunmatik_arayuz_test.dart: dokunma = sol tık, imleç işareti görünür
+00:02 +18: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/dokunmatik_arayuz_test.dart: dokunma = sol tık, imleç işareti görünür
+00:02 +19: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/dokunmatik_arayuz_test.dart: dokunma = sol tık, imleç işareti görünür
+00:02 +20: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Bağlantı ver gelen istek: kabul (kontrol izniyle)
+00:02 +21: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/dokunmatik_arayuz_test.dart: uzun bas = sağ tık
+00:02 +22: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/dokunmatik_arayuz_test.dart: uzun bas = sağ tık
+00:03 +23: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/dokunmatik_arayuz_test.dart: uzun bas = sağ tık
+00:03 +24: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/dokunmatik_arayuz_test.dart: uzun bas = sağ tık
+00:03 +25: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/dokunmatik_arayuz_test.dart: uzun bas = sağ tık
+00:03 +26: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/dokunmatik_arayuz_test.dart: uzun bas = sağ tık
+00:03 +27: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Bağlantı ver dosya alma izin kutusu varsayılan kapalı
+00:03 +28: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/dokunmatik_arayuz_test.dart: sürükleme = sol basılı hareket
+00:04 +29: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/dokunmatik_arayuz_test.dart: sürükleme = sol basılı hareket
+00:04 +30: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/dokunmatik_arayuz_test.dart: sürükleme = sol basılı hareket
+00:04 +31: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/dokunmatik_arayuz_test.dart: sürükleme = sol basılı hareket
+00:04 +32: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Bağlantı ver hata durumunda "Tekrar dene" yeniden başlatır
+00:04 +33: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/dokunmatik_arayuz_test.dart: özel tuş çubuğu: Enter ve Esc
+00:04 +34: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/dokunmatik_arayuz_test.dart: özel tuş çubuğu: Enter ve Esc
+00:04 +35: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Bağlan boş alanlar uyarı verir, bağlanmaz
+00:04 +36: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/dokunmatik_arayuz_test.dart: telefon klavyesinden yazı ve silme
+00:05 +37: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/dokunmatik_arayuz_test.dart: telefon klavyesinden yazı ve silme
+00:05 +38: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Bağlan yapıştır düğmesi panodan alır; boşluklar temizlenir
+00:05 +39: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/dokunmatik_arayuz_test.dart: dar ekranda başlık kesilmez: çip ve Kes yalnız simge
+00:05 +40: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Bağlan yanlış parola hatası anlaşılır biçimde gösterilir
+00:05 +41: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/dokunmatik_arayuz_test.dart: dokunmatik oturum yatay kipe geçer, çıkınca serbest bırakır
+00:05 +42: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Oturum bağlanıyor → onay bekleniyor → görüntü
+00:05 +43: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/dokunmatik_arayuz_test.dart: yalnız izleme kipinde dokunma ve çubuk yok
+00:06 +44: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Oturum kol izni yoksa oyun kolu düğmesi pasif ve açıklamalı
+00:06 +45: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/dokunmatik_arayuz_test.dart: dokunmatik oturumda dosya gönder düğmesi yok (yalnız masaüstü)
+00:06 +46: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Oturum kol durumu değişince gönderilir, aynı durum yinelenmez
+00:06 +47: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Oturum dokunmatik kol katmanı aynı anda analog ve tuş basışını işler
+00:07 +48: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Oturum uzak kol algılanınca oturum başlığında P2 çipi görünür
+00:07 +49: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Oturum fare konumu en-boy oranına göre normalize edilir, siyah bant dışı yok sayılır
+00:07 +50: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Oturum sol ve sağ tık basılı/bırakıldı olarak gider
+00:07 +51: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Oturum tekerlek kaydırma gider
+00:07 +52: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Oturum klavye: tuş basma/bırakma ve Türkçe harf
+00:08 +53: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Oturum yalnız izleme izninde hiçbir girdi gönderilmez
+00:08 +54: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Oturum gecikme göstergesi: renk ağ durumuna göre
+00:08 +55: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Oturum karşıdan pano gelince kısa bildirim gösterilir
+00:08 +56: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Oturum dosya gönderme ilerlemesi gösterilir
+00:09 +57: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Oturum dosya izni yoksa gönder düğmesi pasif
+00:09 +58: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Oturum karşı taraf reddederse sebep gösterilir
+00:09 +59: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Oturum Kes düğmesi oturumu kapatır
+00:09 +60: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Yardımcılar tuş adları
+00:09 +61: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Yardımcılar dosya adı ve boyut metni
+00:09 +62: C:/Users/afuuu/Desktop/afuproject/AfuDesk-telefonkol/app/test/arayuz_test.dart: Yardımcılar hata metni temizlenir
+00:09 +63: All tests passed!

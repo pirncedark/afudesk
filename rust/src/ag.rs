@@ -1,256 +1,282 @@
-//! QUIC uç noktaları. Sunucu her oturumda yeni kendinden imzalı sertifika üretir;
-//! istemci sertifikayı CA ile değil, koddan gelen SHA-256 parmak iziyle doğrular.
+//! Taşıma katmanı: iroh (QUIC). Her cihaz bir anahtar çiftiyle tanınır; açık anahtar
+//! (uç kimliği) koddan gelir ve el sıkışmada doğrulanır — başka cihaz araya giremez.
+//!
+//! Bağlantı sırası kullanıcıdan hiçbir ayar istemez:
+//! 1. Koddaki doğrudan adresler (LAN, IPv6, UPnP/PCP ile açılan dış adres) denenir.
+//! 2. İki taraf relay üzerinden buluşur (rendezvous) ve NAT delme (hole punching) yapılır.
+//! 3. Doğrudan yol kurulamazsa trafik relay üzerinden akar; sonradan doğrudan yol açılırsa
+//!    bağlantı kopmadan oraya geçer. Relay yalnız şifreli paket taşır, içeriği göremez.
 use crate::protokol::ALPN;
 use anyhow::{Context, Result};
-use quinn::crypto::rustls::{QuicClientConfig, QuicServerConfig};
-use rustls::{
-    client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier},
-    crypto::CryptoProvider,
-    pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, ServerName, UnixTime},
-    DigitallySignedStruct, SignatureScheme,
+use iroh::{
+    endpoint::{presets, QuicTransportConfig},
+    Endpoint, EndpointAddr, EndpointId, RelayMode, RelayUrl, TransportAddr,
 };
-use sha2::{Digest, Sha256};
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{net::SocketAddr, time::Duration};
 
-/// RTT'si en düşük bağlantı adayının dizinini döndürür.
-pub fn en_iyi_yol(adaylar: &[(usize, Duration)]) -> Option<usize> {
-    adaylar
-        .iter()
-        .min_by_key(|(_, rtt)| *rtt)
-        .map(|(indeks, _)| *indeks)
+pub use iroh::endpoint::{Connection as Baglanti, RecvStream as AlAkisi, SendStream as GonderAkisi};
+
+/// Doğrudan yolu bilerek kapatır (yalnız relay): TEST-2 ve sorun ayıklama için.
+pub const SADECE_RELAY_ORTAM: &str = "AFUDESK_SADECE_RELAY";
+/// UDP soketini belirli yerel IP'ye bağlar (ör. telefon paylaşımı arayüzü): trafik o
+/// arayüzden çıkar. Tek bilgisayarda iki farklı ISS ile test için.
+pub const BAGLA_IP_ORTAM: &str = "AFUDESK_BAGLA_IP";
+/// Relay (HTTPS) bağlantısı için HTTP CONNECT vekili, ör. `http://127.0.0.1:18080`.
+pub const PROXY_ORTAM: &str = "AFUDESK_PROXY";
+/// (Yalnız `wan_testi` özelliğiyle) yerel/özel adresli yollar hiç seçilmez: aynı
+/// bilgisayardaki test, LAN kısayolundan değil gerçek internetten geçer.
+pub const GENEL_YOL_ORTAM: &str = "AFUDESK_TEST_GENEL_YOL";
+
+/// Uç noktanın nasıl kurulacağı.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kurulum {
+    /// Gerçek kullanım: doğrudan + NAT delme + relay yedeği.
+    Internet,
+    /// Gerçek kullanım ama doğrudan UDP kapalı: her şey relay'den geçer.
+    SadeceRelay,
+    /// Testler: relay yok, dışarı hiçbir istek çıkmaz, yalnız 127.0.0.1.
+    YalnizYerel,
 }
 
-#[cfg(test)]
-mod yol_testleri {
-    use super::*;
+impl Kurulum {
+    /// `AFUDESK_SADECE_RELAY=1` ise relay'e zorlanır.
+    pub fn ortamdan() -> Self {
+        Self::degerden(std::env::var(SADECE_RELAY_ORTAM).ok().as_deref())
+    }
 
-    #[test]
-    fn en_dusuk_rtt_yolu_secer() {
-        assert_eq!(
-            en_iyi_yol(&[
-                (0, Duration::from_millis(80)),
-                (1, Duration::from_millis(12))
-            ]),
-            Some(1)
+    fn degerden(v: Option<&str>) -> Self {
+        match v.map(str::trim) {
+            Some("1") => Kurulum::SadeceRelay,
+            _ => Kurulum::Internet,
+        }
+    }
+}
+
+fn tasima() -> QuicTransportConfig {
+    QuicTransportConfig::builder()
+        .datagram_receive_buffer_size(Some(64 * 1024))
+        .keep_alive_interval(Duration::from_secs(5))
+        .max_idle_timeout(Some(Duration::from_secs(20).try_into().expect("süre")))
+        .build()
+}
+
+pub async fn uc_nokta(kurulum: Kurulum, portmapper: bool) -> Result<Endpoint> {
+    uc_nokta_kimlikli(kurulum, portmapper, None).await
+}
+
+/// mDNS servis adı: `_afudesk._udp.local`. Aynı ağdaki kayıtlı cihaz, IP'si değişse de
+/// internet olmadan bulunur.
+pub const MDNS_SERVISI: &str = "afudesk";
+
+/// `gizli`: kalıcı cihaz anahtarı (kayıtlı cihazlar); `None` = her açılışta yeni kimlik.
+pub async fn uc_nokta_kimlikli(
+    kurulum: Kurulum,
+    portmapper: bool,
+    gizli: Option<iroh::SecretKey>,
+) -> Result<Endpoint> {
+    let b = match kurulum {
+        Kurulum::YalnizYerel => Endpoint::builder(presets::Minimal)
+            .relay_mode(RelayMode::Disabled)
+            .clear_ip_transports()
+            .bind_addr("127.0.0.1:0")?,
+        Kurulum::Internet => Endpoint::builder(presets::N0),
+        Kurulum::SadeceRelay => Endpoint::builder(presets::N0).clear_ip_transports(),
+    };
+    let mut b = b.alpns(vec![ALPN.to_vec()]).transport_config(tasima());
+    if let Some(g) = gizli {
+        b = b.secret_key(g);
+    }
+    if kurulum == Kurulum::Internet {
+        b = b.address_lookup(
+            iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVISI),
         );
-        assert_eq!(en_iyi_yol(&[]), None);
     }
-}
-
-pub struct Kimlik {
-    pub sertifika: CertificateDer<'static>,
-    pub anahtar: PrivatePkcs8KeyDer<'static>,
-    pub parmak_izi: String,
-}
-
-pub fn parmak_izi(der: &[u8]) -> String {
-    Sha256::digest(der)
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
-}
-
-pub fn yeni_kimlik() -> Result<Kimlik> {
-    let s = rcgen::generate_simple_self_signed(vec!["afudesk".to_owned()])?;
-    let sertifika = CertificateDer::from(s.cert.der().to_vec());
-    let anahtar = PrivatePkcs8KeyDer::from(s.key_pair.serialize_der());
-    let parmak_izi = parmak_izi(&sertifika);
-    Ok(Kimlik {
-        sertifika,
-        anahtar,
-        parmak_izi,
-    })
-}
-
-fn saglayici() -> Arc<CryptoProvider> {
-    Arc::new(rustls::crypto::ring::default_provider())
-}
-
-fn tasima() -> Arc<quinn::TransportConfig> {
-    let mut t = quinn::TransportConfig::default();
-    t.datagram_receive_buffer_size(Some(64 * 1024));
-    t.keep_alive_interval(Some(Duration::from_secs(5)));
-    t.max_idle_timeout(Some(Duration::from_secs(20).try_into().expect("süre")));
-    Arc::new(t)
-}
-
-/// `adres` örn. "0.0.0.0:0" (rastgele port) ya da "[::]:47000".
-pub fn sunucu(kimlik: &Kimlik, adres: SocketAddr) -> Result<quinn::Endpoint> {
-    let mut tls = rustls::ServerConfig::builder_with_provider(saglayici())
-        .with_protocol_versions(&[&rustls::version::TLS13])?
-        .with_no_client_auth()
-        .with_single_cert(
-            vec![kimlik.sertifika.clone()],
-            PrivateKeyDer::Pkcs8(kimlik.anahtar.clone_key()),
-        )?;
-    tls.alpn_protocols = vec![ALPN.to_vec()];
-    let mut cfg = quinn::ServerConfig::with_crypto(Arc::new(QuicServerConfig::try_from(tls)?));
-    cfg.transport_config(tasima());
-    Ok(quinn::Endpoint::server(cfg, adres)?)
-}
-
-#[derive(Debug)]
-struct ParmakIziDogrulayici {
-    beklenen: String,
-    saglayici: Arc<CryptoProvider>,
-}
-
-impl ServerCertVerifier for ParmakIziDogrulayici {
-    fn verify_server_cert(
-        &self,
-        end_entity: &CertificateDer<'_>,
-        _ara: &[CertificateDer<'_>],
-        _ad: &ServerName<'_>,
-        _ocsp: &[u8],
-        _simdi: UnixTime,
-    ) -> Result<ServerCertVerified, rustls::Error> {
-        if parmak_izi(end_entity) == self.beklenen {
-            Ok(ServerCertVerified::assertion())
-        } else {
-            Err(rustls::Error::General(
-                "sertifika parmak izi koddakiyle uyuşmuyor".into(),
-            ))
+    if !portmapper || kurulum != Kurulum::Internet {
+        b = b.portmapper_config(iroh::endpoint::PortmapperConfig::Disabled);
+    }
+    if kurulum != Kurulum::YalnizYerel {
+        if kurulum == Kurulum::Internet {
+            if let Some(ip) = ortam(BAGLA_IP_ORTAM).and_then(|v| v.parse::<std::net::IpAddr>().ok()) {
+                b = b.clear_ip_transports().bind_addr(SocketAddr::new(ip, 0))?;
+            }
+        }
+        if let Some(url) = ortam(PROXY_ORTAM).and_then(|v| v.parse().ok()) {
+            b = b.proxy_url(url);
+        }
+        #[cfg(feature = "wan_testi")]
+        if ortam(GENEL_YOL_ORTAM).as_deref() == Some("1") {
+            b = b.path_selector(std::sync::Arc::new(test_secici::GenelYolSecici));
         }
     }
-
-    fn verify_tls12_signature(
-        &self,
-        _m: &[u8],
-        _c: &CertificateDer<'_>,
-        _d: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        Err(rustls::Error::General("TLS 1.2 desteklenmiyor".into()))
-    }
-
-    fn verify_tls13_signature(
-        &self,
-        m: &[u8],
-        c: &CertificateDer<'_>,
-        d: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        rustls::crypto::verify_tls13_signature(
-            m,
-            c,
-            d,
-            &self.saglayici.signature_verification_algorithms,
-        )
-    }
-
-    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        self.saglayici
-            .signature_verification_algorithms
-            .supported_schemes()
-    }
+    b.bind().await.context("Ağ başlatılamadı.")
 }
 
-pub fn istemci_yapilandirmasi(parmak_izi: &str) -> Result<quinn::ClientConfig> {
-    let p = saglayici();
-    let mut tls = rustls::ClientConfig::builder_with_provider(p.clone())
-        .with_protocol_versions(&[&rustls::version::TLS13])?
-        .dangerous()
-        .with_custom_certificate_verifier(Arc::new(ParmakIziDogrulayici {
-            beklenen: parmak_izi.to_lowercase(),
-            saglayici: p,
-        }))
-        .with_no_client_auth();
-    tls.alpn_protocols = vec![ALPN.to_vec()];
-    let mut cfg = quinn::ClientConfig::new(Arc::new(QuicClientConfig::try_from(tls)?));
-    cfg.transport_config(tasima());
-    Ok(cfg)
+fn ortam(ad: &str) -> Option<String> {
+    std::env::var(ad).ok().map(|v| v.trim().to_owned()).filter(|v| !v.is_empty())
 }
 
-/// Adresleri paralel dener; ilk başarılı bağlantı kazanır.
-pub async fn baglan(
-    adresler: &[String],
-    parmak_izi: &str,
-    sure: Duration,
-) -> Result<quinn::Connection> {
-    anyhow::ensure!(!adresler.is_empty(), "Kodda adres yok.");
-    let cfg = istemci_yapilandirmasi(parmak_izi)?;
-    let mut gorevler = tokio::task::JoinSet::new();
-    let mut son_hata = String::from("Karşı tarafa ulaşılamadı.");
-    for a in adresler {
-        let Ok(hedef) = a.parse::<SocketAddr>() else {
-            continue;
-        };
-        let yerel: SocketAddr = if hedef.is_ipv6() {
-            "[::]:0"
-        } else {
-            "0.0.0.0:0"
+/// Adres genel internette mi (özel ağ, döngü, bağlantı-yerel, CGNAT değil)?
+pub fn genel_mi(ip: std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(a) => {
+            let o = a.octets();
+            !(a.is_private()
+                || a.is_loopback()
+                || a.is_link_local()
+                || a.is_unspecified()
+                || a.is_broadcast()
+                || (o[0] == 100 && (o[1] & 0xc0) == 64))
         }
-        .parse()?;
-        let ep = match quinn::Endpoint::client(yerel) {
-            Ok(e) => e,
-            Err(e) => {
-                son_hata = e.to_string();
-                continue;
-            }
-        };
-        let cfg = cfg.clone();
-        gorevler.spawn(async move {
-            let c = ep.connect_with(cfg, hedef, "afudesk")?;
-            let b = tokio::time::timeout(sure, c)
-                .await
-                .context("zaman aşımı")??;
-            Ok::<_, anyhow::Error>(b)
-        });
+        std::net::IpAddr::V6(a) => a.segments()[0] & 0xe000 == 0x2000,
     }
-    let mut basarililar = Vec::new();
-    let mut secim_sonu = None;
-    while !gorevler.is_empty() {
-        let sonuc = if let Some(sinir) = secim_sonu {
-            match tokio::time::timeout_at(sinir, gorevler.join_next()).await {
-                Ok(s) => s,
-                Err(_) => break,
-            }
-        } else {
-            gorevler.join_next().await
-        };
-        let Some(s) = sonuc else { break };
-        match s {
-            Ok(Ok(b)) => {
-                if secim_sonu.is_none() {
-                    secim_sonu = Some(tokio::time::Instant::now() + Duration::from_millis(300));
+}
+
+#[cfg(feature = "wan_testi")]
+pub mod test_secici {
+    //! Yalnız genel adresli doğrudan yolları ya da relay'i seçer (doğrudan önce).
+    use iroh::endpoint::transports::{
+        Addr, PathSelection, PathSelectionContext, PathSelectionData, PathSelector,
+    };
+    use std::time::Duration;
+
+    #[derive(Debug, Default)]
+    pub struct GenelYolSecici;
+
+    impl PathSelector for GenelYolSecici {
+        fn select(&self, ctx: &PathSelectionContext<'_>) -> PathSelection {
+            let mut en_iyi: Option<(PathSelectionData<'_>, (u8, Duration))> = None;
+            for p in ctx.paths() {
+                let Some(st) = p.stats() else { continue };
+                let kat = match p.network_path().remote() {
+                    Addr::Ip(s) if super::genel_mi(s.ip()) => 0,
+                    Addr::Relay(..) => 1,
+                    _ => continue,
+                };
+                let anahtar = (kat, st.rtt);
+                if en_iyi.as_ref().is_none_or(|(_, a)| anahtar < *a) {
+                    en_iyi = Some((p, anahtar));
                 }
-                basarililar.push(b);
             }
-            Ok(Err(e)) => {
-                son_hata = format!("{e:#}");
+            let mut secim = PathSelection::none();
+            if let Some((p, _)) = en_iyi {
+                if ctx.current() != Some(p.network_path()) {
+                    secim.set(&p);
+                }
             }
-            Err(e) => {
-                son_hata = e.to_string();
-            }
+            secim
         }
     }
-    if !basarililar.is_empty() {
-        let rttler: Vec<_> = basarililar
-            .iter()
-            .enumerate()
-            .map(|(i, c)| (i, c.rtt()))
-            .collect();
-        let secilen = en_iyi_yol(&rttler).expect("bağlantı adayı var");
-        let kazanan = basarililar.swap_remove(secilen);
-        for aday in basarililar {
-            aday.close(0u32.into(), b"daha dusuk RTT yolu secildi");
+}
+
+/// Relay'e bağlanana kadar (en çok `sure`) bekler. Relay yoksa (ör. internet yok) false.
+pub async fn cevrimici(ep: &Endpoint, sure: Duration) -> bool {
+    tokio::time::timeout(sure, ep.online()).await.is_ok()
+}
+
+/// Uç kimliği metni (koda yazılan): 64 hex.
+pub fn kimlik_metni(id: EndpointId) -> String {
+    id.to_string()
+}
+
+/// Kodun taşıdığı parçalardan bağlanılacak adres.
+pub fn hedef_adres(kimlik: &str, adresler: &[String], relaylar: &[String]) -> Result<EndpointAddr> {
+    let id: EndpointId = kimlik
+        .trim()
+        .parse()
+        .map_err(|_| anyhow::anyhow!("Kod bozuk: cihaz kimliği okunamadı."))?;
+    let ipler = adresler
+        .iter()
+        .filter_map(|a| a.parse::<SocketAddr>().ok())
+        .map(TransportAddr::Ip);
+    let relay = relaylar
+        .iter()
+        .filter_map(|r| r.parse::<RelayUrl>().ok())
+        .map(TransportAddr::Relay);
+    Ok(EndpointAddr::from_parts(id, ipler.chain(relay)))
+}
+
+/// Koda yazılacak adres listesi ve relay adresleri.
+pub fn yayinlanacak(ep: &Endpoint) -> (Vec<String>, Vec<String>) {
+    let a = ep.addr();
+    let mut ipler: Vec<String> = a.ip_addrs().map(|s| s.to_string()).collect();
+    ipler.sort();
+    ipler.dedup();
+    let relaylar = a.relay_urls().map(|r| r.to_string()).collect();
+    (ipler, relaylar)
+}
+
+/// Kullanıcıya gösterilen bağlantı hatası: teknik ayrıntı (adres, iç hata) içermez;
+/// ayrıntı yalnız günlüğe yazılır.
+pub const ULASILAMADI: &str =
+    "Karşı bilgisayara ulaşılamadı.\nBağlantı veren bilgisayar açık ve internete bağlı mı?";
+pub const GUVENLIK_HATASI: &str =
+    "Güvenlik kontrolü başarısız; doğru cihazın bağlantı kodunu kullanın.";
+
+pub async fn baglan(ep: &Endpoint, hedef: EndpointAddr, sure: Duration) -> Result<Baglanti> {
+    let beklenen = hedef.id;
+    let c = match tokio::time::timeout(sure, ep.connect(hedef, ALPN)).await {
+        Err(_) => {
+            log::warn!("bağlantı zaman aşımı ({sure:?})");
+            anyhow::bail!(ULASILAMADI)
         }
-        gorevler.abort_all();
-        return Ok(kazanan);
+        Ok(Err(e)) => {
+            log::warn!("bağlantı kurulamadı: {e:#}");
+            anyhow::bail!(ULASILAMADI)
+        }
+        Ok(Ok(c)) => c,
+    };
+    // iroh el sıkışmada zaten doğrular; yine de açıkça kontrol et.
+    anyhow::ensure!(c.remote_id() == beklenen, GUVENLIK_HATASI);
+    Ok(c)
+}
+
+/// Şu an veri taşıyan yol.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Yol {
+    Dogrudan,
+    Relay,
+    Bilinmiyor,
+}
+
+impl Yol {
+    pub fn ad(self) -> &'static str {
+        match self {
+            Yol::Dogrudan => "doğrudan",
+            Yol::Relay => "relay",
+            Yol::Bilinmiyor => "?",
+        }
     }
-    if son_hata.contains("parmak izi") {
-        anyhow::bail!("Güvenlik kontrolü başarısız: karşıdaki cihaz koddaki cihaz değil.");
+}
+
+pub fn secili_yol(c: &Baglanti) -> (Yol, Duration) {
+    for p in c.paths().iter() {
+        if p.is_selected() {
+            let y = if p.is_relay() { Yol::Relay } else { Yol::Dogrudan };
+            return (y, p.rtt());
+        }
     }
-    anyhow::bail!(
-        "Karşı tarafa ulaşılamadı. Aynı ağda değilseniz, bağlantı veren tarafın modeminde UPnP açık olmalı. ({son_hata})"
-    )
+    (Yol::Bilinmiyor, Duration::ZERO)
+}
+
+pub fn rtt(c: &Baglanti) -> Duration {
+    secili_yol(c).1
+}
+
+/// Seçili yolun karşı ucu: IP:port ya da relay adresi (kanıt/sorun ayıklama için).
+pub fn secili_yol_adresi(c: &Baglanti) -> String {
+    c.paths()
+        .iter()
+        .find(|p| p.is_selected())
+        .map(|p| p.remote_addr().to_string())
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
 mod testler {
     use super::*;
 
-    async fn yankici(k: &Kimlik) -> (quinn::Endpoint, String) {
-        let ep = sunucu(k, "127.0.0.1:0".parse().unwrap()).unwrap();
-        let adres = ep.local_addr().unwrap().to_string();
+    async fn yankici() -> (Endpoint, String, Vec<String>) {
+        let ep = uc_nokta(Kurulum::YalnizYerel, false).await.unwrap();
         let e = ep.clone();
         tokio::spawn(async move {
             while let Some(g) = e.accept().await {
@@ -265,59 +291,76 @@ mod testler {
                 });
             }
         });
-        (ep, adres)
+        let adres: Vec<String> = ep.bound_sockets().iter().map(|s| s.to_string()).collect();
+        (ep.clone(), kimlik_metni(ep.id()), adres)
     }
 
     #[tokio::test]
-    async fn dogru_parmak_izi_baglanir() {
-        let k = yeni_kimlik().unwrap();
-        let (_ep, adres) = yankici(&k).await;
-        let c = baglan(&[adres], &k.parmak_izi, Duration::from_secs(5))
-            .await
-            .unwrap();
+    async fn dogru_kimlige_baglanir_ve_yol_dogrudan() {
+        let (_h, kimlik, adres) = yankici().await;
+        let ep = uc_nokta(Kurulum::YalnizYerel, false).await.unwrap();
+        let hedef = hedef_adres(&kimlik, &adres, &[]).unwrap();
+        let c = baglan(&ep, hedef, Duration::from_secs(5)).await.unwrap();
         let (mut w, mut r) = c.open_bi().await.unwrap();
         w.write_all(b"merhaba").await.unwrap();
         w.finish().unwrap();
         assert_eq!(r.read_to_end(1024).await.unwrap(), b"merhaba");
+        assert_eq!(secili_yol(&c).0, Yol::Dogrudan);
     }
 
     #[tokio::test]
-    async fn yanlis_parmak_izi_reddedilir() {
-        let k = yeni_kimlik().unwrap();
-        let sahte = yeni_kimlik().unwrap();
-        let (_ep, adres) = yankici(&k).await;
-        let h = baglan(&[adres], &sahte.parmak_izi, Duration::from_secs(5))
-            .await
-            .unwrap_err();
-        assert!(
-            h.to_string().starts_with("Güvenlik kontrolü başarısız"),
-            "{h}"
-        );
+    async fn yanlis_kimlik_reddedilir() {
+        let (_h, _kimlik, adres) = yankici().await;
+        let sahte = uc_nokta(Kurulum::YalnizYerel, false).await.unwrap();
+        let ep = uc_nokta(Kurulum::YalnizYerel, false).await.unwrap();
+        let hedef = hedef_adres(&kimlik_metni(sahte.id()), &adres, &[]).unwrap();
+        assert!(baglan(&ep, hedef, Duration::from_secs(3)).await.is_err());
     }
 
     #[tokio::test]
-    async fn olu_adres_varsa_digeri_kazanir() {
-        let k = yeni_kimlik().unwrap();
-        let (_ep, adres) = yankici(&k).await;
-        let adresler = vec!["127.0.0.1:9".to_owned(), "gecersiz".to_owned(), adres];
-        assert!(baglan(&adresler, &k.parmak_izi, Duration::from_secs(5))
-            .await
-            .is_ok());
+    async fn olu_ve_gecersiz_adresler_digerini_engellemez() {
+        let (_h, kimlik, mut adres) = yankici().await;
+        adres.insert(0, "127.0.0.1:9".into());
+        adres.insert(0, "gecersiz".into());
+        let ep = uc_nokta(Kurulum::YalnizYerel, false).await.unwrap();
+        let hedef = hedef_adres(&kimlik, &adres, &[]).unwrap();
+        assert!(baglan(&ep, hedef, Duration::from_secs(5)).await.is_ok());
     }
 
     #[tokio::test]
     async fn hic_ulasilamazsa_anlasilir_hata() {
-        let k = yeni_kimlik().unwrap();
-        let h = baglan(
-            &["127.0.0.1:9".to_owned()],
-            &k.parmak_izi,
-            Duration::from_secs(2),
-        )
-        .await
-        .unwrap_err();
-        assert!(h.to_string().starts_with("Karşı tarafa ulaşılamadı"), "{h}");
-        assert!(baglan(&[], &k.parmak_izi, Duration::from_secs(1))
-            .await
-            .is_err());
+        let (h, kimlik, _) = yankici().await;
+        drop(h);
+        let ep = uc_nokta(Kurulum::YalnizYerel, false).await.unwrap();
+        let hedef = hedef_adres(&kimlik, &["127.0.0.1:9".into()], &[]).unwrap();
+        let e = baglan(&ep, hedef, Duration::from_secs(2)).await.unwrap_err();
+        assert_eq!(e.to_string(), ULASILAMADI);
+        assert!(hedef_adres("bozuk", &[], &[]).is_err());
+    }
+
+    #[test]
+    fn baglanti_hatasi_kullaniciya_teknik_ayrinti_gostermez() {
+        for m in [ULASILAMADI, GUVENLIK_HATASI] {
+            assert!(!m.contains('('), "{m}");
+            assert!(!m.contains("127.0.0.1") && !m.contains("deadline"), "{m}");
+        }
+    }
+
+    #[test]
+    fn genel_adres_ayrimi() {
+        for a in ["192.168.0.110", "10.1.2.3", "172.28.96.1", "127.0.0.1", "169.254.1.1", "100.100.1.1", "::1", "fe80::1"] {
+            assert!(!genel_mi(a.parse().unwrap()), "{a}");
+        }
+        for a in ["31.223.3.218", "8.8.8.8", "100.128.0.1", "2a02:e0::1"] {
+            assert!(genel_mi(a.parse().unwrap()), "{a}");
+        }
+    }
+
+    #[test]
+    fn ortam_degiskeni_relay_zorlar() {
+        assert_eq!(Kurulum::degerden(Some("1")), Kurulum::SadeceRelay);
+        assert_eq!(Kurulum::degerden(Some(" 1 ")), Kurulum::SadeceRelay);
+        assert_eq!(Kurulum::degerden(Some("0")), Kurulum::Internet);
+        assert_eq!(Kurulum::degerden(None), Kurulum::Internet);
     }
 }

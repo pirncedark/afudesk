@@ -1,0 +1,6 @@
+FASTPATH: 6/6 DONE
+OYUN_MODU: 7/7 DONE
+SONRAKI: 2/4 DONE
+   TODO        donanim_h264
+   TODO        otomatik_cozunurluk
+SONUÇ: NOT_READY

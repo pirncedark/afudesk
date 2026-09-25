@@ -102,6 +102,9 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
       case 'uyari':
         _kolSurucusuYok = true;
         _mesaj(o.metin);
+      case 'yeniden':
+        // Oturum sürüyor sayılır; izleyici dönünce 'baglandi' yeniden gelir.
+        _mesaj(o.metin);
     }
   }
 
@@ -300,6 +303,11 @@ Text('Oyun kolu: ${_kolSurucusuYok ? 'sürücü yok' : (_bagliOyunKolu ? 'açık
             const SizedBox(width: 6),
             Expanded(child: Text(_erisim, key: const Key('ver_erisim'), style: const TextStyle(color: Renk.soluk))),
           ]),
+          if (_erisim.contains('Yalnız aynı ağdan'))
+            const Padding(
+              padding: EdgeInsets.only(left: 26, top: 6),
+              child: Text('Farklı bir evden bağlanacaklar için modemde UPnP’yi açın ya da bağlantıyı karşı taraf versin.', key: Key('ver_ag_onerisi'), style: TextStyle(color: Renk.soluk)),
+            ),
           const SizedBox(height: 18),
           const Text('Biri bağlanmak istediğinde sana sorulacak. Onay vermeden kimse ekranını göremez.',
               style: TextStyle(color: Renk.soluk, fontSize: 13)),

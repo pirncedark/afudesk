@@ -7,7 +7,7 @@ use afudesk_core::{
     protokol::{FareTusu, Girdi, Izinler},
 };
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU32, Ordering},
     Arc, Mutex, OnceLock,
 };
 
@@ -28,8 +28,10 @@ static HOST: Mutex<Option<(host::Host, tokio::sync::mpsc::Sender<HostKomut>)>> =
 static IZLEYICI: Mutex<Option<Arc<izleyici::Izleyici>>> = Mutex::new(None);
 /// Dart son kareyi çizdi mi? (en-yeni-kazanır geri basıncı)
 static KARE_SERBEST: AtomicBool = AtomicBool::new(true);
+static IZLEYICI_KOL_IZNI: AtomicBool = AtomicBool::new(false);
+static IZLEYICI_KOL_SIRASI: AtomicU32 = AtomicU32::new(0);
 
-/// Host olayı. `tur`: hazir | istek | baglandi | koptu | hata | dosya.
+/// Host olayı. `tur`: hazir | istek | baglandi | koptu | hata | dosya | uyari | yeniden.
 #[derive(Debug, Clone, Default)]
 pub struct HostOlayi {
     pub tur: String,
@@ -43,12 +45,12 @@ pub struct HostOlayi {
     pub pano: bool,
     /// baglandi: dosya alma izni.
     pub dosya: bool,
-    /// dosya: al?nan dosyan?n tam yolu.
+    /// dosya: alınan dosyanın tam yolu.
     pub yol: String,
     pub oyun_kolu: bool,
 }
 
-/// ?zleyici olay?. `tur`: bekliyor | kabul | kare | istatistik | koptu | hata | pano | dosya.
+/// İzleyici olayı. `tur`: bekliyor | kabul | kare | istatistik (metin = yol) | yeniden | koptu | hata | pano | dosya.
 #[derive(Debug, Clone, Default)]
 pub struct IzleyiciOlayi {
     pub tur: String,
@@ -64,6 +66,7 @@ pub struct IzleyiciOlayi {
     pub rgba: Vec<u8>,
     /// kabul: dosya gönderme izni.
     pub dosya: bool,
+    pub oyun_kolu: bool,
     /// dosya: gönderilen/toplam bayt; `bitti` ise `metin` boşsa başarılı, doluysa hata.
     pub gonderilen: u64,
     pub toplam: u64,
@@ -100,6 +103,13 @@ fn host_dto(o: HostOlay) -> HostOlayi {
         HostOlay::Hata(m) => HostOlayi { tur: "hata".into(), metin: m, ..Default::default() },
         HostOlay::DosyaAlindi { ad, yol } => HostOlayi { tur: "dosya".into(), ad, yol, ..Default::default() },
         HostOlay::Uyari(m) => HostOlayi { tur: "uyari".into(), metin: m, ..Default::default() },
+        // Yol değişimi (doğrudan/relay): arayüz şimdilik göstermiyor.
+        HostOlay::Yol { yol, adres } => HostOlayi { tur: "yol".into(), metin: yol, yol: adres, ..Default::default() },
+        HostOlay::YenidenBekleniyor => HostOlayi {
+            tur: "yeniden".into(),
+            metin: "Bağlantı koptu; karşı taraf yeniden bağlanıyor…".into(),
+            ..Default::default()
+        },
     }
 }
 
@@ -132,8 +142,7 @@ pub fn host_baslat(ad: String, parola: String, upnp: bool, olaylar: StreamSink<H
     let fab: Arc<dyn afudesk_core::platform::Fabrika> = Arc::new(afudesk_core::platform::masaustu::Gercek);
     #[cfg(not(target_os = "android"))]
     {
-    let kimlik_dosyasi = dirs::data_local_dir().map(|p| p.join("AfuDesk").join("cihaz.json"));
-    let mut h = match rt().block_on(host::baslat(HostAyar { ad, port: 0, upnp, parola, yalniz_yerel: false, dosya_klasoru: None, kimlik_dosyasi }, fab)) {
+    let mut h = match rt().block_on(host::baslat(HostAyar { ad, upnp, parola, yalniz_yerel: false, dosya_klasoru: None }, fab)) {
         Ok(h) => h,
         Err(e) => return hata(&olaylar, format!("Bağlantı açılamadı: {e}")),
     };
@@ -183,6 +192,8 @@ pub fn host_durdur() {
 /// bu yüzden hata olay olarak yazılır.
 pub fn izleyici_baglan(kod: String, parola: String, ad: String, olaylar: StreamSink<IzleyiciOlayi>) {
     izleyici_kapat();
+    IZLEYICI_KOL_IZNI.store(false, Ordering::SeqCst);
+    IZLEYICI_KOL_SIRASI.store(0, Ordering::SeqCst);
     // Masaüstünde izleyici panosu arboard; Android'de yok (gelen metni Dart panoya yazar).
     #[cfg(not(target_os = "android"))]
     let pano = afudesk_core::pano::ArboardPano::new()
@@ -205,8 +216,9 @@ pub fn izleyici_baglan(kod: String, parola: String, ad: String, olaylar: StreamS
         while let Some(o) = alici.recv().await {
             let dto = match o {
                 IzleyiciOlay::OnayBekleniyor { karsi_ad } => IzleyiciOlayi { tur: "bekliyor".into(), ad: karsi_ad, ..Default::default() },
-                IzleyiciOlay::Kabul { izinler, genislik, yukseklik } => IzleyiciOlayi {
-                    tur: "kabul".into(), kontrol: izinler.kontrol, pano: izinler.pano, dosya: izinler.dosya, genislik, yukseklik, ..Default::default()
+                IzleyiciOlay::Kabul { izinler, genislik, yukseklik } => {
+                    IZLEYICI_KOL_IZNI.store(izinler.oyun_kolu, Ordering::SeqCst);
+                    IzleyiciOlayi { tur: "kabul".into(), kontrol: izinler.kontrol, pano: izinler.pano, dosya: izinler.dosya, oyun_kolu: izinler.oyun_kolu, genislik, yukseklik, ..Default::default() }
                 },
                 IzleyiciOlay::Kare { genislik, yukseklik, rgba } => {
                     // Dart önceki kareyi çizmediyse bunu atla; sıradaki daha yeni olacak.
@@ -215,9 +227,15 @@ pub fn izleyici_baglan(kod: String, parola: String, ad: String, olaylar: StreamS
                     }
                     IzleyiciOlayi { tur: "kare".into(), genislik, yukseklik, rgba, ..Default::default() }
                 }
-                IzleyiciOlay::Istatistik { rtt_ms, fps, gecikme_ms } => {
-                    IzleyiciOlayi { tur: "istatistik".into(), rtt_ms, fps, gecikme_ms, ..Default::default() }
+                // metin: kullanılan yol ("doğrudan" | "relay").
+                IzleyiciOlay::Istatistik { rtt_ms, fps, gecikme_ms, yol } => {
+                    IzleyiciOlayi { tur: "istatistik".into(), rtt_ms, fps, gecikme_ms, metin: yol, ..Default::default() }
                 }
+                IzleyiciOlay::YenidenBaglaniyor { deneme } => IzleyiciOlayi {
+                    tur: "yeniden".into(),
+                    metin: format!("Bağlantı koptu, yeniden bağlanılıyor… ({deneme})"),
+                    ..Default::default()
+                },
                 IzleyiciOlay::Koptu { sebep } => IzleyiciOlayi { tur: "koptu".into(), metin: sebep, ..Default::default() },
                 IzleyiciOlay::Pano(metin) => IzleyiciOlayi { tur: "pano".into(), metin, ..Default::default() },
                 IzleyiciOlay::Dosya { ad, gonderilen, toplam, bitti, hata } => IzleyiciOlayi {
@@ -257,6 +275,18 @@ pub fn izleyici_girdi(g: GirdiOlayi) {
         _ => return,
     };
     rt().spawn(async move { iz.gonder(girdi).await });
+}
+
+/// Dart'tan gelen oyun kolu durumunu mevcut datagram yoluna verir; sıra numarasını Rust atar.
+pub fn izleyici_kol(slot: u8, dugmeler: u16, sol_x: i16, sol_y: i16, sag_x: i16, sag_y: i16, sol_tetik: u8, sag_tetik: u8) {
+    if !IZLEYICI_KOL_IZNI.load(Ordering::SeqCst) { return; }
+    let Some(iz) = IZLEYICI.lock().unwrap().clone() else { return };
+    let sira = IZLEYICI_KOL_SIRASI.fetch_add(1, Ordering::SeqCst);
+    rt().spawn(async move {
+        iz.gonder(Girdi::Kol(afudesk_core::protokol::KolDurumu {
+            slot, sira, dugmeler, sol_x, sol_y, sag_x, sag_y, sol_tetik, sag_tetik,
+        })).await;
+    });
 }
 
 /// Dosyayı karşı tarafa gönderir; ilerleme/sonuç izleyici akışına `tur = "dosya"` olarak gelir.

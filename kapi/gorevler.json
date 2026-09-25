@@ -90,17 +90,21 @@
           ]
         },
         "rtt_yol_secimi": {
-          "ad": "Bilinen adres adayları arasında en düşük RTT'li yolun seçimi",
+          "ad": "En düşük RTT'li yolun seçimi (v1.3: iroh yol seçicisi — doğrudan yollar RTT'ye göre, relay yedek)",
           "kanit": [
             [
               "rust/src/ag.rs",
-              "fn en_iyi_yol"
+              "presets::N0"
+            ],
+            [
+              "rust/src/ag.rs",
+              "fn secili_yol"
             ]
           ],
           "testler": [
             [
               "cargo",
-              "en_dusuk_rtt_yolu_secer"
+              "ag::testler::dogru_kimlige_baglanir_ve_yol_dogrudan"
             ]
           ]
         },
@@ -201,7 +205,7 @@
             ],
             [
               "cargo",
-              "uctan_uca::oyun_kolu_hosta_ulasir"
+              "uctan_uca::disaridan_kol_durumu_hosta_ulasir"
             ]
           ]
         },
@@ -240,6 +244,155 @@
             [
               "flutter",
               "oyun kolu izin kutusu"
+            ]
+          ]
+        },
+        "telefon_kol": {
+          "ad": "Android Bluetooth ve dokunmatik kol, izin, çoklu dokunma ve sade bağlantı hatası",
+          "kanit": [
+            [
+              "app/kopru/src/api/afudesk.rs",
+              "izleyici_kol"
+            ],
+            [
+              "app/lib/oyun_kolu.dart",
+              "dugmeMaskesi"
+            ],
+            [
+              "app/android/app/src/main/kotlin/com/afu/afudesk/MainActivity.kt",
+              "dispatchGenericMotionEvent"
+            ],
+            [
+              "app/lib/bilesenler/oyun_kolu_katmani.dart",
+              "OyunKoluKatmani"
+            ],
+            [
+              "rust/src/ag.rs",
+              "pub const ULASILAMADI"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "uctan_uca::disaridan_kol_durumu_hosta_ulasir"
+            ],
+            [
+              "cargo",
+              "baglanti_hatasi_kullaniciya_teknik_ayrinti_gostermez"
+            ],
+            [
+              "flutter",
+              "eksen ve tetik değerleri XInput aralığına kırpılır"
+            ],
+            [
+              "flutter",
+              "XInput tuş maskesi D-pad, omuz ve yüz tuşlarını eşler"
+            ],
+            [
+              "flutter",
+              "dokunmatik kol katmanı aynı anda analog ve tuş basışını işler"
+            ],
+            [
+              "flutter",
+              "kol izni yoksa oyun kolu düğmesi pasif ve açıklamalı"
+            ],
+            [
+              "flutter",
+              "kol durumu değişince gönderilir, aynı durum yinelenmez"
+            ],
+            [
+              "flutter",
+              "hata metni temizlenir"
+            ]
+          ]
+        }
+      }
+    },
+    "WAN": {
+      "ad": "Farklı internet bağlantıları arasında ayarsız bağlantı",
+      "zorunlu": true,
+      "maddeler": {
+        "iroh_tasima": {
+          "ad": "Doğrudan + NAT delme + relay yedeği (iroh), kimlik koddan doğrulanır",
+          "kanit": [
+            [
+              "rust/src/ag.rs",
+              "presets::N0"
+            ],
+            [
+              "rust/src/kod.rs",
+              "relaylar"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "ag::testler::dogru_kimlige_baglanir_ve_yol_dogrudan"
+            ],
+            [
+              "cargo",
+              "ag::testler::yanlis_kimlik_reddedilir"
+            ]
+          ]
+        },
+        "relay_zorlama": {
+          "ad": "Doğrudan yol kapatılınca relay'e düşme (AFUDESK_SADECE_RELAY)",
+          "kanit": [
+            [
+              "rust/src/ag.rs",
+              "SADECE_RELAY_ORTAM"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "ag::testler::ortam_degiskeni_relay_zorlar"
+            ]
+          ]
+        },
+        "yeniden_baglanma": {
+          "ad": "Kopunca onay sormadan yeniden bağlanma; görüntü ve girdi sürer",
+          "kanit": [
+            [
+              "rust/src/izleyici.rs",
+              "fn yeniden_kur"
+            ],
+            [
+              "rust/src/host.rs",
+              "DEVAM_SURESI"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "uctan_uca::kopunca_onay_sormadan_yeniden_baglanir_goruntu_ve_girdi_surer"
+            ],
+            [
+              "cargo",
+              "uctan_uca::izleyici_kapatinca_yeniden_baglanmaz_host_yeni_kod_uretir"
+            ],
+            [
+              "cargo",
+              "uctan_uca::eski_bilet_devam_yerine_kullanilamaz"
+            ]
+          ]
+        },
+        "arayuz": {
+          "ad": "Oturumda yeniden bağlanma ve 'aktarmalı' göstergesi",
+          "kanit": [
+            [
+              "app/lib/sayfalar/oturum.dart",
+              "oturum_yeniden"
+            ]
+          ],
+          "testler": [
+            [
+              "flutter",
+              "bağlantı kopunca yeniden bağlanma gösterilir"
+            ],
+            [
+              "flutter",
+              "aktarmalı"
             ]
           ]
         }

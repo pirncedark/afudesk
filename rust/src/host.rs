@@ -1,9 +1,10 @@
-//! Bağlantı veren taraf. Kendi QUIC sunucusunu açar, kodu üretir, gelen isteği
-//! kullanıcı onayına sunar, onaylanırsa ekranı yayınlar ve (izin varsa) girdiyi uygular,
-//! panoyu karşı tarafla paylaşır.
+//! Bağlantı veren taraf. iroh uç noktası açar (doğrudan + NAT delme + relay yedeği),
+//! kodu üretir, gelen isteği kullanıcı onayına sunar, onaylanırsa ekranı yayınlar ve
+//! (izin varsa) girdiyi uygular, panoyu karşı tarafla paylaşır. Bağlantı istemeden
+//! koparsa aynı izleyici `DEVAM_SURESI` içinde onay sorulmadan geri dönebilir.
 use crate::{
-    adres::{self, UpnpDurum},
-    ag, dosya,
+    ag::{self, Baglanti, GonderAkisi, Kurulum},
+    dosya, guvenilen, kimlik,
     goruntu::Kodlayici,
     kod::{self, Davet},
     pano::{Esitleyici, PANO_ARALIGI},
@@ -11,20 +12,28 @@ use crate::{
     protokol::{self, Izinler, Kontrol, SURUM},
 };
 use anyhow::Result;
+use iroh::{Endpoint, EndpointId};
 use std::{
-    net::SocketAddr,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::Duration,
 };
 use tokio::sync::{mpsc, oneshot};
 
-pub const VARSAYILAN_PORT: u16 = 47_470;
 /// Kullanıcı bağlantı isteğine bu sürede yanıt vermezse istek reddedilir.
 pub const ONAY_SURESI: Duration = Duration::from_secs(60);
+/// İstemeden kopan oturuma izleyicinin onaysız geri dönebileceği süre.
+pub const DEVAM_SURESI: Duration = Duration::from_secs(60);
+/// Kod üretmeden önce relay'e bağlanmak için beklenen en uzun süre.
+const CEVRIMICI_BEKLE: Duration = Duration::from_secs(8);
 pub const HEDEF_FPS: u64 = 15;
 /// Aynı anda yolda olabilecek kare sayısı; aşılırsa en eski kare iptal edilir.
 pub const AZAMI_UCUSTA: usize = 3;
+/// Uygulama kapanış kodu: "ağ değişti, geri döneceğim" — oturum devam bekler.
+pub const KOPUS_KODU: u32 = 2;
 
 /// Yayın ayarı: otomatik kalite döngüsü yazar, kodlayıcı iş parçacığı okur.
 struct YayinAyari {
@@ -57,6 +66,8 @@ pub enum HostOlay {
     },
     Istek {
         ad: String,
+        /// Kayıtlı (daha önce eşleşmiş) cihaz, kod olmadan bağlanmak istiyor.
+        kayitli: bool,
     },
     Baglandi {
         ad: String,
@@ -66,12 +77,19 @@ pub enum HostOlay {
         sebep: String,
     },
     Hata(String),
-    /// Dosya al?nd?.
+    /// Dosya alındı.
     DosyaAlindi {
         ad: String,
         yol: String,
     },
     Uyari(String),
+    /// Bağlantı istemeden koptu; izleyicinin geri dönmesi bekleniyor (`DEVAM_SURESI`).
+    YenidenBekleniyor,
+    /// Oturumda veri taşıyan yol değişti: `yol` "doğrudan" | "relay", `adres` karşı uç.
+    Yol {
+        yol: String,
+        adres: String,
+    },
 }
 
 pub enum HostKomut {
@@ -82,23 +100,28 @@ pub enum HostKomut {
 
 pub struct HostAyar {
     pub ad: String,
-    /// 0 = VARSAYILAN_PORT'tan başlayarak boş port ara.
-    pub port: u16,
+    /// Modemde UPnP/PCP/NAT-PMP ile port açmayı dene (doğrudan yol şansını artırır).
     pub upnp: bool,
     /// Boşsa rastgele 6 hane.
     pub parola: String,
-    /// Testler için: kodda yalnız 127.0.0.1 olsun, UPnP denenmesin.
+    /// Testler için: relay yok, kodda yalnız 127.0.0.1 olsun, dışarı istek çıkmasın.
     pub yalniz_yerel: bool,
     /// Alınan dosyaların klasörü; `None` = İndirilenler\AfuDesk.
     pub dosya_klasoru: Option<PathBuf>,
-    /// Kalıcı TLS kimliği için dosya yolu; üretimde Dart uygulama veri dizinini verir.
-    pub kimlik_dosyasi: Option<PathBuf>,
+    /// Kalıcı cihaz kimliği ve kayıtlı cihazlar bu klasörde. `None`: her açılışta yeni
+    /// kimlik, cihaz kaydı yok (yalnız kodla bağlanılır).
+    pub veri_klasoru: Option<PathBuf>,
+    /// Kodla bağlantı kabul edilsin mi. Uygulama arka planda yalnız kayıtlı cihazları
+    /// dinlerken `false`; "Bağlantı ver" ekranı açılınca `Host::kod_ac(true)`.
+    pub kod_acik: bool,
 }
 
 pub struct Host {
     pub olaylar: mpsc::Receiver<HostOlay>,
     komut: mpsc::Sender<HostKomut>,
     durdur: Option<oneshot::Sender<()>>,
+    kod_acik: Arc<AtomicBool>,
+    kimlik: EndpointId,
 }
 
 impl Host {
@@ -114,6 +137,14 @@ impl Host {
             let _ = d.send(());
         }
     }
+    /// Kodla bağlantıyı aç/kapat (kayıtlı cihazlar her durumda onayla bağlanabilir).
+    pub fn kod_ac(&self, acik: bool) {
+        self.kod_acik.store(acik, Ordering::SeqCst);
+    }
+    /// Bu host'un cihaz kimliği (kalıcı `veri_klasoru` verildiyse her açılışta aynı).
+    pub fn kimlik(&self) -> String {
+        ag::kimlik_metni(self.kimlik)
+    }
 }
 
 impl Drop for Host {
@@ -122,97 +153,113 @@ impl Drop for Host {
     }
 }
 
-fn bagla_port(kimlik: &ag::Kimlik, istek: u16) -> Result<quinn::Endpoint> {
-    let adaylar: Vec<u16> = if istek == 0 {
-        (VARSAYILAN_PORT..VARSAYILAN_PORT + 20)
-            .chain(std::iter::once(0))
-            .collect()
-    } else {
-        vec![istek]
-    };
-    let mut son = None;
-    for p in adaylar {
-        match ag::sunucu(kimlik, SocketAddr::from(([0, 0, 0, 0], p))) {
-            Ok(e) => return Ok(e),
-            Err(e) => son = Some(e),
-        }
-    }
-    Err(son.unwrap_or_else(|| anyhow::anyhow!("port açılamadı")))
-}
-
 pub async fn baslat(ayar: HostAyar, fabrika: Arc<dyn Fabrika>) -> Result<Host> {
     let (olay_tx, olaylar) = mpsc::channel(32);
     let (komut, komut_rx) = mpsc::channel(8);
     let (durdur_tx, durdur_rx) = oneshot::channel();
-    let kimlik = match ayar.kimlik_dosyasi.as_deref() {
-        Some(p) => crate::kimlik::yukle_veya_uret(p, &ayar.ad)?.tls,
-        None => ag::yeni_kimlik()?,
+    let kurulum = if ayar.yalniz_yerel {
+        Kurulum::YalnizYerel
+    } else {
+        Kurulum::ortamdan()
     };
-    let ep4 = bagla_port(&kimlik, ayar.port)?;
-    let port = ep4.local_addr()?.port();
-    // IPv6 aynı portta ayrı uç nokta (Windows'ta çift yığın varsayılan değil); açılamazsa önemsiz.
-    let ep6 = ag::sunucu(&kimlik, SocketAddr::from(([0u16; 8], port))).ok();
+    let gizli = match &ayar.veri_klasoru {
+        Some(v) => Some(kimlik::yukle_veya_uret(&v.join(kimlik::HOST_DOSYASI))?.gizli),
+        None => None,
+    };
+    let ep = ag::uc_nokta_kimlikli(kurulum, ayar.upnp, gizli).await?;
+    let kod_acik = Arc::new(AtomicBool::new(ayar.kod_acik));
+    let kimlik = ep.id();
     tokio::spawn(calis(
-        ayar, fabrika, kimlik, ep4, ep6, olay_tx, komut_rx, durdur_rx,
+        ayar,
+        fabrika,
+        kurulum,
+        ep,
+        olay_tx,
+        komut_rx,
+        durdur_rx,
+        kod_acik.clone(),
     ));
     Ok(Host {
         olaylar,
         komut,
         durdur: Some(durdur_tx),
+        kod_acik,
+        kimlik,
     })
 }
 
-async fn adresleri_topla(
-    ayar: &HostAyar,
-    port: u16,
-) -> (Vec<String>, UpnpDurum, Option<adres::UpnpEslemesi>) {
-    if ayar.yalniz_yerel {
-        return (vec![format!("127.0.0.1:{port}")], UpnpDurum::Kapali, None);
+/// Koda yazılacak doğrudan adresler ve relay adresleri.
+fn adresleri_topla(ep: &Endpoint, kurulum: Kurulum) -> (Vec<String>, Vec<String>) {
+    match kurulum {
+        Kurulum::YalnizYerel => (
+            ep.bound_sockets()
+                .iter()
+                .filter(|a| a.ip().is_loopback())
+                .map(|a| a.to_string())
+                .collect(),
+            vec![],
+        ),
+        _ => ag::yayinlanacak(ep),
     }
-    let mut adresler = Vec::new();
-    let yerel = adres::yerel_ipv4();
-    if let Some(a) = yerel {
-        adresler.push(format!("{a}:{port}"));
-    }
-    let (durum, eslesme) = match (ayar.upnp, yerel) {
-        (true, Some(a)) => match adres::upnp_ac(a, port).await {
-            Ok(e) => {
-                adresler.push(e.dis_adres.to_string());
-                (UpnpDurum::Acik(e.dis_adres.to_string()), Some(e))
-            }
-            Err(s) => (UpnpDurum::Yok(s), None),
-        },
-        _ => (UpnpDurum::Kapali, None),
-    };
-    for a6 in adres::genel_ipv6() {
-        adresler.push(SocketAddr::from((a6, port)).to_string());
-    }
-    let durum = if matches!(durum, UpnpDurum::Acik(_)) || adres::genel_ipv6().is_empty() {
-        durum
+}
+
+pub fn erisim_aciklamasi(relay_var: bool, yalniz_yerel: bool) -> String {
+    if yalniz_yerel {
+        "Yalnız bu bilgisayardan (test)".into()
+    } else if relay_var {
+        "İnternetten ulaşılabilir: önce doğrudan bağlantı denenir, olmazsa relay üzerinden".into()
     } else {
-        UpnpDurum::Acik("IPv6".into())
-    };
-    (adresler, durum, eslesme)
+        "Yalnız aynı ağdan ulaşılabilir — relay sunucusuna ulaşılamadı (internet var mı?)".into()
+    }
+}
+
+/// İzleyicinin onaysız geri dönebilmesi için saklanan oturum bilgisi.
+#[derive(Clone)]
+struct DevamBilgisi {
+    jeton: String,
+    kimlik: EndpointId,
+    izinler: Izinler,
+    ad: String,
+}
+
+/// Kodla ilk kez bağlanan izleyiciye verilecek kayıt bilgisi (veri klasörü varsa).
+struct KayitVerisi {
+    veri: PathBuf,
+    host_ad: String,
+    adresler: Vec<String>,
+    relaylar: Vec<String>,
+}
+
+enum Giris<'a> {
+    /// Koddaki tek kullanımlık bilet; kayıtlı cihazlar da bu durumda bağlanabilir.
+    Yeni {
+        bilet: &'a str,
+        kayit: Option<&'a KayitVerisi>,
+    },
+    Devam(&'a DevamBilgisi),
+}
+
+/// Onayı verilen oturumun türü.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Tur {
+    Kod,
+    Kayitli,
+    Devam,
 }
 
 #[allow(clippy::too_many_arguments)]
 async fn calis(
     ayar: HostAyar,
     fabrika: Arc<dyn Fabrika>,
-    kimlik: ag::Kimlik,
-    ep4: quinn::Endpoint,
-    ep6: Option<quinn::Endpoint>,
+    kurulum: Kurulum,
+    ep: Endpoint,
     olay: mpsc::Sender<HostOlay>,
     mut komut: mpsc::Receiver<HostKomut>,
     mut durdur: oneshot::Receiver<()>,
+    kod_acik: Arc<AtomicBool>,
 ) {
-    let port = ep4.local_addr().map(|a| a.port()).unwrap_or(0);
-    let (adresler, erisim, eslesme) = adresleri_topla(&ayar, port).await;
-    if adresler.is_empty() {
-        let _ = olay
-            .send(HostOlay::Hata("Ağ bağlantısı bulunamadı.".into()))
-            .await;
-        return;
+    if kurulum != Kurulum::YalnizYerel {
+        ag::cevrimici(&ep, CEVRIMICI_BEKLE).await;
     }
     let klasor = ayar
         .dosya_klasoru
@@ -223,14 +270,79 @@ async fn calis(
     } else {
         ayar.parola.trim().to_owned()
     };
+    let mut devam: Option<DevamBilgisi> = None;
 
     'kod: loop {
+        // Kopan oturum: yeni kod üretmeden önce izleyicinin geri dönmesini bekle.
+        if let Some(d) = devam.take() {
+            let _ = olay.send(HostOlay::YenidenBekleniyor).await;
+            let bitis = tokio::time::Instant::now() + DEVAM_SURESI;
+            let sonuc = loop {
+                let gelen = tokio::select! {
+                    _ = &mut durdur => break 'kod,
+                    _ = tokio::time::sleep_until(bitis) => break None,
+                    g = ep.accept() => g,
+                };
+                let Some(gelen) = gelen else { break 'kod };
+                let Ok(Ok(baglanti)) = tokio::time::timeout(Duration::from_secs(10), gelen).await
+                else {
+                    continue;
+                };
+                match oturum(
+                    &baglanti,
+                    Giris::Devam(&d),
+                    &fabrika,
+                    &klasor,
+                    &kod_acik,
+                    &olay,
+                    &mut komut,
+                    &mut durdur,
+                )
+                .await
+                {
+                    Oturum::Reddedildi => continue,
+                    s => break Some(s),
+                }
+            };
+            match sonuc {
+                Some(Oturum::Durdur) => break 'kod,
+                Some(Oturum::Koptu(d2)) => {
+                    devam = Some(d2);
+                    continue 'kod;
+                }
+                Some(Oturum::Bitti(sebep)) => {
+                    let _ = olay.send(HostOlay::Koptu { sebep }).await;
+                }
+                Some(Oturum::Reddedildi) | None => {
+                    let _ = olay
+                        .send(HostOlay::Koptu {
+                            sebep: "Bağlantı koptu; karşı taraf geri dönmedi.".into(),
+                        })
+                        .await;
+                }
+            }
+        }
+
+        let (adresler, relaylar) = adresleri_topla(&ep, kurulum);
+        if adresler.is_empty() && relaylar.is_empty() {
+            let _ = olay
+                .send(HostOlay::Hata("Ağ bağlantısı bulunamadı.".into()))
+                .await;
+            break;
+        }
         let bilet = kod::yeni_bilet();
+        let kayit = ayar.veri_klasoru.clone().map(|veri| KayitVerisi {
+            veri,
+            host_ad: ayar.ad.clone(),
+            adresler: adresler.clone(),
+            relaylar: relaylar.clone(),
+        });
         let davet = Davet {
-            v: 2,
+            v: kod::DAVET_SURUMU,
             ad: ayar.ad.clone(),
             adresler: adresler.clone(),
-            parmak_izi: kimlik.parmak_izi.clone(),
+            parmak_izi: ag::kimlik_metni(ep.id()),
+            relaylar: relaylar.clone(),
             bilet: bilet.clone(),
             bitis: kod::simdi() + kod::GECERLILIK_SN,
         };
@@ -246,7 +358,7 @@ async fn calis(
                 kod: metin,
                 parola: parola.clone(),
                 adresler: adresler.clone(),
-                erisim: erisim.aciklama(),
+                erisim: erisim_aciklamasi(!relaylar.is_empty(), kurulum == Kurulum::YalnizYerel),
             })
             .await;
         let bitis = tokio::time::Instant::now() + Duration::from_secs(kod::GECERLILIK_SN as u64);
@@ -254,8 +366,7 @@ async fn calis(
             let gelen = tokio::select! {
                 _ = &mut durdur => break 'kod,
                 _ = tokio::time::sleep_until(bitis) => continue 'kod, // süre doldu: yeni kod
-                g = ep4.accept() => g,
-                g = async { match &ep6 { Some(e) => e.accept().await, None => std::future::pending().await } } => g,
+                g = ep.accept() => g,
             };
             let Some(gelen) = gelen else { break 'kod };
             let Ok(Ok(baglanti)) = tokio::time::timeout(Duration::from_secs(10), gelen).await
@@ -264,9 +375,13 @@ async fn calis(
             };
             match oturum(
                 &baglanti,
-                &bilet,
+                Giris::Yeni {
+                    bilet: &bilet,
+                    kayit: kayit.as_ref(),
+                },
                 &fabrika,
                 &klasor,
+                &kod_acik,
                 &olay,
                 &mut komut,
                 &mut durdur,
@@ -278,23 +393,34 @@ async fn calis(
                     let _ = olay.send(HostOlay::Koptu { sebep }).await;
                     continue 'kod; // bilet kullanıldı: yeni kod
                 }
+                Oturum::Koptu(d) => {
+                    devam = Some(d);
+                    continue 'kod;
+                }
                 Oturum::Durdur => break 'kod,
             }
         }
     }
-    ep4.close(0u32.into(), b"kapandi");
-    if let Some(e) = ep6 {
-        e.close(0u32.into(), b"kapandi");
-    }
-    if let Some(e) = eslesme {
-        e.kapat().await;
-    }
+    ep.close().await;
 }
 
 enum Oturum {
     Reddedildi,
     Bitti(String),
+    /// Bağlantı istemeden koptu; izleyici geri dönebilir.
+    Koptu(DevamBilgisi),
     Durdur,
+}
+
+/// Bağlantı ağ yüzünden mi koptu (zaman aşımı, sıfırlama) yoksa karşı taraf mı kapattı?
+/// Karşı taraf `KOPUS_KODU` ile kapattıysa ("ağ değişti, döneceğim") da istemsiz sayılır.
+pub(crate) fn istemsiz_kopus(c: &Baglanti) -> bool {
+    use iroh::endpoint::ConnectionError as H;
+    match c.close_reason() {
+        Some(H::ApplicationClosed(k)) => k.error_code == KOPUS_KODU.into(),
+        Some(H::LocallyClosed) | None => false,
+        Some(_) => true,
+    }
 }
 
 fn sabit_zamanli_esit(a: &str, b: &str) -> bool {
@@ -305,7 +431,7 @@ fn sabit_zamanli_esit(a: &str, b: &str) -> bool {
             == 0
 }
 
-async fn reddet(w: &mut quinn::SendStream, c: &quinn::Connection, sebep: &str) {
+async fn reddet(w: &mut GonderAkisi, c: &Baglanti, sebep: &str) {
     let _ = protokol::yaz(w, &Kontrol::Red(sebep.to_owned())).await;
     let _ = w.finish();
     // Karşı tarafın Red'i okuyabilmesi için kısa süre bekle.
@@ -314,10 +440,11 @@ async fn reddet(w: &mut quinn::SendStream, c: &quinn::Connection, sebep: &str) {
 }
 
 async fn oturum(
-    c: &quinn::Connection,
-    bilet: &str,
+    c: &Baglanti,
+    giris: Giris<'_>,
     fabrika: &Arc<dyn Fabrika>,
     klasor: &Path,
+    kod_acik: &AtomicBool,
     olay: &mpsc::Sender<HostOlay>,
     komut: &mut mpsc::Receiver<HostKomut>,
     durdur: &mut oneshot::Receiver<()>,
@@ -326,47 +453,129 @@ async fn oturum(
     else {
         return Oturum::Reddedildi;
     };
-    let merhaba =
+    let ilk =
         tokio::time::timeout(Duration::from_secs(10), protokol::oku::<_, Kontrol>(&mut r)).await;
-    let Ok(Ok(Some(Kontrol::Merhaba {
-        surum,
-        bilet: gelen,
-        ad,
-    }))) = merhaba
-    else {
-        c.close(1u32.into(), b"protokol");
-        return Oturum::Reddedildi;
-    };
-    if surum != SURUM {
-        reddet(
-            &mut w,
-            c,
-            "AfuDesk sürümleri uyuşmuyor; iki taraf da güncellemeli.",
-        )
-        .await;
-        return Oturum::Reddedildi;
-    }
-    if !sabit_zamanli_esit(&gelen, bilet) {
-        reddet(&mut w, c, "Kod geçersiz ya da daha önce kullanılmış.").await;
-        return Oturum::Reddedildi;
-    }
-    let ad: String = ad.chars().filter(|c| !c.is_control()).take(40).collect();
-    let _ = olay.send(HostOlay::Istek { ad: ad.clone() }).await;
-    // Bekleyen eski komutları at.
-    while komut.try_recv().is_ok() {}
-    let karar = tokio::select! {
-        _ = &mut *durdur => return Oturum::Durdur,
-        k = tokio::time::timeout(ONAY_SURESI, komut.recv()) => k,
-    };
-    let izinler = match karar {
-        Ok(Some(HostKomut::Kabul(i))) => i,
-        Ok(Some(HostKomut::Red)) | Ok(Some(HostKomut::Kes)) => {
-            reddet(&mut w, c, "Karşı taraf bağlantıyı reddetti.").await;
+    const SURUM_FARKLI: &str = "AfuDesk sürümleri uyuşmuyor; iki taraf da güncellemeli.";
+    const OTURUM_BITTI: &str = "Oturum sona ermiş; yeni kod iste.";
+    const KOD_GECERSIZ: &str = "Kod geçersiz ya da daha önce kullanılmış.";
+    const KOD_KAPALI: &str =
+        "Karşı taraf şu an bağlantı vermiyor. AfuDesk'te \"Bağlantı ver\"i açmasını iste.";
+    const MESGUL: &str = "Karşı taraf şu an başka bir bağlantıda. Biraz sonra yeniden dene.";
+    // (ad, önceden verilmiş izinler, tür): devam eden oturumda onay yeniden sorulmaz.
+    let (ad, onceki, tur) = match (ilk, &giris) {
+        (Ok(Ok(Some(Kontrol::Merhaba { surum, bilet: gelen, ad }))), Giris::Yeni { bilet, .. }) => {
+            if surum != SURUM {
+                reddet(&mut w, c, SURUM_FARKLI).await;
+                return Oturum::Reddedildi;
+            }
+            if !kod_acik.load(Ordering::SeqCst) {
+                reddet(&mut w, c, KOD_KAPALI).await;
+                return Oturum::Reddedildi;
+            }
+            if !sabit_zamanli_esit(&gelen, bilet) {
+                reddet(&mut w, c, KOD_GECERSIZ).await;
+                return Oturum::Reddedildi;
+            }
+            (ad, None, Tur::Kod)
+        }
+        (
+            Ok(Ok(Some(Kontrol::MerhabaKayitli { surum, jeton, ad }))),
+            Giris::Yeni { kayit, .. },
+        ) => {
+            if surum != SURUM {
+                reddet(&mut w, c, SURUM_FARKLI).await;
+                return Oturum::Reddedildi;
+            }
+            let Some(k) = kayit else {
+                reddet(&mut w, c, guvenilen::GECERSIZ).await;
+                return Oturum::Reddedildi;
+            };
+            // Cihaz kimliği el sıkışmada doğrulandı; jeton bu kimliğe bağlı.
+            let izleyici = ag::kimlik_metni(c.remote_id());
+            let kayitlar = guvenilen::oku(&guvenilen::kayit_yolu(&k.veri));
+            match kayitlar.hostlar.iter().find(|h| h.izleyici_kimlik == izleyici) {
+                None => {
+                    reddet(&mut w, c, guvenilen::KALDIRILDI).await;
+                    return Oturum::Reddedildi;
+                }
+                Some(h) if !guvenilen::jeton_dogrula(&jeton, &h.jeton_sha256) => {
+                    reddet(&mut w, c, guvenilen::GECERSIZ).await;
+                    return Oturum::Reddedildi;
+                }
+                Some(_) => (ad, None, Tur::Kayitli),
+            }
+        }
+        (Ok(Ok(Some(Kontrol::Devam { surum, jeton, .. }))), Giris::Devam(d)) => {
+            if surum != SURUM {
+                reddet(&mut w, c, SURUM_FARKLI).await;
+                return Oturum::Reddedildi;
+            }
+            // Jeton + cihaz kimliği birlikte: jetonu ele geçiren başka cihaz dönemez.
+            if !sabit_zamanli_esit(&jeton, &d.jeton) || c.remote_id() != d.kimlik {
+                reddet(&mut w, c, OTURUM_BITTI).await;
+                return Oturum::Reddedildi;
+            }
+            (d.ad.clone(), Some(d.izinler.clone()), Tur::Devam)
+        }
+        (Ok(Ok(Some(Kontrol::Devam { .. }))), Giris::Yeni { .. }) => {
+            reddet(&mut w, c, OTURUM_BITTI).await;
+            return Oturum::Reddedildi;
+        }
+        (Ok(Ok(Some(Kontrol::MerhabaKayitli { .. }))), Giris::Devam(_)) => {
+            reddet(&mut w, c, MESGUL).await;
+            return Oturum::Reddedildi;
+        }
+        (Ok(Ok(Some(Kontrol::Merhaba { .. }))), Giris::Devam(_)) => {
+            reddet(&mut w, c, KOD_GECERSIZ).await;
             return Oturum::Reddedildi;
         }
         _ => {
-            reddet(&mut w, c, "Karşı taraf zamanında yanıt vermedi.").await;
+            c.close(1u32.into(), b"protokol");
             return Oturum::Reddedildi;
+        }
+    };
+    let ad: String = ad.chars().filter(|c| !c.is_control()).take(40).collect();
+    let izinler = match onceki {
+        Some(i) => i,
+        None => {
+            // Bekleyen eski komutları İSTEKTEN ÖNCE at: sonra atılsaydı, isteği görüp hemen
+            // verilen onay da silinebilirdi (yarış).
+            while komut.try_recv().is_ok() {}
+            let _ = olay
+                .send(HostOlay::Istek {
+                    ad: ad.clone(),
+                    kayitli: tur == Tur::Kayitli,
+                })
+                .await;
+            let karar = tokio::select! {
+                _ = &mut *durdur => return Oturum::Durdur,
+                k = tokio::time::timeout(ONAY_SURESI, komut.recv()) => k,
+            };
+            match karar {
+                Ok(Some(HostKomut::Kabul(i))) => i,
+                Ok(Some(HostKomut::Red)) | Ok(Some(HostKomut::Kes)) => {
+                    reddet(&mut w, c, "Karşı taraf bağlantıyı reddetti.").await;
+                    return Oturum::Reddedildi;
+                }
+                _ => {
+                    reddet(&mut w, c, "Karşı taraf zamanında yanıt vermedi.").await;
+                    return Oturum::Reddedildi;
+                }
+            }
+        }
+    };
+    let devam_bilgisi = DevamBilgisi {
+        jeton: kod::yeni_bilet(),
+        kimlik: c.remote_id(),
+        izinler: izinler.clone(),
+        ad: ad.clone(),
+    };
+    // Bağlantı istemeden koptuysa izleyici geri dönebilsin; kapatıldıysa oturum biter.
+    let kopus = |sebep: &str| {
+        if istemsiz_kopus(c) {
+            Oturum::Koptu(devam_bilgisi.clone())
+        } else {
+            Oturum::Bitti(sebep.to_owned())
         }
     };
     // Görüntü: yakalayıcı kendi iş parçacığında oluşturulur (platform tutamaçları Send değil).
@@ -436,19 +645,62 @@ async fn oturum(
             return Oturum::Bitti("Ekran yakalanamadı.".into());
         }
     };
-    if protokol::yaz(
-        &mut w,
-        &Kontrol::Kabul {
-            izinler: izinler.clone(),
-            genislik,
-            yukseklik,
-        },
-    )
-    .await
-    .is_err()
+    // Jeton Kabul'den ÖNCE gider: izleyici Kabul'ü gördüğünde geri dönüş jetonu hazırdır
+    // (hemen ardından kopan bağlantı da devam edebilir).
+    if protokol::yaz(&mut w, &Kontrol::DevamJetonu(devam_bilgisi.jeton.clone()))
+        .await
+        .is_err()
+        || protokol::yaz(
+            &mut w,
+            &Kontrol::Kabul {
+                izinler: izinler.clone(),
+                genislik,
+                yukseklik,
+            },
+        )
+        .await
+        .is_err()
     {
         yayin_dur.store(true, std::sync::atomic::Ordering::Relaxed);
-        return Oturum::Bitti("Bağlantı koptu.".into());
+        return kopus("Bağlantı koptu.");
+    }
+    if let Giris::Yeni { kayit: Some(k), .. } = &giris {
+        let yol = guvenilen::kayit_yolu(&k.veri);
+        let izleyici = ag::kimlik_metni(c.remote_id());
+        match tur {
+            Tur::Kod => {
+                // Cihazlar birbirini hatırlasın: bundan sonra kod gerekmez (onay yine sorulur).
+                let jeton = guvenilen::yeni_jeton();
+                let simdi = guvenilen::simdi();
+                let kayit = guvenilen::HostKaydi {
+                    izleyici_kimlik: izleyici,
+                    ad: ad.clone(),
+                    jeton_sha256: guvenilen::jeton_ozeti(&jeton),
+                    eklenme: simdi,
+                    son_gorulme: simdi,
+                };
+                if guvenilen::guncelle(&yol, |kk| guvenilen::hosta_ekle(kk, kayit)).is_ok() {
+                    let _ = protokol::yaz(
+                        &mut w,
+                        &Kontrol::KayitJetonu {
+                            host_ad: k.host_ad.clone(),
+                            adresler: k.adresler.clone(),
+                            relaylar: k.relaylar.clone(),
+                            jeton,
+                        },
+                    )
+                    .await;
+                }
+            }
+            Tur::Kayitli => {
+                let _ = guvenilen::guncelle(&yol, |kk| {
+                    if let Some(h) = kk.hostlar.iter_mut().find(|h| h.izleyici_kimlik == izleyici) {
+                        h.son_gorulme = guvenilen::simdi();
+                    }
+                });
+            }
+            Tur::Devam => {}
+        }
     }
     let _ = olay
         .send(HostOlay::Baglandi {
@@ -495,7 +747,7 @@ async fn oturum(
                     ucusta.push_back(Ucusta { konumlar, iptal: Some(iptal), gorev });
                 }
                 _ = olcum.tick() => {
-                    let rtt = c2.rtt().as_millis().min(u32::MAX as u128) as u32;
+                    let rtt = ag::rtt(&c2).as_millis().min(u32::MAX as u128) as u32;
                     let (k, f) = uyarla(
                         ayar.kalite.load(std::sync::atomic::Ordering::Relaxed),
                         ayar.fps.load(std::sync::atomic::Ordering::Relaxed),
@@ -579,6 +831,8 @@ async fn oturum(
     let mut kol_siralari = std::collections::HashMap::<u8, u32>::new();
     let mut titresim_araligi = tokio::time::interval(Duration::from_millis(50));
     titresim_araligi.tick().await;
+    let mut yol_olcum = tokio::time::interval(Duration::from_secs(1));
+    let mut son_yol = (String::new(), String::new());
     let sonuc = loop {
         tokio::select! {
             _ = &mut *durdur => { c.close(0u32.into(), b"durdu"); break Oturum::Durdur; }
@@ -613,14 +867,15 @@ async fn oturum(
                 Some(Kontrol::Pano(metin)) => {
                     if let Some(p) = pano.as_mut() { let _ = tokio::task::block_in_place(|| p.gelen(&metin)); }
                 }
-                Some(Kontrol::Kapat(_)) | None => break Oturum::Bitti("\u{0130}zleyici ba\u{011F}lant\u{0131}y\u{0131} kapatt\u{0131}.".into()),
+                Some(Kontrol::Kapat(_)) => break Oturum::Bitti("İzleyici bağlantıyı kapattı.".into()),
+                None => break kopus("İzleyici bağlantıyı kapattı."),
                 Some(_) => {}
             },
             _ = pano_saat.tick(), if pano.is_some() => {
                 let yeni = pano.as_mut().and_then(|p| tokio::task::block_in_place(|| p.yokla()));
                 if let Some(metin) = yeni {
                     if protokol::yaz(&mut w, &Kontrol::Pano(metin)).await.is_err() {
-                        break Oturum::Bitti("Bağlantı koptu.".into());
+                        break kopus("Bağlantı koptu.");
                     }
                 }
             },
@@ -637,6 +892,13 @@ async fn oturum(
                 },
                 Err(_) => {}
             },
+            _ = yol_olcum.tick() => {
+                let yeni = (ag::secili_yol(c).0.ad().to_owned(), ag::secili_yol_adresi(c));
+                if !yeni.1.is_empty() && yeni != son_yol {
+                    son_yol = yeni.clone();
+                    let _ = olay.send(HostOlay::Yol { yol: yeni.0, adres: yeni.1 }).await;
+                }
+            }
             _ = titresim_araligi.tick() => {
                 if let Some(s) = sanal_kol.as_mut() {
                     for (slot, buyuk, kucuk) in s.titresim_al() {
@@ -646,6 +908,8 @@ async fn oturum(
             }
         }
     };
+    #[cfg(test)]
+    eprintln!("[host] oturum bitti: kapanis={:?}", c.close_reason());
     okuyucu.abort();
     yayin_dur.store(true, std::sync::atomic::Ordering::Relaxed);
     yayin.abort();

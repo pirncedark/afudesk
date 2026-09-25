@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:afudesk/motor.dart';
+import 'package:afudesk/oyun_kolu.dart';
 
 /// Testler için motor: olayları testin kendisi basar, çağrıları kaydeder.
 class SahteMotor implements Motor {
@@ -8,6 +9,7 @@ class SahteMotor implements Motor {
   final izleyici = StreamController<IzleyiciOlay>.broadcast(sync: true);
   final cagrilar = <String>[];
   final girdiler = <Girdi>[];
+  final oyunKoluDurumlari = <OyunKoluDurumu>[];
   Object? baglanHatasi;
   String? sonKod, sonParola;
   bool? sonPano;
@@ -58,6 +60,8 @@ Future<void> hostKabul({required bool kontrol, bool pano = false, bool dosya = f
   void kareCizildi() => kareOnayi++;
   @override
   void girdi(Girdi g) => girdiler.add(g);
+  @override
+  void izleyiciKol(OyunKoluDurumu durum) => oyunKoluDurumlari.add(durum);
   @override
   Future<String?> dosyaSec() async => secilecekDosya;
   @override

@@ -1,6 +1,6 @@
-//! AfuDesk çekirdeği. Merkezi sunucu yok: bağlantı veren cihaz kendi QUIC sunucusunu açar,
-//! adreslerini parolayla şifreli tek bir koda koyar; karşı taraf kodla doğrudan bağlanır.
-pub mod adres;
+//! AfuDesk çekirdeği. Bağlantı veren cihaz kimliğini ve adreslerini parolayla şifreli tek bir
+//! koda koyar; karşı taraf kodla bağlanır. Taşıma iroh: önce doğrudan (LAN/IPv6/UPnP),
+//! sonra NAT delme, olmazsa relay yedeği — kullanıcı IP/port/modem ayarı yapmaz.
 pub mod ag;
 pub mod dosya;
 pub mod goruntu;
