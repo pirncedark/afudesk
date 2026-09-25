@@ -3,7 +3,7 @@ name = "afudesk_core"
 version = "1.2.0"
 edition = "2021"
 license = "MIT"
-description = "AfuDesk çekirdeği: sunucusuz, tek kodla doğrudan bağlanan uzak masaüstü"
+description = "AfuDesk çekirdeği: tek kodla, ayarsız (doğrudan / NAT delme / relay) bağlanan uzak masaüstü"
 
 [lib]
 crate-type = ["cdylib", "staticlib", "rlib"]
@@ -20,12 +20,8 @@ sha2 = "0.10"
 chacha20poly1305 = "0.10"
 argon2 = "0.5"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "fs", "io-util"] }
-quinn = "0.11"
-rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
-rcgen = "0.13"
+iroh = "1.2"
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
-local-ip-address = "0.6"
-igd-next = { version = "0.16", features = ["aio_tokio"] }
 log = "0.4"
 rayon = "1"
 dirs = "6"

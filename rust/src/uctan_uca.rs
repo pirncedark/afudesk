@@ -13,7 +13,6 @@ const SURE: Duration = Duration::from_secs(20);
 fn ayar(parola: &str) -> HostAyar {
     HostAyar {
         ad: "Ali PC".into(),
-        port: 0,
         upnp: false,
         parola: parola.into(),
         yalniz_yerel: true,

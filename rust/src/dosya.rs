@@ -216,8 +216,8 @@ fn ret(m: &str) -> Ret {
 /// Tek bir dosya akışını işler. Başarılıysa (gösterilen ad, son yol) döner.
 pub async fn al(
     alici: &Alici,
-    mut w: quinn::SendStream,
-    mut r: quinn::RecvStream,
+    mut w: crate::ag::GonderAkisi,
+    mut r: crate::ag::AlAkisi,
 ) -> Option<(String, PathBuf)> {
     let sonuc = al_ic(alici, &mut w, &mut r).await;
     let yanit = match &sonuc {
@@ -233,8 +233,8 @@ pub async fn al(
 
 async fn al_ic(
     alici: &Alici,
-    w: &mut quinn::SendStream,
-    r: &mut quinn::RecvStream,
+    w: &mut crate::ag::GonderAkisi,
+    r: &mut crate::ag::AlAkisi,
 ) -> Result<(String, PathBuf), Ret> {
     let baslik = tokio::time::timeout(YANIT_SURESI, protokol::oku::<_, Kontrol>(r)).await;
     let Ok(Ok(Some(Kontrol::DosyaBaslik {
@@ -345,7 +345,7 @@ pub(crate) struct GonderAyari {
 }
 
 pub(crate) async fn gonder(
-    c: &quinn::Connection,
+    c: &crate::ag::Baglanti,
     yol: &Path,
     ayar: GonderAyari,
     mut ilerleme: impl FnMut(u64, u64),
