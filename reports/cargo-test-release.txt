@@ -1,0 +1,98 @@
+cargo :    Compiling afudesk_core v1.2.0 (C:\Users\afuuu\Desktop\afuproject\AfuDesk-telefonkol\rust)
+At line:2 char:55
++ ...  $env:PATH; cargo test --release *> '../reports/cargo-test-release.tx ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling af...elefonkol\rust):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+warning: linker stdout: C:\Users\afuuu\Desktop\afuproject\AfuDesk-telefonkol\rust\target\release\deps\afudesk_core.dll.
+lib kitaplığı ve C:\Users\afuuu\Desktop\afuproject\AfuDesk-telefonkol\rust\target\release\deps\afudesk_core.dll.exp nes
+nesi oluşturuluyor
+  |
+  = note: `#[warn(linker_messages)]` on by default
+
+warning: `afudesk_core` (lib) generated 1 warning
+    Finished `release` profile [optimized] target(s) in 21.88s
+     Running unittests src\lib.rs (target\release\deps\afudesk_core-5d58b56657b469b8.exe)
+
+running 72 tests
+test adres::testler::genel_adres_ayrimi ... ok
+test ag::yol_testleri::en_dusuk_rtt_yolu_secer ... ok
+test ag::yol_testleri::baglanti_hatasi_kullaniciya_teknik_ayrinti_gostermez ... ok
+test dosya::testler::kimlik_icerige_bagli_ve_kararli ... ok
+test dosya::testler::devam_noktasi_hesabi ... ok
+test dosya::testler::guvenli_ad_temizler ... ok
+test dosya::testler::cakismada_numara_eklenir ... ok
+test goruntu::testler::kotu_kare_reddedilir ... ok
+test goruntu::testler::iptal_edilen_kare_dosemeleri_yeniden_gider ... ok
+test goruntu::testler::degisiklik_yoksa_kare_yok ... ok
+test goruntu::testler::ilk_kare_tam_ve_birlesir ... ok
+test goruntu::testler::boyut_degisince_tam_kare ... ok
+test goruntu::testler::sirasiz_gelen_eski_kare_yeniyi_ezmez ... ok
+test dosya::testler::varsayilan_klasor_afudesk_ile_biter ... ok
+test goruntu::testler::yarim_olcek_ortalama_alir ... ok
+test ag::testler::yanlis_parmak_izi_reddedilir ... ok
+test goruntu::testler::yanlis_rgba_boyutu ... ok
+test host::sira_testleri::sira_sarmali_ve_eski_paket ... ok
+test host::uyarlama_testleri::iyi_agda_yukselir_ust_sinirda_durur ... ok
+test goruntu::testler::yayin_boyutu_siniri ... ok
+test host::uyarlama_testleri::kotu_agda_kalite_ve_fps_duser_sinirlarda_durur ... ok
+test goruntu::testler::yalniz_degisen_doseme_gider ... ok
+test host::uyarlama_testleri::orta_agda_sabit ... ok
+test ag::testler::dogru_parmak_izi_baglanir ... ok
+test adres::testler::yerel_ipv4_dongu_degil ... ok
+test kod::testler::hata_metinleri_turkce ... ok
+test kod::testler::kod_kisa_kalir ... ok
+test kod::testler::adres_acik_metinde_gorunmez ... ok
+test kol::testler::dugme_maskesi_kol_durumunda_tasinir ... ok
+test kod::testler::bos_parola ... ok
+test kol::testler::eksen_ve_tetik_sinir_eslemesi ... ok
+test pano::testler::degisiklik_algilanir ... ok
+test ag::testler::olu_adres_varsa_digeri_kazanir ... ok
+test pano::testler::buyuk_metin_reddedilir ... ok
+test platform::masaustu::testler::gercek_enjektor_acilir ... ok
+test platform::masaustu::testler::tus_adlari ... ok
+test protokol::testler::cop_veri_reddedilir ... ok
+test protokol::testler::dev_uzunluk_reddedilir ... ok
+test protokol::testler::yaz_oku_gidis_donus ... ok
+test kod::testler::bosluk_ve_satir_sonu ... ok
+test sanal_kol::testler::sahte_surucu_durumlari_kaydeder ... ok
+test kod::testler::bozuk_girdiler ... ok
+test sanal_kol::testler::gercek_vigem_kol_olusur ... ok
+test kod::testler::parola_yanlis ... ok
+test kod::testler::rastgelelik ... ok
+test kod::testler::gidis_donus ... ok
+test platform::masaustu::testler::gercek_ekran_yakalanir ... ok
+test kod::testler::suresi_dolmus_ve_sinir ... ok
+test kod::testler::oynanmis_bayt ... ok
+test kod::testler::turkce_parola ... ok
+test uctan_uca::dosya_aktarilir ... ok
+test uctan_uca::disaridan_kol_durumu_hosta_ulasir ... ok
+test uctan_uca::dosya_bozulursa_hata ... ok
+test uctan_uca::dosya_izni_yoksa_reddedilir ... ok
+test uctan_uca::dosya_kaldigi_yerden_devam ... ok
+test uctan_uca::eski_sirali_kol_durumu_atilir ... ok
+test uctan_uca::oyun_kolu_izni_yoksa_uygulanmaz ... ok
+test ag::testler::hic_ulasilamazsa_anlasilir_hata ... ok
+test zaman::testler::gecikme_saat_geri_ve_tasimada_sinirlanir ... ok
+test zaman::testler::negatif_saat_farki_desteklenir ... ok
+test zaman::testler::saat_farki_rtt_yarisini_cikarir ... ok
+test uctan_uca::host_durdurulunca_baglanilamaz ... ok
+test uctan_uca::red_edilince_izleyici_sebebi_gorur ... ok
+test uctan_uca::titresim_izleyiciye_doner ... ok
+test uctan_uca::yanlis_parola_baglanmadan_reddedilir ... ok
+test uctan_uca::kontrol_izni_yoksa_girdi_uygulanmaz ... ok
+test uctan_uca::tam_akis_goruntu_ve_girdi ... ok
+test uctan_uca::sahte_bilet_reddedilir ... ok
+test uctan_uca::pano_izni_yoksa_gitmez ... ok
+test uctan_uca::pano_iki_yonlu_gider ... ok
+test platform::masaustu::testler::gercek_wgc_yakalanir ... ok
+test uctan_uca::pano_dongu_yapmaz ... ok
+
+test result: ok. 72 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.80s
+
+   Doc-tests afudesk_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

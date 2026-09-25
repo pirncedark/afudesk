@@ -20,12 +20,11 @@ pub fn en_iyi_yol(adaylar: &[(usize, Duration)]) -> Option<usize> {
         .map(|(indeks, _)| *indeks)
 }
 
-
 fn baglan_hata_metni(ayrinti: &str) -> String {
     if ayrinti.contains("parmak izi") {
-        "G?venlik kontrol? ba?ar?s?z; do?ru cihaz?n ba?lant? kodunu kullan?n.".into()
+        "Güvenlik kontrolü başarısız; doğru cihazın bağlantı kodunu kullanın.".into()
     } else {
-        "Kar?? bilgisayara ula??lamad?.\nBa?lant?y?, ekran?nda '?nternetten ula??labilir' yazan taraf versin.".into()
+        "Karşı bilgisayara ulaşılamadı.\nBağlantıyı, ekranında 'İnternetten ulaşılabilir' yazan taraf versin.".into()
     }
 }
 
@@ -36,7 +35,7 @@ mod yol_testleri {
     #[test]
     fn baglanti_hatasi_kullaniciya_teknik_ayrinti_gostermez() {
         let metin = baglan_hata_metni("deadline has elapsed (zaman a??m?)");
-        assert_eq!(metin, "Kar?? bilgisayara ula??lamad?.\nBa?lant?y?, ekran?nda '?nternetten ula??labilir' yazan taraf versin.");
+        assert_eq!(metin, "Karşı bilgisayara ulaşılamadı.\nBağlantıyı, ekranında 'İnternetten ulaşılabilir' yazan taraf versin.");
         assert!(!metin.contains("deadline"));
         assert!(!metin.contains('('));
     }
@@ -330,7 +329,10 @@ mod testler {
         )
         .await
         .unwrap_err();
-        assert!(h.to_string().starts_with("Karşı tarafa ulaşılamadı"), "{h}");
+        assert!(
+            h.to_string().starts_with("Karşı bilgisayara ulaşılamadı."),
+            "{h}"
+        );
         assert!(baglan(&[], &k.parmak_izi, Duration::from_secs(1))
             .await
             .is_err());

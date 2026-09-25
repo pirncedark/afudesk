@@ -82,8 +82,8 @@ class _OturumDurum extends State<OturumSayfasi> {
       _kolGonderimBekle?.cancel();
       _kolGonderimBekle = null;
       _kolGonder();
-    } else if (_kolGonderimBekle == null) {
-      _kolGonderimBekle = Timer(kalan, _kolGonder);
+    } else {
+      _kolGonderimBekle ??= Timer(kalan, _kolGonder);
     }
   }
 
@@ -294,6 +294,8 @@ case 'dosya':
       await _kolKanal.invokeMethod<void>('vibrate', {'duration': 25 + (buyuk + kucuk) ~/ 12});
     } on PlatformException {
       // Sistem dokunsal geri bildirimi kullanılmaya devam eder.
+    } on MissingPluginException {
+      // Donanım köprüsü olmayan platformlarda telefonun dokunsal geri bildirimi yeterlidir.
     }
   }
 
@@ -312,6 +314,7 @@ case 'dosya':
   void _ozelTus(String ad) => _gonder([Girdi('tus', ad: ad, basili: true), Girdi('tus', ad: ad, basili: false)]);
 
   Widget _dokunmatikCubuk() {
+    final dar = MediaQuery.sizeOf(context).width < 520;
     Widget t(String etiket, String ad, {IconData? simge}) => Padding(
           padding: const EdgeInsets.symmetric(horizontal: 3),
           child: OutlinedButton(
@@ -327,7 +330,7 @@ case 'dosya':
       child: Row(children: [
         FilledButton.icon(
           key: const Key('oturum_klavye'),
-          style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
+          style: FilledButton.styleFrom(minimumSize: Size(dar ? 56 : 0, 56), padding: EdgeInsets.symmetric(horizontal: dar ? 8 : 16)),
           onPressed: () {
             setState(() => _klavyeAcik = !_klavyeAcik);
             if (_klavyeAcik) {
@@ -338,18 +341,17 @@ case 'dosya':
             }
           },
           icon: Icon(_klavyeAcik ? Icons.keyboard_hide : Icons.keyboard),
-          label: const Text('Klavye'),
+          label: dar ? const SizedBox.shrink() : const Text('Klavye'),
         ),
         const SizedBox(width: 8),
         Tooltip(
           key: const Key('oturum_oyun_kolu_ipucu'),
           message: _oyunKoluIzni ? 'Dokunmatik kolu aç' : 'Karşı taraf oyun kolu izni vermedi',
-          child: FilledButton.icon(
+          child: FilledButton(
             key: const Key('oturum_oyun_kolu'),
-            style: FilledButton.styleFrom(minimumSize: const Size(0, 56), backgroundColor: _kolAcik ? Renk.vurgu : null),
+            style: FilledButton.styleFrom(minimumSize: Size(dar ? 56 : 0, 56), padding: EdgeInsets.symmetric(horizontal: dar ? 8 : 16), backgroundColor: _kolAcik ? Renk.vurgu : null),
             onPressed: _oyunKoluIzni ? () => setState(() => _kolAcik = !_kolAcik) : null,
-            icon: const Icon(Icons.sports_esports),
-            label: const Text('🎮 Oyun kolu'),
+            child: dar ? const Icon(Icons.sports_esports) : const Text('🎮 Oyun kolu'),
           ),
         ),
         const SizedBox(width: 6),

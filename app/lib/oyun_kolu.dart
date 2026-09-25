@@ -23,8 +23,8 @@ class OyunKoluDurumu {
       solY: eksen((v['ly'] as num?)?.toDouble() ?? 0),
       sagX: eksen((v['rx'] as num?)?.toDouble() ?? 0),
       sagY: eksen((v['ry'] as num?)?.toDouble() ?? 0),
-      solTetik: tetik(keys.contains('lt') ? 1 : ((v['lt'] as num?)?.toDouble() ?? 0)),
-      sagTetik: tetik(keys.contains('rt') ? 1 : ((v['rt'] as num?)?.toDouble() ?? 0)),
+      solTetik: tetik(((v['lt'] as num?)?.toDouble() ?? 0).clamp(keys.contains('lt') ? 1.0 : 0.0, 1.0)),
+      sagTetik: tetik(((v['rt'] as num?)?.toDouble() ?? 0).clamp(keys.contains('rt') ? 1.0 : 0.0, 1.0)),
     );
   }
 

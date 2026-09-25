@@ -30,6 +30,10 @@ On first launch Windows Firewall may ask for permission: allow **Private network
 
 **Android (viewer):** download `AfuDesk-android.apk` from the same page and install it (allow "install unknown apps" for your browser or file manager). Android 7.0+. On the phone you can connect to a computer: tap = left click, long press = right click, drag = drag, two fingers = scroll; the **Keyboard** button opens the phone keyboard. Sharing the phone's own screen is not available yet.
 
+### Use your phone as a gamepad
+
+Connect a Bluetooth gamepad to the Android phone, or open a remote session and tap **🎮 Oyun kolu** to use the on-screen controls. The host must grant gamepad permission. To verify it, accept the session with gamepad permission and check `joy.cpl` on the host: a second Xbox 360 controller should appear. Move both sticks and press the buttons to test input; trigger vibration to check phone/controller haptics.
+
 ## When does it work?
 
 Because AfuDesk has no central server, the sharing device must be **directly reachable**:
@@ -104,6 +108,10 @@ AfuDesk, iki bilgisayarı **hiçbir sunucu olmadan** birbirine bağlayan açık 
 İlk açılışta Windows Güvenlik Duvarı izin isteyebilir: **Özel ağlar** için izin ver.
 
 **Android (izleyici):** aynı sayfadan `AfuDesk-android.apk` dosyasını indirip kur (tarayıcına ya da dosya yöneticine "bilinmeyen uygulamaları yükle" izni ver). Android 7.0 ve üzeri. Telefondan bir bilgisayara bağlanabilirsin: dokun = sol tık, uzun bas = sağ tık, sürükle = sürükleme, iki parmak = kaydırma; **Klavye** düğmesi telefon klavyesini açar. Telefonun kendi ekranını paylaşmak henüz yok.
+
+### Telefonla oyun kolu
+
+Bluetooth oyun kolunu Android telefona bağla ya da oturumda **🎮 Oyun kolu** düğmesine bas. Host oyun kolu izni vermelidir. Denemek için host'ta `joy.cpl` aç: ikinci bir Xbox 360 kolu görünmeli. İki çubuğu ve düğmeleri dene; titreşim gelince telefonun ve destekliyorsa Bluetooth kolunun titrediğini kontrol et.
 
 ## Hangi durumda çalışır?
 

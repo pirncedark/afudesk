@@ -66,7 +66,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 168140344;
+  int get rustContentHash => 728986621;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -116,6 +116,17 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiAfudeskIzleyiciGirdi({required GirdiOlayi g});
 
   Future<void> crateApiAfudeskIzleyiciKapat();
+
+  Future<void> crateApiAfudeskIzleyiciKol({
+    required int slot,
+    required int dugmeler,
+    required int solX,
+    required int solY,
+    required int sagX,
+    required int sagY,
+    required int solTetik,
+    required int sagTetik,
+  });
 
   Future<IzleyiciOlayi> crateApiAfudeskIzleyiciOlayiDefault();
 
@@ -524,6 +535,61 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "izleyici_kapat", argNames: []);
 
   @override
+  Future<void> crateApiAfudeskIzleyiciKol({
+    required int slot,
+    required int dugmeler,
+    required int solX,
+    required int solY,
+    required int sagX,
+    required int sagY,
+    required int solTetik,
+    required int sagTetik,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_8(slot, serializer);
+          sse_encode_u_16(dugmeler, serializer);
+          sse_encode_i_16(solX, serializer);
+          sse_encode_i_16(solY, serializer);
+          sse_encode_i_16(sagX, serializer);
+          sse_encode_i_16(sagY, serializer);
+          sse_encode_u_8(solTetik, serializer);
+          sse_encode_u_8(sagTetik, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 14,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiAfudeskIzleyiciKolConstMeta,
+        argValues: [slot, dugmeler, solX, solY, sagX, sagY, solTetik, sagTetik],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAfudeskIzleyiciKolConstMeta => const TaskConstMeta(
+    debugName: "izleyici_kol",
+    argNames: [
+      "slot",
+      "dugmeler",
+      "solX",
+      "solY",
+      "sagX",
+      "sagY",
+      "solTetik",
+      "sagTetik",
+    ],
+  );
+
+  @override
   Future<IzleyiciOlayi> crateApiAfudeskIzleyiciOlayiDefault() {
     return handler.executeNormal(
       NormalTask(
@@ -532,7 +598,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 15,
             port: port_,
           );
         },
@@ -556,7 +622,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 15)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -578,7 +644,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 17)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -679,6 +745,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int dco_decode_i_16(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
   int dco_decode_i_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
@@ -688,8 +760,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   IzleyiciOlayi dco_decode_izleyici_olayi(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 18)
-      throw Exception('unexpected arr length: expect 18 but see ${arr.length}');
+    if (arr.length != 19)
+      throw Exception('unexpected arr length: expect 19 but see ${arr.length}');
     return IzleyiciOlayi(
       tur: dco_decode_String(arr[0]),
       rttMs: dco_decode_u_32(arr[1]),
@@ -703,12 +775,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       yukseklik: dco_decode_u_32(arr[9]),
       rgba: dco_decode_list_prim_u_8_strict(arr[10]),
       dosya: dco_decode_bool(arr[11]),
-      gonderilen: dco_decode_u_64(arr[12]),
-      toplam: dco_decode_u_64(arr[13]),
-      bitti: dco_decode_bool(arr[14]),
-      slot: dco_decode_u_8(arr[15]),
-      buyuk: dco_decode_u_8(arr[16]),
-      kucuk: dco_decode_u_8(arr[17]),
+      oyunKolu: dco_decode_bool(arr[12]),
+      gonderilen: dco_decode_u_64(arr[13]),
+      toplam: dco_decode_u_64(arr[14]),
+      bitti: dco_decode_bool(arr[15]),
+      slot: dco_decode_u_8(arr[16]),
+      buyuk: dco_decode_u_8(arr[17]),
+      kucuk: dco_decode_u_8(arr[18]),
     );
   }
 
@@ -722,6 +795,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as Uint8List;
+  }
+
+  @protected
+  int dco_decode_u_16(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
   }
 
   @protected
@@ -851,6 +930,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int sse_decode_i_16(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getInt16();
+  }
+
+  @protected
   int sse_decode_i_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getInt32();
@@ -871,6 +956,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_yukseklik = sse_decode_u_32(deserializer);
     var var_rgba = sse_decode_list_prim_u_8_strict(deserializer);
     var var_dosya = sse_decode_bool(deserializer);
+    var var_oyunKolu = sse_decode_bool(deserializer);
     var var_gonderilen = sse_decode_u_64(deserializer);
     var var_toplam = sse_decode_u_64(deserializer);
     var var_bitti = sse_decode_bool(deserializer);
@@ -890,6 +976,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       yukseklik: var_yukseklik,
       rgba: var_rgba,
       dosya: var_dosya,
+      oyunKolu: var_oyunKolu,
       gonderilen: var_gonderilen,
       toplam: var_toplam,
       bitti: var_bitti,
@@ -916,6 +1003,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
     return deserializer.buffer.getUint8List(len_);
+  }
+
+  @protected
+  int sse_decode_u_16(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint16();
   }
 
   @protected
@@ -1042,6 +1135,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_i_16(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putInt16(self);
+  }
+
+  @protected
   void sse_encode_i_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putInt32(self);
@@ -1062,6 +1161,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_32(self.yukseklik, serializer);
     sse_encode_list_prim_u_8_strict(self.rgba, serializer);
     sse_encode_bool(self.dosya, serializer);
+    sse_encode_bool(self.oyunKolu, serializer);
     sse_encode_u_64(self.gonderilen, serializer);
     sse_encode_u_64(self.toplam, serializer);
     sse_encode_bool(self.bitti, serializer);
@@ -1087,6 +1187,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     serializer.buffer.putUint8List(self);
+  }
+
+  @protected
+  void sse_encode_u_16(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint16(self);
   }
 
   @protected

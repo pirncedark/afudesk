@@ -201,7 +201,7 @@
             ],
             [
               "cargo",
-              "uctan_uca::oyun_kolu_hosta_ulasir"
+              "uctan_uca::disaridan_kol_durumu_hosta_ulasir"
             ]
           ]
         },
@@ -241,6 +241,26 @@
               "flutter",
               "oyun kolu izin kutusu"
             ]
+          ]
+        },
+        "telefon_kol": {
+          "ad": "Android Bluetooth ve dokunmatik kol, izin, çoklu dokunma ve sade bağlantı hatası",
+          "kanit": [
+            ["app/kopru/src/api/afudesk.rs", "izleyici_kol"],
+            ["app/lib/oyun_kolu.dart", "dugmeMaskesi"],
+            ["app/android/app/src/main/kotlin/com/afu/afudesk/MainActivity.kt", "dispatchGenericMotionEvent"],
+            ["app/lib/bilesenler/oyun_kolu_katmani.dart", "OyunKoluKatmani"],
+            ["rust/src/ag.rs", "baglan_hata_metni"]
+          ],
+          "testler": [
+            ["cargo", "uctan_uca::disaridan_kol_durumu_hosta_ulasir"],
+            ["cargo", "baglanti_hatasi_kullaniciya_teknik_ayrinti_gostermez"],
+            ["flutter", "eksen ve tetik değerleri XInput aralığına kırpılır"],
+            ["flutter", "XInput tuş maskesi D-pad, omuz ve yüz tuşlarını eşler"],
+            ["flutter", "dokunmatik kol katmanı aynı anda analog ve tuş basışını işler"],
+            ["flutter", "kol izni yoksa oyun kolu düğmesi pasif ve açıklamalı"],
+            ["flutter", "kol durumu değişince gönderilir, aynı durum yinelenmez"],
+            ["flutter", "hata metni temizlenir"]
           ]
         }
       }

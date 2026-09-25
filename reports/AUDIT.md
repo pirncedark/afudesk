@@ -1,6 +1,6 @@
 # AfuDesk Görev Kapısı — Denetim
 
-Tarih: 2026-09-24 15:01  ·  Commit: `52ad66a`
+Tarih: 2026-09-25 05:16  ·  Commit: `97cb6c5`
 
 ## FASTPATH — Düşük gecikmeli görüntü ve ölçüm
 
@@ -17,7 +17,7 @@ Zorunlu: 6 · Tamam: 6 · Eksik: 0
 
 ## OYUN_MODU — Couch Co-op: uzak oyun kolu
 
-Zorunlu: 6 · Tamam: 6 · Eksik: 0
+Zorunlu: 7 · Tamam: 7 · Eksik: 0
 
 | Madde | Durum | Kod | Test | Not |
 |---|---|---|---|---|
@@ -27,6 +27,7 @@ Zorunlu: 6 · Tamam: 6 · Eksik: 0
 | Host'ta sanal Xbox 360 kolu (ViGEmBus), yoksa açık uyarı | ✅ DONE | ✅ | ✅ |  |
 | Titreşimin izleyiciye geri gitmesi | ✅ DONE | ✅ | ✅ |  |
 | Onay penceresinde 'Oyun kolu' izni | ✅ DONE | ✅ | ✅ |  |
+| Android Bluetooth ve dokunmatik kol, izin, çoklu dokunma ve sade bağlantı hatası | ✅ DONE | ✅ | ✅ |  |
 
 ## SONRAKI — Sıradaki özellikler
 
@@ -43,6 +44,6 @@ Zorunlu: 4 · Tamam: 2 · Eksik: 2
 
 | İSTENEN | UYGULANAN | TEST EDİLEN | GEÇEN | BAŞARISIZ | ENGELLİ | EKSİK | TEST EDİLMEYEN |
 |---|---|---|---|---|---|---|---|
-| 16 | 14 | 14 | 14 | 0 | 0 | 2 | 2 |
+| 17 | 15 | 15 | 15 | 0 | 0 | 2 | 2 |
 
 **SONUÇ: ❌ NOT_READY**

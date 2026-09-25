@@ -211,6 +211,10 @@ String hataMetni(Object e) {
   if (s.endsWith(')') && e.toString().startsWith('AnyhowException(')) {
     s = s.substring(0, s.length - 1);
   }
-  // anyhow bağlam zinciri: yalnız ilk satır kullanıcıya.
-  return s.split('\n').first.trim();
+  // Bağlantı hatalarının ayrıntısı log'da kalır; ekranda kısa ve ne yapmalı metni gösterilir.
+  if (s.contains('Karşı tarafa ulaşılamadı') || s.contains('Karşı bilgisayara ulaşılamadı') ||
+      s.toLowerCase().contains('deadline has elapsed')) {
+    return "Karşı bilgisayara ulaşılamadı.\nBağlantıyı, ekranında 'İnternetten ulaşılabilir' yazan taraf versin.";
+  }
+  return s.split('\n').first.split(' (').first.trim();
 }

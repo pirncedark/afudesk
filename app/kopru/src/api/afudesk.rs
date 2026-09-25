@@ -186,6 +186,7 @@ pub fn host_durdur() {
 pub fn izleyici_baglan(kod: String, parola: String, ad: String, olaylar: StreamSink<IzleyiciOlayi>) {
     izleyici_kapat();
     IZLEYICI_KOL_IZNI.store(false, Ordering::SeqCst);
+    IZLEYICI_KOL_SIRASI.store(0, Ordering::SeqCst);
     // Masaüstünde izleyici panosu arboard; Android'de yok (gelen metni Dart panoya yazar).
     #[cfg(not(target_os = "android"))]
     let pano = afudesk_core::pano::ArboardPano::new()

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:afudesk/motor.dart';
+import 'package:afudesk/oyun_kolu.dart';
 
 /// Testler için motor: olayları testin kendisi basar, çağrıları kaydeder.
 class SahteMotor implements Motor {

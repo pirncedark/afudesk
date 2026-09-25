@@ -14,6 +14,7 @@ class MainActivity : FlutterActivity() {
     private lateinit var channel: MethodChannel
     private val pressed = mutableSetOf<String>()
     private var axes = floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f)
+    private var kolVibrator: Vibrator? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -23,6 +24,9 @@ class MainActivity : FlutterActivity() {
                 val duration = (call.argument<Int>("duration") ?: 35).toLong().coerceIn(1L, 500L)
                 val vibrator = if (Build.VERSION.SDK_INT >= 31) getSystemService(android.os.VibratorManager::class.java).defaultVibrator else getSystemService(Vibrator::class.java)
                 if (Build.VERSION.SDK_INT >= 26) vibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE)) else vibrator.vibrate(duration)
+                kolVibrator?.takeIf { it.hasVibrator() }?.let {
+                    if (Build.VERSION.SDK_INT >= 26) it.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE)) else it.vibrate(duration)
+                }
                 result.success(null)
             } else result.notImplemented()
         }
@@ -45,8 +49,8 @@ class MainActivity : FlutterActivity() {
             e.getAxisValue(MotionEvent.AXIS_X), e.getAxisValue(MotionEvent.AXIS_Y),
             e.getAxisValue(MotionEvent.AXIS_Z).takeIf { it != 0f } ?: e.getAxisValue(MotionEvent.AXIS_RX),
             e.getAxisValue(MotionEvent.AXIS_RZ).takeIf { it != 0f } ?: e.getAxisValue(MotionEvent.AXIS_RY),
-            e.getAxisValue(MotionEvent.AXIS_LTRIGGER).coerceIn(0f, 1f),
-            e.getAxisValue(MotionEvent.AXIS_RTRIGGER).coerceIn(0f, 1f)
+            maxOf(e.getAxisValue(MotionEvent.AXIS_LTRIGGER), e.getAxisValue(MotionEvent.AXIS_BRAKE)).coerceIn(0f, 1f),
+            maxOf(e.getAxisValue(MotionEvent.AXIS_RTRIGGER), e.getAxisValue(MotionEvent.AXIS_GAS)).coerceIn(0f, 1f)
         )
         val hatX = e.getAxisValue(MotionEvent.AXIS_HAT_X)
         val hatY = e.getAxisValue(MotionEvent.AXIS_HAT_Y)
@@ -65,6 +69,7 @@ class MainActivity : FlutterActivity() {
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val tus = taninanTusu(event.keyCode)
         if (tus != null && ((event.device?.sources ?: 0) and (InputDevice.SOURCE_GAMEPAD or InputDevice.SOURCE_JOYSTICK)) != 0) {
+            kolVibrator = event.device?.vibrator
             if (event.action == KeyEvent.ACTION_DOWN) pressed.add(tus) else if (event.action == KeyEvent.ACTION_UP) pressed.remove(tus)
             bildirKol()
             return true
@@ -74,6 +79,7 @@ class MainActivity : FlutterActivity() {
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
         if (event.action == MotionEvent.ACTION_MOVE && ((event.device?.sources ?: 0) and InputDevice.SOURCE_JOYSTICK) != 0) {
+            kolVibrator = event.device?.vibrator
             gonderKol(event)
             return true
         }
