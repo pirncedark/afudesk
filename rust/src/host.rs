@@ -432,9 +432,10 @@ async fn oturum(
     let izinler = match onceki {
         Some(i) => i,
         None => {
-            let _ = olay.send(HostOlay::Istek { ad: ad.clone() }).await;
-            // Bekleyen eski komutları at.
+            // Bekleyen eski komutları İSTEKTEN ÖNCE at: sonra atılsaydı, isteği görüp hemen
+            // verilen onay da silinebilirdi (yarış).
             while komut.try_recv().is_ok() {}
+            let _ = olay.send(HostOlay::Istek { ad: ad.clone() }).await;
             let karar = tokio::select! {
                 _ = &mut *durdur => return Oturum::Durdur,
                 k = tokio::time::timeout(ONAY_SURESI, komut.recv()) => k,
@@ -533,19 +534,21 @@ async fn oturum(
             return Oturum::Bitti("Ekran yakalanamadı.".into());
         }
     };
-    if protokol::yaz(
-        &mut w,
-        &Kontrol::Kabul {
-            izinler: izinler.clone(),
-            genislik,
-            yukseklik,
-        },
-    )
-    .await
-    .is_err()
-        || protokol::yaz(&mut w, &Kontrol::DevamJetonu(devam_bilgisi.jeton.clone()))
-            .await
-            .is_err()
+    // Jeton Kabul'den ÖNCE gider: izleyici Kabul'ü gördüğünde geri dönüş jetonu hazırdır
+    // (hemen ardından kopan bağlantı da devam edebilir).
+    if protokol::yaz(&mut w, &Kontrol::DevamJetonu(devam_bilgisi.jeton.clone()))
+        .await
+        .is_err()
+        || protokol::yaz(
+            &mut w,
+            &Kontrol::Kabul {
+                izinler: izinler.clone(),
+                genislik,
+                yukseklik,
+            },
+        )
+        .await
+        .is_err()
     {
         yayin_dur.store(true, std::sync::atomic::Ordering::Relaxed);
         return kopus("Bağlantı koptu.");
@@ -756,6 +759,8 @@ async fn oturum(
             }
         }
     };
+    #[cfg(test)]
+    eprintln!("[host] oturum bitti: kapanis={:?}", c.close_reason());
     okuyucu.abort();
     yayin_dur.store(true, std::sync::atomic::Ordering::Relaxed);
     yayin.abort();

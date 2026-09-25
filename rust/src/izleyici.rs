@@ -318,6 +318,12 @@ impl Gozetmen {
         let sebep = loop {
             let sebep = self.oturum(&c, &mut w, r, &mut jeton).await;
             let istendi = self.yeniden_iste.swap(false, Ordering::SeqCst);
+            #[cfg(test)]
+            eprintln!(
+                "[izleyici] oturum bitti: sebep={sebep:?} kapanis={:?} istendi={istendi} jeton={}",
+                c.close_reason(),
+                jeton.is_some()
+            );
             let geri_don = !self.kapatildi.load(Ordering::SeqCst)
                 && jeton.is_some()
                 && (istendi || istemsiz_kopus(&c));
@@ -374,9 +380,16 @@ impl Gozetmen {
         jeton: &mut Option<String>,
     ) -> String {
         let olay = self.olay.clone();
-        let ilk =
-            tokio::time::timeout(Duration::from_secs(75), protokol::oku::<_, Kontrol>(&mut r))
-                .await;
+        // Host önce devam jetonunu, sonra Kabul/Red'i yollar.
+        let ilk = tokio::time::timeout(Duration::from_secs(75), async {
+            loop {
+                match protokol::oku::<_, Kontrol>(&mut r).await {
+                    Ok(Some(Kontrol::DevamJetonu(j))) => *jeton = Some(j),
+                    diger => return diger,
+                }
+            }
+        })
+        .await;
         let izinler = match ilk {
             Ok(Ok(Some(Kontrol::Kabul {
                 izinler,

@@ -34,16 +34,31 @@ async fn olay_bekle(h: &mut host::Host, f: impl Fn(&HostOlay) -> bool) -> HostOl
 }
 
 async fn iz_bekle(i: &mut izleyici::Izleyici, f: impl Fn(&IzleyiciOlay) -> bool) -> IzleyiciOlay {
-    tokio::time::timeout(SURE, async {
+    // Zaman aşımında teşhis için son görülen olaylar (kare içeriği atılır).
+    let mut son: std::collections::VecDeque<String> = Default::default();
+    let sonuc = tokio::time::timeout(SURE, async {
         loop {
-            let o = i.olaylar.recv().await.expect("izleyici kapandı");
+            let Some(o) = i.olaylar.recv().await else {
+                panic!("izleyici kapandı; son olaylar: {son:?}");
+            };
             if f(&o) {
                 return o;
             }
+            let ozet = match &o {
+                IzleyiciOlay::Kare { .. } => "Kare".to_owned(),
+                d => format!("{d:?}"),
+            };
+            son.push_back(ozet);
+            if son.len() > 8 {
+                son.pop_front();
+            }
         }
     })
-    .await
-    .expect("izleyici olayı gelmedi")
+    .await;
+    match sonuc {
+        Ok(o) => o,
+        Err(_) => panic!("izleyici olayı gelmedi; son olaylar: {son:?}"),
+    }
 }
 
 async fn hazir(h: &mut host::Host) -> (String, String) {
@@ -733,7 +748,9 @@ async fn oyun_kolu_izni_yoksa_uygulanmaz() {
         basili: true,
     })
     .await;
-    tokio::time::sleep(Duration::from_millis(250)).await;
+    // Fare girdisi ulaşana kadar bekle (sabit bekleme yük altında yetmeyebilir); kol
+    // girdisi fareden önce gönderildiği için o ana kadar ulaşmadıysa hiç uygulanmamıştır.
+    kosul_bekle("fare girdisi", || !girdiler.lock().unwrap().is_empty()).await;
     assert!(durumlar.lock().unwrap().is_empty());
     assert_eq!(
         *girdiler.lock().unwrap(),
@@ -931,16 +948,20 @@ async fn eski_bilet_devam_yerine_kullanilamaz() {
     iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Kare { .. })).await;
     i.yeniden_baglan();
     olay_bekle(&mut h, |o| matches!(o, HostOlay::Baglandi { .. })).await;
-    // Oturum sürerken: kullanılmış biletle giren olmamalı (bağlanamaz ya da reddedilir).
-    if let Ok(mut ikinci) = izleyici::baglan(&kod, &parola, "Hırsız").await {
-        match iz_bekle(&mut ikinci, |o| {
-            matches!(o, IzleyiciOlay::Koptu { .. } | IzleyiciOlay::Kabul { .. })
-        })
-        .await
-        {
-            IzleyiciOlay::Koptu { .. } => {}
-            o => panic!("kullanılmış biletle girildi: {o:?}"),
+    // Oturum sürerken: kullanılmış biletle giren olmamalı. Host oturumdayken yeni bağlantı
+    // ya hiç kurulamaz, ya kurulur ama yanıt almaz, ya da reddedilir — asla Kabul gelmez.
+    let deneme = async {
+        let mut ikinci = izleyici::baglan(&kod, &parola, "Hırsız").await.ok()?;
+        loop {
+            match ikinci.olaylar.recv().await? {
+                o @ IzleyiciOlay::Kabul { .. } => return Some(o),
+                IzleyiciOlay::Koptu { .. } => return None,
+                _ => {}
+            }
         }
+    };
+    if let Ok(Some(o)) = tokio::time::timeout(Duration::from_secs(8), deneme).await {
+        panic!("kullanılmış biletle girildi: {o:?}");
     }
     // Asıl izleyici etkilenmeden sürer.
     iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Kare { .. })).await;

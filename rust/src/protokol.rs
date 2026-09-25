@@ -1,5 +1,5 @@
 //! Tel protokolü: iroh (QUIC) akışları üzerinde uzunluk önekli (u32 BE) bincode mesajları.
-//! Kontrol akışı (çift yönlü): Merhaba|Devam / Kabul+DevamJetonu / Red / Girdi / Pano / Kapat.
+//! Kontrol akışı (çift yönlü): Merhaba|Devam / DevamJetonu+Kabul / Red / Girdi / Pano / Kapat.
 //! Görüntü akışı (tek yönlü, host → izleyici): Kare.
 //! Dosya akışı (çift yönlü, izleyici açar; dosya başına bir akış):
 //! DosyaBaslik → DosyaDevam | DosyaHata, sonra DosyaParca… ve DosyaTamam | DosyaHata.
@@ -116,7 +116,7 @@ pub enum Kontrol {
         buyuk: u8,
         kucuk: u8,
     },
-    /// Host → izleyici, `Kabul`'den hemen sonra: bağlantı istemeden koparsa izleyici bu
+    /// Host → izleyici, `Kabul`'den hemen önce: bağlantı istemeden koparsa izleyici bu
     /// jetonla onay sorulmadan geri dönebilir (yalnız aynı cihaz kimliğiyle, kısa süre).
     DevamJetonu(String),
     /// İzleyici → host, kopan oturuma dönüş (Merhaba yerine ilk mesaj).
