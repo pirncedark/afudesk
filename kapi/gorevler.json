@@ -521,11 +521,11 @@
       }
     },
     "KAYITLI_CIHAZLAR": {
-      "ad": "Kay?tl? (g?venilen) cihazlar",
+      "ad": "Kayıtlı (güvenilen) cihazlar",
       "zorunlu": true,
       "maddeler": {
         "kalici_kimlik": {
-          "ad": "Kal?c? cihaz kimli?i ve TLS sertifikas?",
+          "ad": "Kalıcı cihaz kimliği (iroh anahtarı, host/izleyici ayrı)",
           "kanit": [
             [
               "rust/src/kimlik.rs",
@@ -533,18 +533,22 @@
             ],
             [
               "rust/src/host.rs",
-              "kimlik_dosyasi"
+              "HOST_DOSYASI"
             ]
           ],
           "testler": [
             [
               "cargo",
               "kimlik::testler::cihaz_kimligi_kalici"
+            ],
+            [
+              "cargo",
+              "uctan_uca::host_kimligi_yeniden_acilista_ayni"
             ]
           ]
         },
         "eslesme_kaydi": {
-          "ad": "Atomik JSON e?le?me kayd?",
+          "ad": "Atomik JSON eşleşme kaydı",
           "kanit": [
             [
               "rust/src/guvenilen.rs",
@@ -563,11 +567,15 @@
             [
               "cargo",
               "guvenilen::testler::atomik_yazma"
+            ],
+            [
+              "cargo",
+              "guvenilen::testler::eszamanli_guncelleme_kayit_kaybetmez"
             ]
           ]
         },
         "kayitsiz_kod": {
-          "ad": "Kay?tl? cihaz kimlik/jeton do?rulamas?",
+          "ad": "Kayıtlı cihaz kimlik/jeton doğrulaması, her seferinde onay",
           "kanit": [
             [
               "rust/src/protokol.rs",
@@ -576,6 +584,10 @@
             [
               "rust/src/host.rs",
               "sabit_zamanli_esit"
+            ],
+            [
+              "rust/src/guvenilen.rs",
+              "fn jeton_dogrula"
             ]
           ],
           "testler": [
@@ -601,30 +613,68 @@
             ]
           ]
         },
+        "arka_plan": {
+          "ad": "Uygulama açıkken arka planda dinleme; kod yalnız 'Bağlantı ver' açıkken",
+          "kanit": [
+            [
+              "app/lib/main.dart",
+              "arkaPlanBaslat"
+            ],
+            [
+              "rust/src/host.rs",
+              "pub fn kod_ac"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "uctan_uca::kod_kapaliyken_kodla_girilmez_kayitli_cihaz_yine_baglanir"
+            ],
+            [
+              "flutter",
+              "arka planda kayıtlı cihaz isteği onay penceresi açar"
+            ]
+          ]
+        },
+        "yerel_kesif": {
+          "ad": "Yerel ağ keşfi (mDNS, cihaz kimliğiyle; IP değişse de)",
+          "kanit": [
+            [
+              "rust/src/ag.rs",
+              "MDNS_SERVISI"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "ag::testler::gercek_mdns_kimlikle_bulunur"
+            ]
+          ]
+        },
         "ui": {
-          "ad": "Kay?tl? cihazlar? y?netme aray?z?",
+          "ad": "Kayıtlı cihazları yönetme arayüzü",
           "kanit": [
             [
               "app/lib/sayfalar/ana.dart",
-              "Kay?tl? cihazlar"
+              "Kayıtlı cihazlar"
             ],
             [
               "app/lib/sayfalar/baglanti_ver.dart",
-              "G?venilen cihazlar"
+              "Güvenilen cihazlar"
             ]
           ],
           "testler": [
             [
               "flutter",
-              "kay?tl? cihazlar listesi"
+              "kayıtlı cihazlar listesi"
             ],
             [
               "flutter",
-              "kay?tl? cihaz? unut"
+              "kayıtlı cihazı unut"
             ],
             [
               "flutter",
-              "g?venilen cihaz? kald?r"
+              "güvenilen cihazı kaldır"
             ]
           ]
         }

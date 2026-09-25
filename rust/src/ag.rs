@@ -338,6 +338,44 @@ mod testler {
         assert!(hedef_adres("bozuk", &[], &[]).is_err());
     }
 
+    /// Yerel ağ keşfi: adres ve relay OLMADAN yalnız cihaz kimliğiyle, mDNS üzerinden bulunur
+    /// (kayıtlı cihazın IP'si değişse de). Çoklu yayın gerektirdiği için CI'da atlanır.
+    #[tokio::test]
+    async fn gercek_mdns_kimlikle_bulunur() {
+        async fn uc() -> Endpoint {
+            Endpoint::builder(presets::Minimal)
+                .relay_mode(RelayMode::Disabled)
+                .alpns(vec![ALPN.to_vec()])
+                .address_lookup(
+                    iroh_mdns_address_lookup::MdnsAddressLookup::builder()
+                        .service_name(MDNS_SERVISI),
+                )
+                .bind()
+                .await
+                .unwrap()
+        }
+        let h = uc().await;
+        let e = h.clone();
+        tokio::spawn(async move {
+            if let Some(g) = e.accept().await {
+                let c = g.await?;
+                let (mut w, mut r) = c.accept_bi().await?;
+                let v = r.read_to_end(64).await?;
+                w.write_all(&v).await?;
+                w.finish()?;
+                c.closed().await;
+            }
+            Ok::<_, anyhow::Error>(())
+        });
+        let v = uc().await;
+        let yalniz_kimlik = EndpointAddr::from_parts(h.id(), std::iter::empty());
+        let c = baglan(&v, yalniz_kimlik, Duration::from_secs(20)).await.unwrap();
+        let (mut w, mut r) = c.open_bi().await.unwrap();
+        w.write_all(b"yerel").await.unwrap();
+        w.finish().unwrap();
+        assert_eq!(r.read_to_end(64).await.unwrap(), b"yerel");
+    }
+
     #[test]
     fn baglanti_hatasi_kullaniciya_teknik_ayrinti_gostermez() {
         for m in [ULASILAMADI, GUVENLIK_HATASI] {

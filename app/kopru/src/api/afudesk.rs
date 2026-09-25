@@ -2,13 +2,17 @@
 //! Olaylar düz DTO'larla (tur alanı) akar; freezed/build_runner gerekmez.
 use crate::frb_generated::StreamSink;
 use afudesk_core::{
+    guvenilen,
     host::{self, HostAyar, HostKomut, HostOlay},
     izleyici::{self, IzleyiciOlay},
     protokol::{FareTusu, Girdi, Izinler},
 };
-use std::sync::{
-    atomic::{AtomicBool, AtomicU32, Ordering},
-    Arc, Mutex, OnceLock,
+use std::{
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, AtomicU32, Ordering},
+        Arc, Mutex, OnceLock,
+    },
 };
 
 fn rt() -> &'static tokio::runtime::Runtime {
@@ -30,6 +34,74 @@ static IZLEYICI: Mutex<Option<Arc<izleyici::Izleyici>>> = Mutex::new(None);
 static KARE_SERBEST: AtomicBool = AtomicBool::new(true);
 static IZLEYICI_KOL_IZNI: AtomicBool = AtomicBool::new(false);
 static IZLEYICI_KOL_SIRASI: AtomicU32 = AtomicU32::new(0);
+/// Kalıcı cihaz kimliği + kayıtlı cihazlar klasörü (Dart uygulama destek klasörünü verir).
+static VERI: Mutex<Option<PathBuf>> = Mutex::new(None);
+
+/// Uygulama açılışında çağrılır: kimlik ve kayıtlı cihazlar bu klasörde saklanır.
+#[flutter_rust_bridge::frb(sync)]
+pub fn veri_klasoru_ayarla(yol: String) {
+    *VERI.lock().unwrap() = Some(PathBuf::from(yol).join("AfuDesk"));
+}
+
+fn veri() -> Option<PathBuf> {
+    VERI.lock().unwrap().clone().or_else(guvenilen::varsayilan_klasor)
+}
+
+/// Kayıtlı/güvenilen cihaz (listede yalnız ad ve son görülme gösterilir).
+#[derive(Debug, Clone, Default)]
+pub struct KayitliCihaz {
+    /// İç kimlik: yalnız Bağlan/Unut/Kaldır çağrılarında kullanılır, gösterilmez.
+    pub kimlik: String,
+    pub ad: String,
+    /// Unix saniye.
+    pub son_gorulme: i64,
+}
+
+fn kayitlar() -> guvenilen::Kayitlar {
+    veri()
+        .map(|v| guvenilen::oku(&guvenilen::kayit_yolu(&v)))
+        .unwrap_or_default()
+}
+
+/// Bu cihazın kod olmadan bağlanabileceği bilgisayarlar (en son görülen önce).
+#[flutter_rust_bridge::frb(sync)]
+pub fn kayitli_cihazlar() -> Vec<KayitliCihaz> {
+    let mut v: Vec<_> = kayitlar()
+        .izleyiciler
+        .into_iter()
+        .map(|k| KayitliCihaz { kimlik: k.host_kimlik, ad: k.ad, son_gorulme: k.son_gorulme })
+        .collect();
+    v.sort_by_key(|k| std::cmp::Reverse(k.son_gorulme));
+    v
+}
+
+/// İzleyici: kaydı unut (karşı tarafa haber verilmez).
+#[flutter_rust_bridge::frb(sync)]
+pub fn kayitli_unut(kimlik: String) {
+    if let Some(v) = veri() {
+        let _ = guvenilen::guncelle(&guvenilen::kayit_yolu(&v), |k| guvenilen::hostu_unut(k, &kimlik));
+    }
+}
+
+/// Bu bilgisayara kod olmadan bağlanabilen cihazlar (en son görülen önce).
+#[flutter_rust_bridge::frb(sync)]
+pub fn guvenilen_cihazlar() -> Vec<KayitliCihaz> {
+    let mut v: Vec<_> = kayitlar()
+        .hostlar
+        .into_iter()
+        .map(|k| KayitliCihaz { kimlik: k.izleyici_kimlik, ad: k.ad, son_gorulme: k.son_gorulme })
+        .collect();
+    v.sort_by_key(|k| std::cmp::Reverse(k.son_gorulme));
+    v
+}
+
+/// Host: güvenilen cihazı kaldır; o cihaz bir dahaki sefere kod gerektiğini öğrenir.
+#[flutter_rust_bridge::frb(sync)]
+pub fn guvenilen_kaldir(kimlik: String) {
+    if let Some(v) = veri() {
+        let _ = guvenilen::guncelle(&guvenilen::kayit_yolu(&v), |k| guvenilen::hosttan_kaldir(k, &kimlik));
+    }
+}
 
 /// Host olayı. `tur`: hazir | istek | baglandi | koptu | hata | dosya | uyari | yeniden.
 #[derive(Debug, Clone, Default)]
@@ -48,9 +120,12 @@ pub struct HostOlayi {
     /// dosya: alınan dosyanın tam yolu.
     pub yol: String,
     pub oyun_kolu: bool,
+    /// istek: kayıtlı cihaz (kod olmadan) bağlanmak istiyor.
+    pub kayitli: bool,
 }
 
-/// İzleyici olayı. `tur`: bekliyor | kabul | kare | istatistik (metin = yol) | yeniden | koptu | hata | pano | dosya.
+/// İzleyici olayı. `tur`: bekliyor | kabul | kare | istatistik (metin = yol) | yeniden | kaydedildi |
+/// koptu | hata | pano | dosya.
 #[derive(Debug, Clone, Default)]
 pub struct IzleyiciOlayi {
     pub tur: String,
@@ -95,7 +170,7 @@ fn host_dto(o: HostOlay) -> HostOlayi {
         HostOlay::Hazir { kod, parola, adresler, erisim } => {
             HostOlayi { tur: "hazir".into(), kod, parola, adresler, erisim, ..Default::default() }
         }
-        HostOlay::Istek { ad } => HostOlayi { tur: "istek".into(), ad, ..Default::default() },
+        HostOlay::Istek { ad, kayitli } => HostOlayi { tur: "istek".into(), ad, kayitli, ..Default::default() },
         HostOlay::Baglandi { ad, izinler } => HostOlayi {
             tur: "baglandi".into(), ad, kontrol: izinler.kontrol, pano: izinler.pano, dosya: izinler.dosya, oyun_kolu: izinler.oyun_kolu, ..Default::default()
         },
@@ -126,7 +201,8 @@ pub fn surum() -> String {
     env!("CARGO_PKG_VERSION").to_owned()
 }
 
-/// Bağlantı ver: sunucuyu açar, olayları `olaylar` akışına yazar. Önceki host varsa durdurulur.
+/// Uygulama açıkken arka planda çalışan host'u başlatır (kayıtlı cihazlar onayla bağlanabilir);
+/// kodla bağlantı `host_kod_ac(true)` ile ("Bağlantı ver" ekranı) açılır. Önceki host durdurulur.
 pub fn host_baslat(ad: String, parola: String, upnp: bool, olaylar: StreamSink<HostOlayi>) {
     host_durdur();
     let hata = |olaylar: &StreamSink<HostOlayi>, m: String| {
@@ -142,7 +218,8 @@ pub fn host_baslat(ad: String, parola: String, upnp: bool, olaylar: StreamSink<H
     let fab: Arc<dyn afudesk_core::platform::Fabrika> = Arc::new(afudesk_core::platform::masaustu::Gercek);
     #[cfg(not(target_os = "android"))]
     {
-    let mut h = match rt().block_on(host::baslat(HostAyar { ad, upnp, parola, yalniz_yerel: false, dosya_klasoru: None }, fab)) {
+    let ayar = HostAyar { ad, upnp, parola, yalniz_yerel: false, dosya_klasoru: None, veri_klasoru: veri(), kod_acik: false };
+    let mut h = match rt().block_on(host::baslat(ayar, fab)) {
         Ok(h) => h,
         Err(e) => return hata(&olaylar, format!("Bağlantı açılamadı: {e}")),
     };
@@ -180,6 +257,14 @@ pub fn host_kes() {
     host_komut(HostKomut::Kes);
 }
 
+/// "Bağlantı ver" ekranı açılınca true, kapanınca false: kod yalnız ekran açıkken geçerli.
+#[flutter_rust_bridge::frb(sync)]
+pub fn host_kod_ac(acik: bool) {
+    if let Some((h, _)) = HOST.lock().unwrap().as_ref() {
+        h.kod_ac(acik);
+    }
+}
+
 pub fn host_durdur() {
     // Host düşürülünce Drop durdurma sinyalini gönderir.
     if let Some((mut h, _)) = HOST.lock().unwrap().take() {
@@ -201,7 +286,32 @@ pub fn izleyici_baglan(kod: String, parola: String, ad: String, olaylar: StreamS
         .map(|p| Box::new(p) as Box<dyn afudesk_core::pano::Pano>);
     #[cfg(target_os = "android")]
     let pano: Option<Box<dyn afudesk_core::pano::Pano>> = None;
-    let mut iz = match rt().block_on(izleyici::baglan_panolu(&kod, &parola, &ad, pano)) {
+    let v = veri();
+    let sonuc = rt().block_on(izleyici::baglan_ayarli(&kod, &parola, &ad, pano, v.as_deref()));
+    izleyici_pompala(sonuc, olaylar);
+}
+
+/// Kayıtlı bilgisayara kod ve parola olmadan bağlan (karşı taraf yine onay verir).
+pub fn izleyici_kayitli_baglan(kimlik: String, ad: String, olaylar: StreamSink<IzleyiciOlayi>) {
+    izleyici_kapat();
+    IZLEYICI_KOL_IZNI.store(false, Ordering::SeqCst);
+    IZLEYICI_KOL_SIRASI.store(0, Ordering::SeqCst);
+    let Some(v) = veri() else {
+        let _ = olaylar.add(IzleyiciOlayi { tur: "hata".into(), metin: "Kayıtlı cihazlar okunamadı.".into(), ..Default::default() });
+        return;
+    };
+    #[cfg(not(target_os = "android"))]
+    let pano = afudesk_core::pano::ArboardPano::new()
+        .ok()
+        .map(|p| Box::new(p) as Box<dyn afudesk_core::pano::Pano>);
+    #[cfg(target_os = "android")]
+    let pano: Option<Box<dyn afudesk_core::pano::Pano>> = None;
+    let sonuc = rt().block_on(izleyici::kayitli_baglan(&kimlik, &v, &ad, pano));
+    izleyici_pompala(sonuc, olaylar);
+}
+
+fn izleyici_pompala(sonuc: anyhow::Result<izleyici::Izleyici>, olaylar: StreamSink<IzleyiciOlayi>) {
+    let mut iz = match sonuc {
         Ok(i) => i,
         Err(e) => {
             let _ = olaylar.add(IzleyiciOlayi { tur: "hata".into(), metin: e.to_string(), ..Default::default() });
@@ -236,6 +346,7 @@ pub fn izleyici_baglan(kod: String, parola: String, ad: String, olaylar: StreamS
                     metin: format!("Bağlantı koptu, yeniden bağlanılıyor… ({deneme})"),
                     ..Default::default()
                 },
+                IzleyiciOlay::Kaydedildi { ad } => IzleyiciOlayi { tur: "kaydedildi".into(), ad, ..Default::default() },
                 IzleyiciOlay::Koptu { sebep } => IzleyiciOlayi { tur: "koptu".into(), metin: sebep, ..Default::default() },
                 IzleyiciOlay::Pano(metin) => IzleyiciOlayi { tur: "pano".into(), metin, ..Default::default() },
                 IzleyiciOlay::Dosya { ad, gonderilen, toplam, bitti, hata } => IzleyiciOlayi {

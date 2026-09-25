@@ -135,6 +135,12 @@ pub fn guncelle<T>(yol: &Path, f: impl FnOnce(&mut Kayitlar) -> T) -> std::io::R
     Ok(sonuc)
 }
 
+/// Masaüstünde varsayılan veri klasörü (Windows: %LOCALAPPDATA%\AfuDesk). Android'de yok;
+/// orada klasörü uygulama verir.
+pub fn varsayilan_klasor() -> Option<PathBuf> {
+    dirs::data_local_dir().map(|p| p.join("AfuDesk"))
+}
+
 pub fn kayit_yolu(veri_klasoru: &Path) -> PathBuf {
     veri_klasoru.join(KAYIT_DOSYASI)
 }

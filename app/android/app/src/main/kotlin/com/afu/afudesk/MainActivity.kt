@@ -28,6 +28,9 @@ class MainActivity : FlutterActivity() {
                     if (Build.VERSION.SDK_INT >= 26) it.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE)) else it.vibrate(duration)
                 }
                 result.success(null)
+            } else if (call.method == "veriKlasoru") {
+                // Kalıcı cihaz kimliği ve kayıtlı cihazlar (uygulamaya özel klasör).
+                result.success(filesDir.absolutePath)
             } else result.notImplemented()
         }
     }

@@ -66,7 +66,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 728986621;
+  int get rustContentHash => -1105205063;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -81,6 +81,10 @@ abstract class RustLibApi extends BaseApi {
   String crateApiAfudeskCihazAdi();
 
   Future<GirdiOlayi> crateApiAfudeskGirdiOlayiDefault();
+
+  List<KayitliCihaz> crateApiAfudeskGuvenilenCihazlar();
+
+  void crateApiAfudeskGuvenilenKaldir({required String kimlik});
 
   Stream<HostOlayi> crateApiAfudeskHostBaslat({
     required String ad,
@@ -98,6 +102,8 @@ abstract class RustLibApi extends BaseApi {
   });
 
   Future<void> crateApiAfudeskHostKes();
+
+  void crateApiAfudeskHostKodAc({required bool acik});
 
   Future<HostOlayi> crateApiAfudeskHostOlayiDefault();
 
@@ -117,6 +123,11 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiAfudeskIzleyiciKapat();
 
+  Stream<IzleyiciOlayi> crateApiAfudeskIzleyiciKayitliBaglan({
+    required String kimlik,
+    required String ad,
+  });
+
   Future<void> crateApiAfudeskIzleyiciKol({
     required int slot,
     required int dugmeler,
@@ -132,7 +143,15 @@ abstract class RustLibApi extends BaseApi {
 
   void crateApiAfudeskKareCizildi();
 
+  Future<KayitliCihaz> crateApiAfudeskKayitliCihazDefault();
+
+  List<KayitliCihaz> crateApiAfudeskKayitliCihazlar();
+
+  void crateApiAfudeskKayitliUnut({required String kimlik});
+
   String crateApiAfudeskSurum();
+
+  void crateApiAfudeskVeriKlasoruAyarla({required String yol});
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -193,6 +212,51 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "girdi_olayi_default", argNames: []);
 
   @override
+  List<KayitliCihaz> crateApiAfudeskGuvenilenCihazlar() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_kayitli_cihaz,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiAfudeskGuvenilenCihazlarConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAfudeskGuvenilenCihazlarConstMeta =>
+      const TaskConstMeta(debugName: "guvenilen_cihazlar", argNames: []);
+
+  @override
+  void crateApiAfudeskGuvenilenKaldir({required String kimlik}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(kimlik, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiAfudeskGuvenilenKaldirConstMeta,
+        argValues: [kimlik],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAfudeskGuvenilenKaldirConstMeta =>
+      const TaskConstMeta(debugName: "guvenilen_kaldir", argNames: ["kimlik"]);
+
+  @override
   Stream<HostOlayi> crateApiAfudeskHostBaslat({
     required String ad,
     required String parola,
@@ -211,7 +275,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 3,
+              funcId: 5,
               port: port_,
             );
           },
@@ -242,7 +306,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 4,
+            funcId: 6,
             port: port_,
           );
         },
@@ -278,7 +342,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 7,
             port: port_,
           );
         },
@@ -307,7 +371,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 8,
             port: port_,
           );
         },
@@ -326,6 +390,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "host_kes", argNames: []);
 
   @override
+  void crateApiAfudeskHostKodAc({required bool acik}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_bool(acik, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiAfudeskHostKodAcConstMeta,
+        argValues: [acik],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAfudeskHostKodAcConstMeta =>
+      const TaskConstMeta(debugName: "host_kod_ac", argNames: ["acik"]);
+
+  @override
   Future<HostOlayi> crateApiAfudeskHostOlayiDefault() {
     return handler.executeNormal(
       NormalTask(
@@ -334,7 +421,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 10,
             port: port_,
           );
         },
@@ -361,7 +448,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 11,
             port: port_,
           );
         },
@@ -388,7 +475,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 12,
             port: port_,
           );
         },
@@ -425,7 +512,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 10,
+              funcId: 13,
               port: port_,
             );
           },
@@ -458,7 +545,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 14,
             port: port_,
           );
         },
@@ -489,7 +576,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 15,
             port: port_,
           );
         },
@@ -516,7 +603,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 16,
             port: port_,
           );
         },
@@ -533,6 +620,46 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiAfudeskIzleyiciKapatConstMeta =>
       const TaskConstMeta(debugName: "izleyici_kapat", argNames: []);
+
+  @override
+  Stream<IzleyiciOlayi> crateApiAfudeskIzleyiciKayitliBaglan({
+    required String kimlik,
+    required String ad,
+  }) {
+    final olaylar = RustStreamSink<IzleyiciOlayi>();
+    unawaited(
+      handler.executeNormal(
+        NormalTask(
+          callFfi: (port_) {
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            sse_encode_String(kimlik, serializer);
+            sse_encode_String(ad, serializer);
+            sse_encode_StreamSink_izleyici_olayi_Sse(olaylar, serializer);
+            pdeCallFfi(
+              generalizedFrbRustBinding,
+              serializer,
+              funcId: 17,
+              port: port_,
+            );
+          },
+          codec: SseCodec(
+            decodeSuccessData: sse_decode_unit,
+            decodeErrorData: null,
+          ),
+          constMeta: kCrateApiAfudeskIzleyiciKayitliBaglanConstMeta,
+          argValues: [kimlik, ad, olaylar],
+          apiImpl: this,
+        ),
+      ),
+    );
+    return olaylar.stream;
+  }
+
+  TaskConstMeta get kCrateApiAfudeskIzleyiciKayitliBaglanConstMeta =>
+      const TaskConstMeta(
+        debugName: "izleyici_kayitli_baglan",
+        argNames: ["kimlik", "ad", "olaylar"],
+      );
 
   @override
   Future<void> crateApiAfudeskIzleyiciKol({
@@ -560,7 +687,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 18,
             port: port_,
           );
         },
@@ -598,7 +725,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 19,
             port: port_,
           );
         },
@@ -622,7 +749,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 20)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -639,12 +766,84 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "kare_cizildi", argNames: []);
 
   @override
+  Future<KayitliCihaz> crateApiAfudeskKayitliCihazDefault() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 21,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_kayitli_cihaz,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiAfudeskKayitliCihazDefaultConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAfudeskKayitliCihazDefaultConstMeta =>
+      const TaskConstMeta(debugName: "kayitli_cihaz_default", argNames: []);
+
+  @override
+  List<KayitliCihaz> crateApiAfudeskKayitliCihazlar() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 22)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_kayitli_cihaz,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiAfudeskKayitliCihazlarConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAfudeskKayitliCihazlarConstMeta =>
+      const TaskConstMeta(debugName: "kayitli_cihazlar", argNames: []);
+
+  @override
+  void crateApiAfudeskKayitliUnut({required String kimlik}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(kimlik, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiAfudeskKayitliUnutConstMeta,
+        argValues: [kimlik],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAfudeskKayitliUnutConstMeta =>
+      const TaskConstMeta(debugName: "kayitli_unut", argNames: ["kimlik"]);
+
+  @override
   String crateApiAfudeskSurum() {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 17)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -659,6 +858,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiAfudeskSurumConstMeta =>
       const TaskConstMeta(debugName: "surum", argNames: []);
+
+  @override
+  void crateApiAfudeskVeriKlasoruAyarla({required String yol}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(yol, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 25)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiAfudeskVeriKlasoruAyarlaConstMeta,
+        argValues: [yol],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAfudeskVeriKlasoruAyarlaConstMeta =>
+      const TaskConstMeta(debugName: "veri_klasoru_ayarla", argNames: ["yol"]);
 
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw) {
@@ -726,8 +948,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   HostOlayi dco_decode_host_olayi(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 12)
-      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return HostOlayi(
       tur: dco_decode_String(arr[0]),
       kod: dco_decode_String(arr[1]),
@@ -741,6 +963,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       dosya: dco_decode_bool(arr[9]),
       yol: dco_decode_String(arr[10]),
       oyunKolu: dco_decode_bool(arr[11]),
+      kayitli: dco_decode_bool(arr[12]),
     );
   }
 
@@ -754,6 +977,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   int dco_decode_i_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
+  }
+
+  @protected
+  PlatformInt64 dco_decode_i_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeI64(raw);
   }
 
   @protected
@@ -786,9 +1015,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  KayitliCihaz dco_decode_kayitli_cihaz(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return KayitliCihaz(
+      kimlik: dco_decode_String(arr[0]),
+      ad: dco_decode_String(arr[1]),
+      sonGorulme: dco_decode_i_64(arr[2]),
+    );
+  }
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_String).toList();
+  }
+
+  @protected
+  List<KayitliCihaz> dco_decode_list_kayitli_cihaz(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_kayitli_cihaz).toList();
   }
 
   @protected
@@ -913,6 +1161,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_dosya = sse_decode_bool(deserializer);
     var var_yol = sse_decode_String(deserializer);
     var var_oyunKolu = sse_decode_bool(deserializer);
+    var var_kayitli = sse_decode_bool(deserializer);
     return HostOlayi(
       tur: var_tur,
       kod: var_kod,
@@ -926,6 +1175,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       dosya: var_dosya,
       yol: var_yol,
       oyunKolu: var_oyunKolu,
+      kayitli: var_kayitli,
     );
   }
 
@@ -939,6 +1189,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   int sse_decode_i_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getInt32();
+  }
+
+  @protected
+  PlatformInt64 sse_decode_i_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getPlatformInt64();
   }
 
   @protected
@@ -987,6 +1243,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  KayitliCihaz sse_decode_kayitli_cihaz(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_kimlik = sse_decode_String(deserializer);
+    var var_ad = sse_decode_String(deserializer);
+    var var_sonGorulme = sse_decode_i_64(deserializer);
+    return KayitliCihaz(
+      kimlik: var_kimlik,
+      ad: var_ad,
+      sonGorulme: var_sonGorulme,
+    );
+  }
+
+  @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -994,6 +1263,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <String>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_String(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<KayitliCihaz> sse_decode_list_kayitli_cihaz(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <KayitliCihaz>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_kayitli_cihaz(deserializer));
     }
     return ans_;
   }
@@ -1132,6 +1415,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.dosya, serializer);
     sse_encode_String(self.yol, serializer);
     sse_encode_bool(self.oyunKolu, serializer);
+    sse_encode_bool(self.kayitli, serializer);
   }
 
   @protected
@@ -1144,6 +1428,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_i_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putInt32(self);
+  }
+
+  @protected
+  void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putPlatformInt64(self);
   }
 
   @protected
@@ -1171,11 +1461,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_kayitli_cihaz(KayitliCihaz self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.kimlik, serializer);
+    sse_encode_String(self.ad, serializer);
+    sse_encode_i_64(self.sonGorulme, serializer);
+  }
+
+  @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_String(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_kayitli_cihaz(
+    List<KayitliCihaz> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_kayitli_cihaz(item, serializer);
     }
   }
 

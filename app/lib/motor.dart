@@ -12,8 +12,30 @@ import 'oyun_kolu.dart';
 class HostOlay {
   final String tur, kod, parola, erisim, ad, metin, yol;
   final bool kontrol, pano, dosya, oyunKolu;
+  /// istek: kayıtlı cihaz (kod olmadan) bağlanmak istiyor.
+  final bool kayitli;
   const HostOlay(this.tur, {this.kod = '', this.parola = '', this.erisim = '', this.ad = '', this.metin = '',
-    this.kontrol = false, this.pano = false, this.dosya = false, this.yol = '', this.oyunKolu = false});
+    this.kontrol = false, this.pano = false, this.dosya = false, this.yol = '', this.oyunKolu = false,
+    this.kayitli = false});
+}
+
+/// Kayıtlı (birbirini hatırlayan) cihaz. Ekranda yalnız ad ve son görülme gösterilir;
+/// `kimlik` yalnız Bağlan/Unut/Kaldır için kullanılır.
+class KayitliCihaz {
+  final String kimlik, ad;
+  final DateTime sonGorulme;
+  const KayitliCihaz(this.kimlik, this.ad, this.sonGorulme);
+}
+
+/// "az önce", "5 dk önce", "3 saat önce", "2 gün önce", ya da tarih.
+String goreliZaman(DateTime t, {DateTime? simdi}) {
+  final f = (simdi ?? DateTime.now()).difference(t);
+  if (f.inMinutes < 1) return 'az önce';
+  if (f.inHours < 1) return '${f.inMinutes} dk önce';
+  if (f.inDays < 1) return '${f.inHours} saat önce';
+  if (f.inDays < 30) return '${f.inDays} gün önce';
+  String iki(int n) => n.toString().padLeft(2, '0');
+  return '${iki(t.day)}.${iki(t.month)}.${t.year}';
 }
 
 class IzleyiciOlay {
@@ -84,12 +106,26 @@ abstract class Motor {
   bool get baglantiVerilebilir;
   /// Dokunmatik kontrol kipi (telefon/tablet).
   bool get dokunmatik;
+  /// Uygulama açıkken arka planda dinle: kayıtlı cihazlar kod olmadan (onayla) bağlanabilir.
+  void arkaPlanBaslat();
+  /// Host olayları (arka plan dahil); onay penceresini uygulama kökü gösterir.
+  Stream<HostOlay> get hostOlaylari;
+  /// "Bağlantı ver" ekranı: kodla bağlantıyı açar, olayları (son durum dahil) verir.
   Stream<HostOlay> hostBaslat({required String ad, String parola = '', bool upnp = true});
 Future<void> hostKabul({required bool kontrol, bool pano = false, bool dosya = false, bool oyunKolu = false});
   Future<void> hostRed();
   Future<void> hostKes();
+  /// "Bağlantı ver" ekranı kapandı: kodla bağlantı kapanır, arka plan dinleme sürer.
   Future<void> hostDurdur();
   Stream<IzleyiciOlay> baglan({required String kod, required String parola, required String ad});
+  /// Kayıtlı bilgisayara kod ve parola olmadan bağlan (karşı taraf yine onay verir).
+  Stream<IzleyiciOlay> kayitliBaglan({required String kimlik, required String ad});
+  /// Bu cihazın kod olmadan bağlanabileceği bilgisayarlar.
+  List<KayitliCihaz> kayitliCihazlar();
+  void kayitliUnut(String kimlik);
+  /// Bu bilgisayara kod olmadan bağlanabilen cihazlar.
+  List<KayitliCihaz> guvenilenCihazlar();
+  void guvenilenKaldir(String kimlik);
   void kareCizildi();
   void girdi(Girdi g);
   void izleyiciKol(OyunKoluDurumu durum);
@@ -110,9 +146,19 @@ class RustMotor implements Motor {
   @override
   String cihazAdi() => rust.cihazAdi();
 
+  final _hostOlay = StreamController<HostOlay>.broadcast();
+  HostOlay? _sonHazir, _bagli;
+  bool _arkaPlan = false;
+
   @override
-  Stream<HostOlay> hostBaslat({required String ad, String parola = '', bool upnp = true}) =>
-      rust.hostBaslat(ad: ad, parola: parola, upnp: upnp).map((o) => HostOlay(o.tur,
+  Stream<HostOlay> get hostOlaylari => _hostOlay.stream;
+
+  @override
+  void arkaPlanBaslat() {
+    if (_arkaPlan || !baglantiVerilebilir) return;
+    _arkaPlan = true;
+    rust.hostBaslat(ad: cihazAdi(), parola: '', upnp: true).listen((o) {
+      final h = HostOlay(o.tur,
           kod: o.kod,
           parola: o.parola,
           erisim: o.erisim,
@@ -122,7 +168,33 @@ class RustMotor implements Motor {
           pano: o.pano,
           dosya: o.dosya,
           yol: o.yol,
-          oyunKolu: o.oyunKolu));
+          oyunKolu: o.oyunKolu,
+          kayitli: o.kayitli);
+      switch (h.tur) {
+        case 'hazir':
+          _sonHazir = h;
+        case 'baglandi':
+          _bagli = h;
+        case 'koptu':
+          _bagli = null;
+        case 'hata':
+          // Başlatılamadı: "Tekrar dene" yeniden başlatabilsin.
+          _bagli = null;
+          _arkaPlan = false;
+      }
+      _hostOlay.add(h);
+    });
+  }
+
+  @override
+  Stream<HostOlay> hostBaslat({required String ad, String parola = '', bool upnp = true}) async* {
+    arkaPlanBaslat();
+    rust.hostKodAc(acik: true);
+    // Sayfa sonradan açıldı: son durumu (bağlı oturum ya da geçerli kod) hemen göster.
+    final son = _bagli ?? _sonHazir;
+    if (son != null) yield son;
+    yield* _hostOlay.stream;
+  }
 
   @override
   Future<void> hostKabul({required bool kontrol, bool pano = false, bool dosya = false, bool oyunKolu = false}) =>
@@ -132,11 +204,29 @@ class RustMotor implements Motor {
   @override
   Future<void> hostKes() => rust.hostKes();
   @override
-  Future<void> hostDurdur() => rust.hostDurdur();
+  Future<void> hostDurdur() async => rust.hostKodAc(acik: false);
 
   @override
   Stream<IzleyiciOlay> baglan({required String kod, required String parola, required String ad}) =>
-      rust.izleyiciBaglan(kod: kod, parola: parola, ad: ad).map((o) => IzleyiciOlay(o.tur,
+      rust.izleyiciBaglan(kod: kod, parola: parola, ad: ad).map(_izleyiciOlayi);
+
+  @override
+  Stream<IzleyiciOlay> kayitliBaglan({required String kimlik, required String ad}) =>
+      rust.izleyiciKayitliBaglan(kimlik: kimlik, ad: ad).map(_izleyiciOlayi);
+
+  static KayitliCihaz _kayitli(rust.KayitliCihaz k) =>
+      KayitliCihaz(k.kimlik, k.ad, DateTime.fromMillisecondsSinceEpoch(k.sonGorulme.toInt() * 1000));
+
+  @override
+  List<KayitliCihaz> kayitliCihazlar() => rust.kayitliCihazlar().map(_kayitli).toList();
+  @override
+  void kayitliUnut(String kimlik) => rust.kayitliUnut(kimlik: kimlik);
+  @override
+  List<KayitliCihaz> guvenilenCihazlar() => rust.guvenilenCihazlar().map(_kayitli).toList();
+  @override
+  void guvenilenKaldir(String kimlik) => rust.guvenilenKaldir(kimlik: kimlik);
+
+  static IzleyiciOlay _izleyiciOlayi(rust.IzleyiciOlayi o) => IzleyiciOlay(o.tur,
           ad: o.ad,
           metin: o.metin,
           kontrol: o.kontrol,
@@ -154,7 +244,7 @@ class RustMotor implements Motor {
           slot: o.slot,
           buyuk: o.buyuk,
           kucuk: o.kucuk,
-          rgba: o.rgba));
+          rgba: o.rgba);
 
   @override
   void kareCizildi() => rust.kareCizildi();

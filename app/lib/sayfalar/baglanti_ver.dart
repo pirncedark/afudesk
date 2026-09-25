@@ -13,6 +13,10 @@ class BaglantiVerSayfasi extends StatefulWidget {
   final Motor motor;
   const BaglantiVerSayfasi({super.key, required this.motor});
 
+  static int _acikSayisi = 0;
+  /// Ekran açık mı (arka planda gelen bağlantıda ikinci kez açılmasın).
+  static bool get acik => _acikSayisi > 0;
+
   @override
   State<BaglantiVerSayfasi> createState() => _BaglantiVerDurum();
 }
@@ -36,11 +40,13 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
 
   DateTime _bitis = DateTime.now();
   Timer? _sayac;
-  bool _istekAcik = false;
+  List<KayitliCihaz> _guvenilen = const [];
 
   @override
   void initState() {
     super.initState();
+    BaglantiVerSayfasi._acikSayisi++;
+    _guvenilen = widget.motor.guvenilenCihazlar();
     _baslat();
     _sayac = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && _asama == _Asama.bekliyor) setState(() {});
@@ -67,14 +73,14 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
     switch (o.tur) {
       case 'hazir':
         setState(() {
+          _guvenilen = widget.motor.guvenilenCihazlar();
           _asama = _Asama.bekliyor;
           _kod = o.kod;
           _parola = o.parola;
           _erisim = o.erisim;
           _bitis = DateTime.now().add(kodSuresi);
         });
-      case 'istek':
-        _istekGoster(o.ad);
+      // 'istek': onay penceresini uygulama kökü gösterir (bu ekran kapalıyken de).
       case 'baglandi':
         _kolSurucusuYok = false;
         setState(() {
@@ -108,23 +114,6 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
     }
   }
 
-  Future<void> _istekGoster(String ad) async {
-    if (_istekAcik) return;
-    _istekAcik = true;
-    final sonuc = await showDialog<IstekKarari?>(
-
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => IstekPenceresi(ad: ad),
-    );
-    _istekAcik = false;
-    if (sonuc == null) {
-      await widget.motor.hostRed();
-    } else {
-await widget.motor.hostKabul(kontrol: sonuc.kontrol, pano: sonuc.pano, dosya: sonuc.dosya, oyunKolu: sonuc.oyunKolu);
-    }
-  }
-
   void _mesaj(String m) {
     if (m.isEmpty) return;
     // Yeni bildirim eskisinin yerini alsın (üst üste sıraya girmesin).
@@ -140,10 +129,44 @@ await widget.motor.hostKabul(kontrol: sonuc.kontrol, pano: sonuc.pano, dosya: so
 
   @override
   void dispose() {
+    BaglantiVerSayfasi._acikSayisi--;
     _sayac?.cancel();
     _abonelik?.cancel();
+    // Ekrandan çıkınca bağlantı da biter (arka planda gizli oturum kalmasın).
+    if (_asama == _Asama.bagli) widget.motor.hostKes();
     widget.motor.hostDurdur();
     super.dispose();
+  }
+
+  void _guvenileniKaldir(KayitliCihaz c) {
+    widget.motor.guvenilenKaldir(c.kimlik);
+    setState(() => _guvenilen = widget.motor.guvenilenCihazlar());
+    _mesaj('${c.ad} kaldırıldı. Bir dahaki sefere kod gerekecek.');
+  }
+
+  Widget _guvenilenler() {
+    if (_guvenilen.isEmpty) return const SizedBox.shrink();
+    return Column(key: const Key('guvenilen_liste'), crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const SizedBox(height: 22),
+      const Text('Güvenilen cihazlar', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+      const SizedBox(height: 4),
+      const Text('Bu cihazlar kod olmadan bağlanabilir. Her seferinde yine senden onay istenir.',
+          style: TextStyle(color: Renk.soluk, fontSize: 13)),
+      const SizedBox(height: 8),
+      for (final (i, c) in _guvenilen.indexed)
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.verified_user_outlined, color: Renk.vurgu),
+            title: Text(c.ad),
+            subtitle: Text('Son görülme: ${goreliZaman(c.sonGorulme)}'),
+            trailing: TextButton(
+              key: Key('guvenilen_kaldir_$i'),
+              onPressed: () => _guvenileniKaldir(c),
+              child: const Text('Kaldır'),
+            ),
+          ),
+        ),
+    ]);
   }
 
   @override
@@ -306,11 +329,12 @@ Text('Oyun kolu: ${_kolSurucusuYok ? 'sürücü yok' : (_bagliOyunKolu ? 'açık
           if (_erisim.contains('Yalnız aynı ağdan'))
             const Padding(
               padding: EdgeInsets.only(left: 26, top: 6),
-              child: Text('Farklı bir evden bağlanacaklar için modemde UPnP’yi açın ya da bağlantıyı karşı taraf versin.', key: Key('ver_ag_onerisi'), style: TextStyle(color: Renk.soluk)),
+              child: Text('İnternet bağlantını kontrol et. Kod birkaç dakikada bir kendiliğinden yenilenir.', key: Key('ver_ag_onerisi'), style: TextStyle(color: Renk.soluk)),
             ),
           const SizedBox(height: 18),
           const Text('Biri bağlanmak istediğinde sana sorulacak. Onay vermeden kimse ekranını göremez.',
               style: TextStyle(color: Renk.soluk, fontSize: 13)),
+          _guvenilenler(),
         ]);
     }
   }
@@ -329,7 +353,9 @@ class IstekKarari {
 class IstekPenceresi extends StatefulWidget {
   final String ad;
   final Duration sure;
-  const IstekPenceresi({super.key, required this.ad, this.sure = const Duration(seconds: 60)});
+  /// Kayıtlı cihaz: kod olmadan bağlanıyor (rozetle belirtilir, onay yine gerekir).
+  final bool kayitli;
+  const IstekPenceresi({super.key, required this.ad, this.sure = const Duration(seconds: 60), this.kayitli = false});
 
   @override
   State<IstekPenceresi> createState() => _IstekPenceresiDurum();
@@ -368,6 +394,15 @@ class _IstekPenceresiDurum extends State<IstekPenceresi> {
       title: Text('${widget.ad} bağlanmak istiyor',
           key: const Key('istek_baslik'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
       content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (widget.kayitli)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Chip(
+              key: Key('istek_kayitli'),
+              avatar: Icon(Icons.verified_user_outlined, size: 18),
+              label: Text('Kayıtlı cihaz — kod gerekmedi'),
+            ),
+          ),
         const Text('Kabul edersen ekranını görebilecek.'),
         const SizedBox(height: 10),
         CheckboxListTile(
