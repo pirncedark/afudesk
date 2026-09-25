@@ -28,6 +28,44 @@ pub struct Kayitlar {
 pub fn jeton_ozeti(j: &str) -> String {
     hex(&Sha256::digest(j.as_bytes()))
 }
+/// Jetonu karşılaştırmadan önce özetler; baytların tamamını sabit sürede karşılaştırır.
+pub fn jeton_dogrula(jeton: &str, ozet: &str) -> bool {
+    let hesaplanan = jeton_ozeti(jeton);
+    hesaplanan.len() == ozet.len()
+        && hesaplanan
+            .bytes()
+            .zip(ozet.bytes())
+            .fold(0u8, |fark, (a, b)| fark | (a ^ b))
+            == 0
+}
+
+/// Kriptografik rastgele 256 bit eşleştirme jetonu.
+pub fn yeni_jeton() -> String {
+    use rand::RngCore;
+    let mut baytlar = [0u8; 32];
+    rand::thread_rng().fill_bytes(&mut baytlar);
+    hex(&baytlar)
+}
+
+/// Kayıtlı izleyicinin jeton özetini kaydeder veya mevcut eşleşmenin üzerine yazar.
+pub fn hosta_ekle(kayitlar: &mut Kayitlar, kayit: HostKaydi) {
+    kayitlar.hostlar.retain(|eski| eski.izleyici_kimlik != kayit.izleyici_kimlik);
+    kayitlar.hostlar.push(kayit);
+}
+
+/// Host kullanıcısının kaldırdığı eşleşmeyi bellekten çıkarır.
+pub fn hosttan_kaldir(kayitlar: &mut Kayitlar, izleyici_kimlik: &str) -> bool {
+    let once = kayitlar.hostlar.len();
+    kayitlar.hostlar.retain(|k| k.izleyici_kimlik != izleyici_kimlik);
+    once != kayitlar.hostlar.len()
+}
+
+/// İzleyicinin kendi listesinden bir host kaydını kaldırır.
+pub fn hostu_unut(kayitlar: &mut Kayitlar, host_kimlik: &str) -> bool {
+    let once = kayitlar.izleyiciler.len();
+    kayitlar.izleyiciler.retain(|k| k.host_kimlik != host_kimlik);
+    once != kayitlar.izleyiciler.len()
+}
 fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
@@ -98,5 +136,38 @@ pub mod testler {
         yaz(&p, &k2).unwrap();
         assert_eq!(oku(&p), k2);
         let _ = fs::remove_file(p);
+    }
+
+    #[test]
+    fn jeton_dogrulamasi() {
+        let jeton = yeni_jeton();
+        assert_eq!(jeton.len(), 64);
+        assert!(jeton_dogrula(&jeton, &jeton_ozeti(&jeton)));
+        assert!(!jeton_dogrula("yanlis", &jeton_ozeti(&jeton)));
+    }
+
+    #[test]
+    fn guvenilen_cihaz_kaldirilir_ve_unutulur() {
+        let mut kayitlar = Kayitlar {
+            hostlar: vec![HostKaydi {
+                izleyici_kimlik: "izleyici-1".into(),
+                ad: "Telefon".into(),
+                jeton_sha256: jeton_ozeti("jeton"),
+                eklenme: 1,
+                son_gorulme: 1,
+            }],
+            izleyiciler: vec![IzleyiciKaydi {
+                host_kimlik: "host-1".into(),
+                ad: "Bilgisayar".into(),
+                son_adresler: vec![],
+                host_parmak_izi: "parmak-izi".into(),
+                jeton: "jeton".into(),
+                son_gorulme: 1,
+            }],
+        };
+        assert!(hosttan_kaldir(&mut kayitlar, "izleyici-1"));
+        assert!(!hosttan_kaldir(&mut kayitlar, "izleyici-1"));
+        assert!(hostu_unut(&mut kayitlar, "host-1"));
+        assert!(kayitlar.hostlar.is_empty() && kayitlar.izleyiciler.is_empty());
     }
 }
