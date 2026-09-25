@@ -18,6 +18,14 @@ pub use iroh::endpoint::{Connection as Baglanti, RecvStream as AlAkisi, SendStre
 
 /// Doğrudan yolu bilerek kapatır (yalnız relay): TEST-2 ve sorun ayıklama için.
 pub const SADECE_RELAY_ORTAM: &str = "AFUDESK_SADECE_RELAY";
+/// UDP soketini belirli yerel IP'ye bağlar (ör. telefon paylaşımı arayüzü): trafik o
+/// arayüzden çıkar. Tek bilgisayarda iki farklı ISS ile test için.
+pub const BAGLA_IP_ORTAM: &str = "AFUDESK_BAGLA_IP";
+/// Relay (HTTPS) bağlantısı için HTTP CONNECT vekili, ör. `http://127.0.0.1:18080`.
+pub const PROXY_ORTAM: &str = "AFUDESK_PROXY";
+/// (Yalnız `wan_testi` özelliğiyle) yerel/özel adresli yollar hiç seçilmez: aynı
+/// bilgisayardaki test, LAN kısayolundan değil gerçek internetten geçer.
+pub const GENEL_YOL_ORTAM: &str = "AFUDESK_TEST_GENEL_YOL";
 
 /// Uç noktanın nasıl kurulacağı.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,7 +73,78 @@ pub async fn uc_nokta(kurulum: Kurulum, portmapper: bool) -> Result<Endpoint> {
     if !portmapper || kurulum != Kurulum::Internet {
         b = b.portmapper_config(iroh::endpoint::PortmapperConfig::Disabled);
     }
+    if kurulum != Kurulum::YalnizYerel {
+        if kurulum == Kurulum::Internet {
+            if let Some(ip) = ortam(BAGLA_IP_ORTAM).and_then(|v| v.parse::<std::net::IpAddr>().ok()) {
+                b = b.clear_ip_transports().bind_addr(SocketAddr::new(ip, 0))?;
+            }
+        }
+        if let Some(url) = ortam(PROXY_ORTAM).and_then(|v| v.parse().ok()) {
+            b = b.proxy_url(url);
+        }
+        #[cfg(feature = "wan_testi")]
+        if ortam(GENEL_YOL_ORTAM).as_deref() == Some("1") {
+            b = b.path_selector(std::sync::Arc::new(test_secici::GenelYolSecici));
+        }
+    }
     b.bind().await.context("Ağ başlatılamadı.")
+}
+
+fn ortam(ad: &str) -> Option<String> {
+    std::env::var(ad).ok().map(|v| v.trim().to_owned()).filter(|v| !v.is_empty())
+}
+
+/// Adres genel internette mi (özel ağ, döngü, bağlantı-yerel, CGNAT değil)?
+pub fn genel_mi(ip: std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(a) => {
+            let o = a.octets();
+            !(a.is_private()
+                || a.is_loopback()
+                || a.is_link_local()
+                || a.is_unspecified()
+                || a.is_broadcast()
+                || (o[0] == 100 && (o[1] & 0xc0) == 64))
+        }
+        std::net::IpAddr::V6(a) => a.segments()[0] & 0xe000 == 0x2000,
+    }
+}
+
+#[cfg(feature = "wan_testi")]
+pub mod test_secici {
+    //! Yalnız genel adresli doğrudan yolları ya da relay'i seçer (doğrudan önce).
+    use iroh::endpoint::transports::{
+        Addr, PathSelection, PathSelectionContext, PathSelectionData, PathSelector,
+    };
+    use std::time::Duration;
+
+    #[derive(Debug, Default)]
+    pub struct GenelYolSecici;
+
+    impl PathSelector for GenelYolSecici {
+        fn select(&self, ctx: &PathSelectionContext<'_>) -> PathSelection {
+            let mut en_iyi: Option<(PathSelectionData<'_>, (u8, Duration))> = None;
+            for p in ctx.paths() {
+                let Some(st) = p.stats() else { continue };
+                let kat = match p.network_path().remote() {
+                    Addr::Ip(s) if super::genel_mi(s.ip()) => 0,
+                    Addr::Relay(..) => 1,
+                    _ => continue,
+                };
+                let anahtar = (kat, st.rtt);
+                if en_iyi.as_ref().is_none_or(|(_, a)| anahtar < *a) {
+                    en_iyi = Some((p, anahtar));
+                }
+            }
+            let mut secim = PathSelection::none();
+            if let Some((p, _)) = en_iyi {
+                if ctx.current() != Some(p.network_path()) {
+                    secim.set(&p);
+                }
+            }
+            secim
+        }
+    }
 }
 
 /// Relay'e bağlanana kadar (en çok `sure`) bekler. Relay yoksa (ör. internet yok) false.
@@ -154,6 +233,15 @@ pub fn rtt(c: &Baglanti) -> Duration {
     secili_yol(c).1
 }
 
+/// Seçili yolun karşı ucu: IP:port ya da relay adresi (kanıt/sorun ayıklama için).
+pub fn secili_yol_adresi(c: &Baglanti) -> String {
+    c.paths()
+        .iter()
+        .find(|p| p.is_selected())
+        .map(|p| p.remote_addr().to_string())
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod testler {
     use super::*;
@@ -219,6 +307,16 @@ mod testler {
         let e = baglan(&ep, hedef, Duration::from_secs(2)).await.unwrap_err();
         assert!(e.to_string().starts_with("Karşı tarafa ulaşılamadı"), "{e}");
         assert!(hedef_adres("bozuk", &[], &[]).is_err());
+    }
+
+    #[test]
+    fn genel_adres_ayrimi() {
+        for a in ["192.168.0.110", "10.1.2.3", "172.28.96.1", "127.0.0.1", "169.254.1.1", "100.100.1.1", "::1", "fe80::1"] {
+            assert!(!genel_mi(a.parse().unwrap()), "{a}");
+        }
+        for a in ["31.223.3.218", "8.8.8.8", "100.128.0.1", "2a02:e0::1"] {
+            assert!(genel_mi(a.parse().unwrap()), "{a}");
+        }
     }
 
     #[test]

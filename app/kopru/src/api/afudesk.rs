@@ -100,6 +100,8 @@ fn host_dto(o: HostOlay) -> HostOlayi {
         HostOlay::Hata(m) => HostOlayi { tur: "hata".into(), metin: m, ..Default::default() },
         HostOlay::DosyaAlindi { ad, yol } => HostOlayi { tur: "dosya".into(), ad, yol, ..Default::default() },
         HostOlay::Uyari(m) => HostOlayi { tur: "uyari".into(), metin: m, ..Default::default() },
+        // Yol değişimi (doğrudan/relay): arayüz şimdilik göstermiyor.
+        HostOlay::Yol { yol, adres } => HostOlayi { tur: "yol".into(), metin: yol, yol: adres, ..Default::default() },
         HostOlay::YenidenBekleniyor => HostOlayi {
             tur: "yeniden".into(),
             metin: "Bağlantı koptu; karşı taraf yeniden bağlanıyor…".into(),

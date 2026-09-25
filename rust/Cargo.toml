@@ -37,5 +37,18 @@ windows-capture = "2.0.1"
 vigem-client = { version = "0.1", features = ["unstable_xtarget_notification"] }
 
 
+[features]
+# Yalnız WAN test düzeneği (examples/wan_test.rs): iroh'un kararsız yol seçici API'si.
+wan_testi = ["iroh/unstable-custom-transports"]
+
+[[example]]
+name = "wan_test"
+required-features = ["wan_testi"]
+
 [dev-dependencies]
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+serde_json = "1"
 tokio = { version = "1", features = ["full"] }
+
+[target.'cfg(windows)'.dev-dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }

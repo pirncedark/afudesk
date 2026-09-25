@@ -5,3 +5,6 @@
 /app/windows/flutter/ephemeral/
 *.log
 /dist/
+
+# WAN testi kanıtları: kişisel ekran görüntüleri içerir, yerelde kalır
+reports/wan/

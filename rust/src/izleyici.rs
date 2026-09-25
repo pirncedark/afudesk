@@ -123,6 +123,11 @@ impl Izleyici {
         ag::secili_yol(&self.simdiki())
     }
 
+    /// Seçili yolun karşı ucu (IP:port ya da relay adresi).
+    pub fn yol_adresi(&self) -> String {
+        ag::secili_yol_adresi(&self.simdiki())
+    }
+
     /// Dosyayı karşı tarafa gönderir (arka planda). İlerleme ve sonuç
     /// `IzleyiciOlay::Dosya` olarak gelir; sonuç ayrıca dönen görevden okunabilir.
     /// Aynı dosya yeniden gönderilirse host kaldığı yerden devam ettirir.

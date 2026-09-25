@@ -80,6 +80,11 @@ pub enum HostOlay {
     Uyari(String),
     /// Bağlantı istemeden koptu; izleyicinin geri dönmesi bekleniyor (`DEVAM_SURESI`).
     YenidenBekleniyor,
+    /// Oturumda veri taşıyan yol değişti: `yol` "doğrudan" | "relay", `adres` karşı uç.
+    Yol {
+        yol: String,
+        adres: String,
+    },
 }
 
 pub enum HostKomut {
@@ -674,6 +679,8 @@ async fn oturum(
     let mut kol_siralari = std::collections::HashMap::<u8, u32>::new();
     let mut titresim_araligi = tokio::time::interval(Duration::from_millis(50));
     titresim_araligi.tick().await;
+    let mut yol_olcum = tokio::time::interval(Duration::from_secs(1));
+    let mut son_yol = (String::new(), String::new());
     let sonuc = loop {
         tokio::select! {
             _ = &mut *durdur => { c.close(0u32.into(), b"durdu"); break Oturum::Durdur; }
@@ -733,6 +740,13 @@ async fn oturum(
                 },
                 Err(_) => {}
             },
+            _ = yol_olcum.tick() => {
+                let yeni = (ag::secili_yol(c).0.ad().to_owned(), ag::secili_yol_adresi(c));
+                if !yeni.1.is_empty() && yeni != son_yol {
+                    son_yol = yeni.clone();
+                    let _ = olay.send(HostOlay::Yol { yol: yeni.0, adres: yeni.1 }).await;
+                }
+            }
             _ = titresim_araligi.tick() => {
                 if let Some(s) = sanal_kol.as_mut() {
                     for (slot, buyuk, kucuk) in s.titresim_al() {
