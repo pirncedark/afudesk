@@ -1,6 +1,6 @@
 {
-  "zaman": "2026-09-24 15:01",
-  "commit": "52ad66a",
+  "zaman": "2026-09-25 15:59",
+  "commit": "fb25443",
   "sistemler": {
     "FASTPATH": {
       "ad": "Düşük gecikmeli görüntü ve ölçüm",
@@ -28,12 +28,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.5,
+              "sure_sn": 0.9,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.00s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.00s"
               ]
             },
             {
@@ -42,12 +42,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.6,
+              "sure_sn": 0.9,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.00s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.00s"
               ]
             },
             {
@@ -56,12 +56,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.2,
+              "sure_sn": 1.6,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.63s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.70s"
               ]
             }
           ],
@@ -88,12 +88,12 @@
               "cikis": 0,
               "gecen": 3,
               "basarisiz": 0,
-              "sure_sn": 0.6,
+              "sure_sn": 0.9,
               "gecti": true,
               "son_satirlar": [
                 "running 3 tests",
                 "...",
-                "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 68 filtered out; finished in 0.00s"
+                "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.00s"
               ]
             }
           ],
@@ -125,12 +125,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 6.4,
+              "sure_sn": 6.9,
               "gecti": true,
               "son_satirlar": [
-                "00:00 +0: loading C:/Users/afuuu/Desktop/afuproject/AfuDesk/app/test/arayuz_test.dart",
-                "00:00 +0: C:/Users/afuuu/Desktop/afuproject/AfuDesk/app/test/arayuz_test.dart: Oturum gecikme göstergesi: renk ağ durumuna göre",
-                "00:01 +1: All tests passed!"
+                "",
+                "Package file_selector:windows references file_selector_windows:windows as the default plugin, but the package does not exist, or is not a plugin package.",
+                "Ask the maintainers of file_selector to either avoid referencing a default implementation via `platforms: windows: default_package: file_selector_windows` or create a plugin named file_selector_windows."
               ]
             }
           ],
@@ -167,12 +167,12 @@
               "cikis": 0,
               "gecen": 3,
               "basarisiz": 0,
-              "sure_sn": 0.6,
+              "sure_sn": 0.9,
               "gecti": true,
               "son_satirlar": [
                 "running 3 tests",
                 "...",
-                "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 68 filtered out; finished in 0.00s"
+                "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.00s"
               ]
             }
           ],
@@ -183,28 +183,33 @@
           "engel": ""
         },
         "rtt_yol_secimi": {
-          "ad": "Bilinen adres adayları arasında en düşük RTT'li yolun seçimi",
+          "ad": "En düşük RTT'li yolun seçimi (v1.3: iroh yol seçicisi — doğrudan yollar RTT'ye göre, relay yedek)",
           "durum": "DONE",
           "kanit": [
             {
               "dosya": "rust/src/ag.rs",
-              "desen": "fn en_iyi_yol",
+              "desen": "presets::N0",
+              "bulundu": true
+            },
+            {
+              "dosya": "rust/src/ag.rs",
+              "desen": "fn secili_yol",
               "bulundu": true
             }
           ],
           "testler": [
             {
               "tur": "cargo",
-              "filtre": "en_dusuk_rtt_yolu_secer",
+              "filtre": "ag::testler::dogru_kimlige_baglanir_ve_yol_dogrudan",
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.6,
+              "sure_sn": 1.0,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.00s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.08s"
               ]
             }
           ],
@@ -231,12 +236,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 3.4,
+              "sure_sn": 3.5,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 2.72s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 2.63s"
               ]
             }
           ],
@@ -274,12 +279,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.7,
+              "sure_sn": 0.8,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.00s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.00s"
               ]
             }
           ],
@@ -311,7 +316,7 @@
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.00s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.00s"
               ]
             },
             {
@@ -320,12 +325,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.2,
+              "sure_sn": 1.4,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.52s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.54s"
               ]
             }
           ],
@@ -352,12 +357,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.6,
+              "sure_sn": 0.9,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.00s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.00s"
               ]
             }
           ],
@@ -389,12 +394,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.6,
+              "sure_sn": 0.8,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.00s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.00s"
               ]
             },
             {
@@ -403,26 +408,26 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.7,
+              "sure_sn": 0.8,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.02s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.03s"
               ]
             },
             {
               "tur": "cargo",
-              "filtre": "uctan_uca::oyun_kolu_hosta_ulasir",
+              "filtre": "uctan_uca::disaridan_kol_durumu_hosta_ulasir",
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.0,
+              "sure_sn": 1.3,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.38s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.40s"
               ]
             }
           ],
@@ -449,12 +454,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.0,
+              "sure_sn": 1.1,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.29s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.33s"
               ]
             }
           ],
@@ -486,12 +491,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.1,
+              "sure_sn": 1.3,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.45s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.33s"
               ]
             },
             {
@@ -500,12 +505,362 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
+              "sure_sn": 6.8,
+              "gecti": true,
+              "son_satirlar": [
+                "",
+                "Package file_selector:windows references file_selector_windows:windows as the default plugin, but the package does not exist, or is not a plugin package.",
+                "Ask the maintainers of file_selector to either avoid referencing a default implementation via `platforms: windows: default_package: file_selector_windows` or create a plugin named file_selector_windows."
+              ]
+            }
+          ],
+          "uygulandi": true,
+          "test_edildi": true,
+          "gecti": true,
+          "basarisiz": false,
+          "engel": ""
+        },
+        "telefon_kol": {
+          "ad": "Android Bluetooth ve dokunmatik kol, izin, çoklu dokunma ve sade bağlantı hatası",
+          "durum": "DONE",
+          "kanit": [
+            {
+              "dosya": "app/kopru/src/api/afudesk.rs",
+              "desen": "izleyici_kol",
+              "bulundu": true
+            },
+            {
+              "dosya": "app/lib/oyun_kolu.dart",
+              "desen": "dugmeMaskesi",
+              "bulundu": true
+            },
+            {
+              "dosya": "app/android/app/src/main/kotlin/com/afu/afudesk/MainActivity.kt",
+              "desen": "dispatchGenericMotionEvent",
+              "bulundu": true
+            },
+            {
+              "dosya": "app/lib/bilesenler/oyun_kolu_katmani.dart",
+              "desen": "OyunKoluKatmani",
+              "bulundu": true
+            },
+            {
+              "dosya": "rust/src/ag.rs",
+              "desen": "pub const ULASILAMADI",
+              "bulundu": true
+            }
+          ],
+          "testler": [
+            {
+              "tur": "cargo",
+              "filtre": "uctan_uca::disaridan_kol_durumu_hosta_ulasir",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 1.3,
+              "gecti": true,
+              "son_satirlar": [
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.40s"
+              ]
+            },
+            {
+              "tur": "cargo",
+              "filtre": "baglanti_hatasi_kullaniciya_teknik_ayrinti_gostermez",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 0.9,
+              "gecti": true,
+              "son_satirlar": [
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.00s"
+              ]
+            },
+            {
+              "tur": "flutter",
+              "filtre": "eksen ve tetik değerleri XInput aralığına kırpılır",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 5.3,
+              "gecti": true,
+              "son_satirlar": [
+                "",
+                "Package file_selector:windows references file_selector_windows:windows as the default plugin, but the package does not exist, or is not a plugin package.",
+                "Ask the maintainers of file_selector to either avoid referencing a default implementation via `platforms: windows: default_package: file_selector_windows` or create a plugin named file_selector_windows."
+              ]
+            },
+            {
+              "tur": "flutter",
+              "filtre": "XInput tuş maskesi D-pad, omuz ve yüz tuşlarını eşler",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 5.6,
+              "gecti": true,
+              "son_satirlar": [
+                "",
+                "Package file_selector:windows references file_selector_windows:windows as the default plugin, but the package does not exist, or is not a plugin package.",
+                "Ask the maintainers of file_selector to either avoid referencing a default implementation via `platforms: windows: default_package: file_selector_windows` or create a plugin named file_selector_windows."
+              ]
+            },
+            {
+              "tur": "flutter",
+              "filtre": "dokunmatik kol katmanı aynı anda analog ve tuş basışını işler",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 6.1,
+              "gecti": true,
+              "son_satirlar": [
+                "",
+                "Package file_selector:windows references file_selector_windows:windows as the default plugin, but the package does not exist, or is not a plugin package.",
+                "Ask the maintainers of file_selector to either avoid referencing a default implementation via `platforms: windows: default_package: file_selector_windows` or create a plugin named file_selector_windows."
+              ]
+            },
+            {
+              "tur": "flutter",
+              "filtre": "kol izni yoksa oyun kolu düğmesi pasif ve açıklamalı",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 6.5,
+              "gecti": true,
+              "son_satirlar": [
+                "",
+                "Package file_selector:windows references file_selector_windows:windows as the default plugin, but the package does not exist, or is not a plugin package.",
+                "Ask the maintainers of file_selector to either avoid referencing a default implementation via `platforms: windows: default_package: file_selector_windows` or create a plugin named file_selector_windows."
+              ]
+            },
+            {
+              "tur": "flutter",
+              "filtre": "kol durumu değişince gönderilir, aynı durum yinelenmez",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 7.9,
+              "gecti": true,
+              "son_satirlar": [
+                "",
+                "Package file_selector:windows references file_selector_windows:windows as the default plugin, but the package does not exist, or is not a plugin package.",
+                "Ask the maintainers of file_selector to either avoid referencing a default implementation via `platforms: windows: default_package: file_selector_windows` or create a plugin named file_selector_windows."
+              ]
+            },
+            {
+              "tur": "flutter",
+              "filtre": "hata metni temizlenir",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
               "sure_sn": 6.2,
               "gecti": true,
               "son_satirlar": [
-                "00:00 +0: loading C:/Users/afuuu/Desktop/afuproject/AfuDesk/app/test/arayuz_test.dart",
-                "00:00 +0: C:/Users/afuuu/Desktop/afuproject/AfuDesk/app/test/arayuz_test.dart: Bağlantı ver oyun kolu izin kutusu",
-                "00:01 +1: All tests passed!"
+                "",
+                "Package file_selector:windows references file_selector_windows:windows as the default plugin, but the package does not exist, or is not a plugin package.",
+                "Ask the maintainers of file_selector to either avoid referencing a default implementation via `platforms: windows: default_package: file_selector_windows` or create a plugin named file_selector_windows."
+              ]
+            }
+          ],
+          "uygulandi": true,
+          "test_edildi": true,
+          "gecti": true,
+          "basarisiz": false,
+          "engel": ""
+        }
+      }
+    },
+    "WAN": {
+      "ad": "Farklı internet bağlantıları arasında ayarsız bağlantı",
+      "zorunlu": true,
+      "maddeler": {
+        "iroh_tasima": {
+          "ad": "Doğrudan + NAT delme + relay yedeği (iroh), kimlik koddan doğrulanır",
+          "durum": "DONE",
+          "kanit": [
+            {
+              "dosya": "rust/src/ag.rs",
+              "desen": "presets::N0",
+              "bulundu": true
+            },
+            {
+              "dosya": "rust/src/kod.rs",
+              "desen": "relaylar",
+              "bulundu": true
+            }
+          ],
+          "testler": [
+            {
+              "tur": "cargo",
+              "filtre": "ag::testler::dogru_kimlige_baglanir_ve_yol_dogrudan",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 1.0,
+              "gecti": true,
+              "son_satirlar": [
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.08s"
+              ]
+            },
+            {
+              "tur": "cargo",
+              "filtre": "ag::testler::yanlis_kimlik_reddedilir",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 1.2,
+              "gecti": true,
+              "son_satirlar": [
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.10s"
+              ]
+            }
+          ],
+          "uygulandi": true,
+          "test_edildi": true,
+          "gecti": true,
+          "basarisiz": false,
+          "engel": ""
+        },
+        "relay_zorlama": {
+          "ad": "Doğrudan yol kapatılınca relay'e düşme (AFUDESK_SADECE_RELAY)",
+          "durum": "DONE",
+          "kanit": [
+            {
+              "dosya": "rust/src/ag.rs",
+              "desen": "SADECE_RELAY_ORTAM",
+              "bulundu": true
+            }
+          ],
+          "testler": [
+            {
+              "tur": "cargo",
+              "filtre": "ag::testler::ortam_degiskeni_relay_zorlar",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 1.1,
+              "gecti": true,
+              "son_satirlar": [
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.00s"
+              ]
+            }
+          ],
+          "uygulandi": true,
+          "test_edildi": true,
+          "gecti": true,
+          "basarisiz": false,
+          "engel": ""
+        },
+        "yeniden_baglanma": {
+          "ad": "Kopunca onay sormadan yeniden bağlanma; görüntü ve girdi sürer",
+          "durum": "DONE",
+          "kanit": [
+            {
+              "dosya": "rust/src/izleyici.rs",
+              "desen": "fn yeniden_kur",
+              "bulundu": true
+            },
+            {
+              "dosya": "rust/src/host.rs",
+              "desen": "DEVAM_SURESI",
+              "bulundu": true
+            }
+          ],
+          "testler": [
+            {
+              "tur": "cargo",
+              "filtre": "uctan_uca::kopunca_onay_sormadan_yeniden_baglanir_goruntu_ve_girdi_surer",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 1.5,
+              "gecti": true,
+              "son_satirlar": [
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.43s"
+              ]
+            },
+            {
+              "tur": "cargo",
+              "filtre": "uctan_uca::izleyici_kapatinca_yeniden_baglanmaz_host_yeni_kod_uretir",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 1.5,
+              "gecti": true,
+              "son_satirlar": [
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.37s"
+              ]
+            },
+            {
+              "tur": "cargo",
+              "filtre": "uctan_uca::eski_bilet_devam_yerine_kullanilamaz",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 9.3,
+              "gecti": true,
+              "son_satirlar": [
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 8.31s"
+              ]
+            }
+          ],
+          "uygulandi": true,
+          "test_edildi": true,
+          "gecti": true,
+          "basarisiz": false,
+          "engel": ""
+        },
+        "arayuz": {
+          "ad": "Oturumda yeniden bağlanma ve 'aktarmalı' göstergesi",
+          "durum": "DONE",
+          "kanit": [
+            {
+              "dosya": "app/lib/sayfalar/oturum.dart",
+              "desen": "oturum_yeniden",
+              "bulundu": true
+            }
+          ],
+          "testler": [
+            {
+              "tur": "flutter",
+              "filtre": "bağlantı kopunca yeniden bağlanma gösterilir",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 6.1,
+              "gecti": true,
+              "son_satirlar": [
+                "",
+                "Package file_selector:windows references file_selector_windows:windows as the default plugin, but the package does not exist, or is not a plugin package.",
+                "Ask the maintainers of file_selector to either avoid referencing a default implementation via `platforms: windows: default_package: file_selector_windows` or create a plugin named file_selector_windows."
+              ]
+            },
+            {
+              "tur": "flutter",
+              "filtre": "aktarmalı",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 7.2,
+              "gecti": true,
+              "son_satirlar": [
+                "",
+                "Package file_selector:windows references file_selector_windows:windows as the default plugin, but the package does not exist, or is not a plugin package.",
+                "Ask the maintainers of file_selector to either avoid referencing a default implementation via `platforms: windows: default_package: file_selector_windows` or create a plugin named file_selector_windows."
               ]
             }
           ],
@@ -543,12 +898,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.6,
+              "sure_sn": 1.0,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.00s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.00s"
               ]
             },
             {
@@ -557,12 +912,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.7,
+              "sure_sn": 0.9,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.00s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.00s"
               ]
             },
             {
@@ -571,12 +926,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 2.9,
+              "sure_sn": 3.1,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 2.23s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 2.29s"
               ]
             },
             {
@@ -585,12 +940,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 2.8,
+              "sure_sn": 3.1,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 2.21s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 2.28s"
               ]
             },
             {
@@ -599,12 +954,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 5.8,
+              "sure_sn": 6.3,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 5.23s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 5.30s"
               ]
             },
             {
@@ -613,12 +968,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 8.1,
+              "sure_sn": 7.1,
               "gecti": true,
               "son_satirlar": [
-                "00:00 +0: loading C:/Users/afuuu/Desktop/afuproject/AfuDesk/app/test/arayuz_test.dart",
-                "00:00 +0: C:/Users/afuuu/Desktop/afuproject/AfuDesk/app/test/arayuz_test.dart: Bağlantı ver pano izin kutusu varsayılan kapalı",
-                "00:01 +1: All tests passed!"
+                "",
+                "Package file_selector:windows references file_selector_windows:windows as the default plugin, but the package does not exist, or is not a plugin package.",
+                "Ask the maintainers of file_selector to either avoid referencing a default implementation via `platforms: windows: default_package: file_selector_windows` or create a plugin named file_selector_windows."
               ]
             }
           ],
@@ -650,12 +1005,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.8,
+              "sure_sn": 1.0,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.00s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.00s"
               ]
             },
             {
@@ -664,12 +1019,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.7,
+              "sure_sn": 1.1,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.00s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.00s"
               ]
             },
             {
@@ -678,12 +1033,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.0,
+              "sure_sn": 1.4,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.29s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.36s"
               ]
             },
             {
@@ -692,12 +1047,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.9,
+              "sure_sn": 1.3,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.25s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.31s"
               ]
             },
             {
@@ -706,12 +1061,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.9,
+              "sure_sn": 1.1,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.29s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.26s"
               ]
             },
             {
@@ -720,12 +1075,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.9,
+              "sure_sn": 1.3,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 70 filtered out; finished in 0.22s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 0.37s"
               ]
             },
             {
@@ -734,12 +1089,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 6.1,
+              "sure_sn": 6.6,
               "gecti": true,
               "son_satirlar": [
-                "00:00 +0: loading C:/Users/afuuu/Desktop/afuproject/AfuDesk/app/test/arayuz_test.dart",
-                "00:00 +0: C:/Users/afuuu/Desktop/afuproject/AfuDesk/app/test/arayuz_test.dart: Bağlantı ver dosya alma izin kutusu varsayılan kapalı",
-                "00:01 +1: All tests passed!"
+                "",
+                "Package file_selector:windows references file_selector_windows:windows as the default plugin, but the package does not exist, or is not a plugin package.",
+                "Ask the maintainers of file_selector to either avoid referencing a default implementation via `platforms: windows: default_package: file_selector_windows` or create a plugin named file_selector_windows."
               ]
             },
             {
@@ -748,12 +1103,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 6.0,
+              "sure_sn": 7.7,
               "gecti": true,
               "son_satirlar": [
-                "00:00 +0: loading C:/Users/afuuu/Desktop/afuproject/AfuDesk/app/test/arayuz_test.dart",
-                "00:00 +0: C:/Users/afuuu/Desktop/afuproject/AfuDesk/app/test/arayuz_test.dart: Oturum dosya gönderme ilerlemesi gösterilir",
-                "00:01 +1: All tests passed!"
+                "",
+                "Package file_selector:windows references file_selector_windows:windows as the default plugin, but the package does not exist, or is not a plugin package.",
+                "Ask the maintainers of file_selector to either avoid referencing a default implementation via `platforms: windows: default_package: file_selector_windows` or create a plugin named file_selector_windows."
               ]
             }
           ],
@@ -780,12 +1135,12 @@
               "cikis": 0,
               "gecen": 0,
               "basarisiz": 0,
-              "sure_sn": 0.5,
+              "sure_sn": 1.1,
               "gecti": false,
               "son_satirlar": [
                 "running 0 tests",
                 "",
-                "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 71 filtered out; finished in 0.00s"
+                "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 78 filtered out; finished in 0.00s"
               ]
             }
           ],
@@ -812,12 +1167,12 @@
               "cikis": 0,
               "gecen": 0,
               "basarisiz": 0,
-              "sure_sn": 0.5,
+              "sure_sn": 1.0,
               "gecti": false,
               "son_satirlar": [
                 "running 0 tests",
                 "",
-                "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 71 filtered out; finished in 0.00s"
+                "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 78 filtered out; finished in 0.00s"
               ]
             }
           ],

@@ -251,7 +251,8 @@ async fn host_durdurulunca_baglanilamaz() {
     // Paralel testlerde boşalan portu başka bir host alabilir: o zaman parmak izi
     // uyuşmaz ve bağlantı güvenlik kontrolünde reddedilir — bu da doğru davranış.
     assert!(
-        e.starts_with("Karşı tarafa ulaşılamadı") || e.starts_with("Güvenlik kontrolü başarısız"),
+        e.starts_with("Karşı bilgisayara ulaşılamadı.")
+            || e.starts_with("Güvenlik kontrolü başarısız"),
         "{e}"
     );
 }
@@ -671,7 +672,7 @@ async fn dosya_bozulursa_hata() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn oyun_kolu_hosta_ulasir() {
+async fn disaridan_kol_durumu_hosta_ulasir() {
     let fab = Arc::new(SahteFabrika::new(64, 64));
     let durumlar = fab.kol_durumlari.clone();
     let kaldirilan = fab.kol_kaldirilan.clone();
@@ -690,12 +691,12 @@ async fn oyun_kolu_hosta_ulasir() {
         slot: 0,
         sira: 1,
         dugmeler: 0x1000,
-        sol_x: 0,
-        sol_y: 0,
-        sag_x: 0,
-        sag_y: 0,
-        sol_tetik: 0,
-        sag_tetik: 0,
+        sol_x: 1234,
+        sol_y: -2345,
+        sag_x: 32767,
+        sag_y: -32767,
+        sol_tetik: 120,
+        sag_tetik: 240,
     }))
     .await;
     tokio::time::timeout(SURE, async {
@@ -706,6 +707,12 @@ async fn oyun_kolu_hosta_ulasir() {
     .await
     .unwrap();
     assert_eq!(durumlar.lock().unwrap()[0].dugmeler, 0x1000);
+    assert_eq!(durumlar.lock().unwrap()[0].sol_x, 1234);
+    assert_eq!(durumlar.lock().unwrap()[0].sol_y, -2345);
+    assert_eq!(durumlar.lock().unwrap()[0].sag_x, 32767);
+    assert_eq!(durumlar.lock().unwrap()[0].sag_y, -32767);
+    assert_eq!(durumlar.lock().unwrap()[0].sol_tetik, 120);
+    assert_eq!(durumlar.lock().unwrap()[0].sag_tetik, 240);
     i.kapat();
     olay_bekle(&mut h, |o| matches!(o, HostOlay::Koptu { .. })).await;
     assert_eq!(

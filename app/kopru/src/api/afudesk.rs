@@ -7,7 +7,7 @@ use afudesk_core::{
     protokol::{FareTusu, Girdi, Izinler},
 };
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU32, Ordering},
     Arc, Mutex, OnceLock,
 };
 
@@ -28,6 +28,8 @@ static HOST: Mutex<Option<(host::Host, tokio::sync::mpsc::Sender<HostKomut>)>> =
 static IZLEYICI: Mutex<Option<Arc<izleyici::Izleyici>>> = Mutex::new(None);
 /// Dart son kareyi çizdi mi? (en-yeni-kazanır geri basıncı)
 static KARE_SERBEST: AtomicBool = AtomicBool::new(true);
+static IZLEYICI_KOL_IZNI: AtomicBool = AtomicBool::new(false);
+static IZLEYICI_KOL_SIRASI: AtomicU32 = AtomicU32::new(0);
 
 /// Host olayı. `tur`: hazir | istek | baglandi | koptu | hata | dosya | uyari | yeniden.
 #[derive(Debug, Clone, Default)]
@@ -64,6 +66,7 @@ pub struct IzleyiciOlayi {
     pub rgba: Vec<u8>,
     /// kabul: dosya gönderme izni.
     pub dosya: bool,
+    pub oyun_kolu: bool,
     /// dosya: gönderilen/toplam bayt; `bitti` ise `metin` boşsa başarılı, doluysa hata.
     pub gonderilen: u64,
     pub toplam: u64,
@@ -189,6 +192,8 @@ pub fn host_durdur() {
 /// bu yüzden hata olay olarak yazılır.
 pub fn izleyici_baglan(kod: String, parola: String, ad: String, olaylar: StreamSink<IzleyiciOlayi>) {
     izleyici_kapat();
+    IZLEYICI_KOL_IZNI.store(false, Ordering::SeqCst);
+    IZLEYICI_KOL_SIRASI.store(0, Ordering::SeqCst);
     // Masaüstünde izleyici panosu arboard; Android'de yok (gelen metni Dart panoya yazar).
     #[cfg(not(target_os = "android"))]
     let pano = afudesk_core::pano::ArboardPano::new()
@@ -211,8 +216,9 @@ pub fn izleyici_baglan(kod: String, parola: String, ad: String, olaylar: StreamS
         while let Some(o) = alici.recv().await {
             let dto = match o {
                 IzleyiciOlay::OnayBekleniyor { karsi_ad } => IzleyiciOlayi { tur: "bekliyor".into(), ad: karsi_ad, ..Default::default() },
-                IzleyiciOlay::Kabul { izinler, genislik, yukseklik } => IzleyiciOlayi {
-                    tur: "kabul".into(), kontrol: izinler.kontrol, pano: izinler.pano, dosya: izinler.dosya, genislik, yukseklik, ..Default::default()
+                IzleyiciOlay::Kabul { izinler, genislik, yukseklik } => {
+                    IZLEYICI_KOL_IZNI.store(izinler.oyun_kolu, Ordering::SeqCst);
+                    IzleyiciOlayi { tur: "kabul".into(), kontrol: izinler.kontrol, pano: izinler.pano, dosya: izinler.dosya, oyun_kolu: izinler.oyun_kolu, genislik, yukseklik, ..Default::default() }
                 },
                 IzleyiciOlay::Kare { genislik, yukseklik, rgba } => {
                     // Dart önceki kareyi çizmediyse bunu atla; sıradaki daha yeni olacak.
@@ -269,6 +275,18 @@ pub fn izleyici_girdi(g: GirdiOlayi) {
         _ => return,
     };
     rt().spawn(async move { iz.gonder(girdi).await });
+}
+
+/// Dart'tan gelen oyun kolu durumunu mevcut datagram yoluna verir; sıra numarasını Rust atar.
+pub fn izleyici_kol(slot: u8, dugmeler: u16, sol_x: i16, sol_y: i16, sag_x: i16, sag_y: i16, sol_tetik: u8, sag_tetik: u8) {
+    if !IZLEYICI_KOL_IZNI.load(Ordering::SeqCst) { return; }
+    let Some(iz) = IZLEYICI.lock().unwrap().clone() else { return };
+    let sira = IZLEYICI_KOL_SIRASI.fetch_add(1, Ordering::SeqCst);
+    rt().spawn(async move {
+        iz.gonder(Girdi::Kol(afudesk_core::protokol::KolDurumu {
+            slot, sira, dugmeler, sol_x, sol_y, sag_x, sag_y, sol_tetik, sag_tetik,
+        })).await;
+    });
 }
 
 /// Dosyayı karşı tarafa gönderir; ilerleme/sonuç izleyici akışına `tur = "dosya"` olarak gelir.

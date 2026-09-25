@@ -383,6 +383,64 @@ expect(m.cagrilar, contains('kabul:true:true'));
       expect(m.kareOnayi, 1, reason: 'kare çizilince çekirdeğe haber verilmeli');
     });
 
+    testWidgets('kol izni yoksa oyun kolu düğmesi pasif ve açıklamalı', (t) async {
+      final m = await oturumAc(t);
+      m.dokunmatik = true;
+      m.izleyici.add(IzleyiciOlay('kabul', kontrol: true, genislik: 200, yukseklik: 100));
+      await t.pump();
+      final dugme = t.widget<FilledButton>(find.byKey(const Key('oturum_oyun_kolu')));
+      expect(dugme.onPressed, isNull);
+      expect(find.byTooltip('Karşı taraf oyun kolu izni vermedi'), findsOneWidget);
+    });
+
+    testWidgets('kol durumu değişince gönderilir, aynı durum yinelenmez', (t) async {
+      final m = await oturumAc(t);
+      m.dokunmatik = true;
+      m.izleyici.add(IzleyiciOlay('kabul', kontrol: true, oyunKolu: true, genislik: 200, yukseklik: 100));
+      await t.pump();
+      // Katmandan gelen değişiklik akışı düğme/eksen değişiminde motoru çağırır.
+      await t.tap(find.byKey(const Key('oturum_oyun_kolu')));
+      await t.pump();
+      // Dokunmatik katmanın gerçek pointer olayı ile durum gönderimini doğrula.
+      final analog = find.byKey(const Key('oyun_kolu_analog_sol'));
+      final p = t.getCenter(analog);
+      final pointer = TestPointer(31);
+      await t.sendEventToBinding(pointer.down(p));
+      await t.pump(const Duration(milliseconds: 5));
+      expect(m.oyunKoluDurumlari, isNotEmpty);
+      final adet = m.oyunKoluDurumlari.length;
+      await t.sendEventToBinding(pointer.move(p + const Offset(12, 0)));
+      await t.pump(const Duration(milliseconds: 5));
+      expect(m.oyunKoluDurumlari.length, greaterThan(adet));
+      final degisenAdet = m.oyunKoluDurumlari.length;
+      await t.sendEventToBinding(pointer.move(p + const Offset(12, 0)));
+      await t.pump(const Duration(milliseconds: 5));
+      expect(m.oyunKoluDurumlari.length, degisenAdet, reason: 'aynı kol durumu tekrar gönderilmemeli');
+      await t.sendEventToBinding(pointer.up());
+      await t.pump();
+    });
+
+    testWidgets('dokunmatik kol katmanı aynı anda analog ve tuş basışını işler', (t) async {
+      final m = await oturumAc(t);
+      m.dokunmatik = true;
+      m.izleyici.add(IzleyiciOlay('kabul', kontrol: true, oyunKolu: true, genislik: 200, yukseklik: 100));
+      await t.pump();
+      await t.tap(find.byKey(const Key('oturum_oyun_kolu')));
+      await t.pump();
+      final analog = t.getCenter(find.byKey(const Key('oyun_kolu_analog_sol')));
+      final a = t.getCenter(find.byKey(const Key('oyun_kolu_tus_a')));
+      final parmak1 = TestPointer(41), parmak2 = TestPointer(42);
+      await t.sendEventToBinding(parmak1.down(analog + const Offset(20, 0)));
+      await t.sendEventToBinding(parmak2.down(a));
+      await t.pump(const Duration(milliseconds: 5));
+      expect(m.oyunKoluDurumlari, isNotEmpty);
+      expect(m.oyunKoluDurumlari.last.dugmeler & 0x1000, 0x1000);
+      expect(m.oyunKoluDurumlari.last.solX, isNot(0));
+      await t.sendEventToBinding(parmak2.up());
+      await t.sendEventToBinding(parmak1.up());
+      await t.pump();
+    });
+
     testWidgets('uzak kol algılanınca oturum başlığında P2 çipi görünür', (t) async {
       final m = await oturumAc(t);
       m.izleyici.add(IzleyiciOlay('kabul', kontrol: true, genislik: 20, yukseklik: 10));
@@ -615,7 +673,15 @@ expect(m.cagrilar, contains('kabul:true:true'));
 
     test('hata metni temizlenir', () {
       expect(hataMetni(Exception('Parola yanlış.')), 'Parola yanlış.');
-      expect(hataMetni('AnyhowException(Karşı tarafa ulaşılamadı.\n\nCaused by: x)'), 'Karşı tarafa ulaşılamadı.');
+      expect(
+        hataMetni('AnyhowException(Karşı bilgisayara ulaşılamadı.\nBağlantı veren bilgisayar açık ve internete bağlı mı?\n\nCaused by: x)'),
+        "Karşı bilgisayara ulaşılamadı.\nBağlantı veren bilgisayar açık ve internete bağlı mı?",
+      );
+      final baglanti = hataMetni(Exception('Karşı tarafa ulaşılamadı. (deadline has elapsed)'));
+      expect(baglanti, contains('Karşı bilgisayara ulaşılamadı.'));
+      expect(baglanti, contains('internete bağlı mı?'));
+      expect(baglanti, isNot(contains('deadline')));
+      expect(baglanti, isNot(contains('(')));
     });
   });
 }

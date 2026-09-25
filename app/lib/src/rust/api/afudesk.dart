@@ -62,6 +62,27 @@ void kareCizildi() => RustLib.instance.api.crateApiAfudeskKareCizildi();
 Future<void> izleyiciGirdi({required GirdiOlayi g}) =>
     RustLib.instance.api.crateApiAfudeskIzleyiciGirdi(g: g);
 
+/// Dart'tan gelen oyun kolu durumunu mevcut datagram yoluna verir; sıra numarasını Rust atar.
+Future<void> izleyiciKol({
+  required int slot,
+  required int dugmeler,
+  required int solX,
+  required int solY,
+  required int sagX,
+  required int sagY,
+  required int solTetik,
+  required int sagTetik,
+}) => RustLib.instance.api.crateApiAfudeskIzleyiciKol(
+  slot: slot,
+  dugmeler: dugmeler,
+  solX: solX,
+  solY: solY,
+  sagX: sagX,
+  sagY: sagY,
+  solTetik: solTetik,
+  sagTetik: sagTetik,
+);
+
 /// Dosyayı karşı tarafa gönderir; ilerleme/sonuç izleyici akışına `tur = "dosya"` olarak gelir.
 Future<void> izleyiciDosyaGonder({required String yol}) =>
     RustLib.instance.api.crateApiAfudeskIzleyiciDosyaGonder(yol: yol);
@@ -122,7 +143,7 @@ class GirdiOlayi {
           metin == other.metin;
 }
 
-/// Host olayı. `tur`: hazir | istek | baglandi | koptu | hata | dosya.
+/// Host olayı. `tur`: hazir | istek | baglandi | koptu | hata | dosya | uyari | yeniden.
 class HostOlayi {
   final String tur;
   final String kod;
@@ -137,7 +158,7 @@ class HostOlayi {
   /// baglandi: dosya alma izni.
   final bool dosya;
 
-  /// dosya: al?nan dosyan?n tam yolu.
+  /// dosya: alınan dosyanın tam yolu.
   final String yol;
   final bool oyunKolu;
 
@@ -193,7 +214,7 @@ class HostOlayi {
           oyunKolu == other.oyunKolu;
 }
 
-/// ?zleyici olay?. `tur`: bekliyor | kabul | kare | istatistik | koptu | hata | pano | dosya.
+/// İzleyici olayı. `tur`: bekliyor | kabul | kare | istatistik (metin = yol) | yeniden | koptu | hata | pano | dosya.
 class IzleyiciOlayi {
   final String tur;
   final int rttMs;
@@ -209,6 +230,7 @@ class IzleyiciOlayi {
 
   /// kabul: dosya gönderme izni.
   final bool dosya;
+  final bool oyunKolu;
 
   /// dosya: gönderilen/toplam bayt; `bitti` ise `metin` boşsa başarılı, doluysa hata.
   final BigInt gonderilen;
@@ -231,6 +253,7 @@ class IzleyiciOlayi {
     required this.yukseklik,
     required this.rgba,
     required this.dosya,
+    required this.oyunKolu,
     required this.gonderilen,
     required this.toplam,
     required this.bitti,
@@ -256,6 +279,7 @@ class IzleyiciOlayi {
       yukseklik.hashCode ^
       rgba.hashCode ^
       dosya.hashCode ^
+      oyunKolu.hashCode ^
       gonderilen.hashCode ^
       toplam.hashCode ^
       bitti.hashCode ^
@@ -280,6 +304,7 @@ class IzleyiciOlayi {
           yukseklik == other.yukseklik &&
           rgba == other.rgba &&
           dosya == other.dosya &&
+          oyunKolu == other.oyunKolu &&
           gonderilen == other.gonderilen &&
           toplam == other.toplam &&
           bitti == other.bitti &&

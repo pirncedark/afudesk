@@ -1,6 +1,6 @@
 # AfuDesk Görev Kapısı — Denetim
 
-Tarih: 2026-09-24 15:01  ·  Commit: `52ad66a`
+Tarih: 2026-09-25 15:59  ·  Commit: `fb25443`
 
 ## FASTPATH — Düşük gecikmeli görüntü ve ölçüm
 
@@ -12,12 +12,12 @@ Zorunlu: 6 · Tamam: 6 · Eksik: 0
 | RTT ve iptal sayısına göre otomatik kalite/FPS | ✅ DONE | ✅ | ✅ |  |
 | Oturumda RTT/FPS göstergesi | ✅ DONE | ✅ | ✅ |  |
 | Yakalamadan izleyicide birleşmeye gerçek gecikme (saat farkı düzeltmeli) | ✅ DONE | ✅ | ✅ |  |
-| Bilinen adres adayları arasında en düşük RTT'li yolun seçimi | ✅ DONE | ✅ | ✅ |  |
+| En düşük RTT'li yolun seçimi (v1.3: iroh yol seçicisi — doğrudan yollar RTT'ye göre, relay yedek) | ✅ DONE | ✅ | ✅ |  |
 | Windows Graphics Capture ile yakalama (xcap yedeği) | ✅ DONE | ✅ | ✅ |  |
 
 ## OYUN_MODU — Couch Co-op: uzak oyun kolu
 
-Zorunlu: 6 · Tamam: 6 · Eksik: 0
+Zorunlu: 7 · Tamam: 7 · Eksik: 0
 
 | Madde | Durum | Kod | Test | Not |
 |---|---|---|---|---|
@@ -27,6 +27,18 @@ Zorunlu: 6 · Tamam: 6 · Eksik: 0
 | Host'ta sanal Xbox 360 kolu (ViGEmBus), yoksa açık uyarı | ✅ DONE | ✅ | ✅ |  |
 | Titreşimin izleyiciye geri gitmesi | ✅ DONE | ✅ | ✅ |  |
 | Onay penceresinde 'Oyun kolu' izni | ✅ DONE | ✅ | ✅ |  |
+| Android Bluetooth ve dokunmatik kol, izin, çoklu dokunma ve sade bağlantı hatası | ✅ DONE | ✅ | ✅ |  |
+
+## WAN — Farklı internet bağlantıları arasında ayarsız bağlantı
+
+Zorunlu: 4 · Tamam: 4 · Eksik: 0
+
+| Madde | Durum | Kod | Test | Not |
+|---|---|---|---|---|
+| Doğrudan + NAT delme + relay yedeği (iroh), kimlik koddan doğrulanır | ✅ DONE | ✅ | ✅ |  |
+| Doğrudan yol kapatılınca relay'e düşme (AFUDESK_SADECE_RELAY) | ✅ DONE | ✅ | ✅ |  |
+| Kopunca onay sormadan yeniden bağlanma; görüntü ve girdi sürer | ✅ DONE | ✅ | ✅ |  |
+| Oturumda yeniden bağlanma ve 'aktarmalı' göstergesi | ✅ DONE | ✅ | ✅ |  |
 
 ## SONRAKI — Sıradaki özellikler
 
@@ -43,6 +55,6 @@ Zorunlu: 4 · Tamam: 2 · Eksik: 2
 
 | İSTENEN | UYGULANAN | TEST EDİLEN | GEÇEN | BAŞARISIZ | ENGELLİ | EKSİK | TEST EDİLMEYEN |
 |---|---|---|---|---|---|---|---|
-| 16 | 14 | 14 | 14 | 0 | 0 | 2 | 2 |
+| 21 | 19 | 19 | 19 | 0 | 0 | 2 | 2 |
 
 **SONUÇ: ❌ NOT_READY**

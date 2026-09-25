@@ -184,20 +184,28 @@ pub fn yayinlanacak(ep: &Endpoint) -> (Vec<String>, Vec<String>) {
     (ipler, relaylar)
 }
 
+/// Kullanıcıya gösterilen bağlantı hatası: teknik ayrıntı (adres, iç hata) içermez;
+/// ayrıntı yalnız günlüğe yazılır.
+pub const ULASILAMADI: &str =
+    "Karşı bilgisayara ulaşılamadı.\nBağlantı veren bilgisayar açık ve internete bağlı mı?";
+pub const GUVENLIK_HATASI: &str =
+    "Güvenlik kontrolü başarısız; doğru cihazın bağlantı kodunu kullanın.";
+
 pub async fn baglan(ep: &Endpoint, hedef: EndpointAddr, sure: Duration) -> Result<Baglanti> {
     let beklenen = hedef.id;
     let c = match tokio::time::timeout(sure, ep.connect(hedef, ALPN)).await {
-        Err(_) => anyhow::bail!(
-            "Karşı tarafa ulaşılamadı (zaman aşımı). Bağlantı veren cihaz açık ve internete bağlı mı?"
-        ),
-        Ok(Err(e)) => anyhow::bail!("Karşı tarafa ulaşılamadı. ({e})"),
+        Err(_) => {
+            log::warn!("bağlantı zaman aşımı ({sure:?})");
+            anyhow::bail!(ULASILAMADI)
+        }
+        Ok(Err(e)) => {
+            log::warn!("bağlantı kurulamadı: {e:#}");
+            anyhow::bail!(ULASILAMADI)
+        }
         Ok(Ok(c)) => c,
     };
     // iroh el sıkışmada zaten doğrular; yine de açıkça kontrol et.
-    anyhow::ensure!(
-        c.remote_id() == beklenen,
-        "Güvenlik kontrolü başarısız: karşıdaki cihaz koddaki cihaz değil."
-    );
+    anyhow::ensure!(c.remote_id() == beklenen, GUVENLIK_HATASI);
     Ok(c)
 }
 
@@ -305,8 +313,16 @@ mod testler {
         let ep = uc_nokta(Kurulum::YalnizYerel, false).await.unwrap();
         let hedef = hedef_adres(&kimlik, &["127.0.0.1:9".into()], &[]).unwrap();
         let e = baglan(&ep, hedef, Duration::from_secs(2)).await.unwrap_err();
-        assert!(e.to_string().starts_with("Karşı tarafa ulaşılamadı"), "{e}");
+        assert_eq!(e.to_string(), ULASILAMADI);
         assert!(hedef_adres("bozuk", &[], &[]).is_err());
+    }
+
+    #[test]
+    fn baglanti_hatasi_kullaniciya_teknik_ayrinti_gostermez() {
+        for m in [ULASILAMADI, GUVENLIK_HATASI] {
+            assert!(!m.contains('('), "{m}");
+            assert!(!m.contains("127.0.0.1") && !m.contains("deadline"), "{m}");
+        }
     }
 
     #[test]

@@ -2,7 +2,7 @@
 
 **English** · [Türkçe](#türkçe)
 
-AfuDesk is an open-source remote desktop app that connects two computers **without any server**. The device that shares its screen opens its own connection point and puts its addresses into a single password-encrypted code. The other side enters the code and the password and connects directly. There is no server, no account and no fee in between.
+AfuDesk is an open-source remote desktop app that connects two computers with **a single code** — no account, no fee and no router setup. The device that shares its screen puts its identity and addresses into one password-encrypted code. The other side enters the code and the password and connects: directly whenever possible (also across different internet connections, using NAT hole punching), and through an encrypted relay only when a direct path cannot be made.
 
 ![Home screen](docs/ekranlar/1_ana_masaustu.png) ![Phone](docs/ekranlar/10_telefon_ana.png)
 
@@ -30,18 +30,21 @@ On first launch Windows Firewall may ask for permission: allow **Private network
 
 **Android (viewer):** download `AfuDesk-android.apk` from the same page and install it (allow "install unknown apps" for your browser or file manager). Android 7.0+. On the phone you can connect to a computer: tap = left click, long press = right click, drag = drag, two fingers = scroll; the **Keyboard** button opens the phone keyboard. Sharing the phone's own screen is not available yet.
 
+### Use your phone as a gamepad
+
+Connect a Bluetooth gamepad to the Android phone, or open a remote session and tap **🎮 Oyun kolu** to use the on-screen controls. The host must grant gamepad permission. To verify it, accept the session with gamepad permission and check `joy.cpl` on the host: a second Xbox 360 controller should appear. Move both sticks and press the buttons to test input; trigger vibration to check phone/controller haptics.
+
 ## When does it work?
 
-Because AfuDesk has no central server, the sharing device must be **directly reachable**:
+The two devices can be on **any** internet connections (home internet, mobile hotspot, office, another ISP). Nobody has to change router settings, open ports or know an IP address.
 
-| Situation | Works? |
+| Situation | How it connects |
 |---|---|
-| Both devices on the same network (home/office Wi‑Fi) | ✅ Always |
-| UPnP enabled on the sharing side's router | ✅ Over the internet |
-| The sharing side has a public IPv6 address | ✅ Over the internet |
-| Carrier-grade NAT / double NAT, no UPnP and no IPv6 | ❌ Not over the internet |
+| Both devices on the same network | ✅ Directly on the local network |
+| Different internet connections, NAT hole punching succeeds (most home/mobile networks, also double NAT) | ✅ Directly over the internet |
+| Hole punching is not possible (strict firewall, UDP blocked) | ✅ Through the relay — slower, but it works |
 
-While giving access, the app shows which case applies ("Reachable from the internet" or "Reachable only from the same network").
+The relay only passes on end-to-end encrypted packets; it cannot see the screen, the input or the files. AfuDesk uses the free public relays of [iroh](https://www.iroh.computer/) (n0.computer). While connected, the statistics show "aktarmalı" (relayed) if traffic goes through the relay. If the connection drops (for example the network changes), the viewer reconnects by itself for up to 90 seconds without asking the host again.
 
 ## Oyun Modu
 
@@ -83,7 +86,7 @@ License: MIT
 
 ## Türkçe
 
-AfuDesk, iki bilgisayarı **hiçbir sunucu olmadan** birbirine bağlayan açık kaynak bir uzak masaüstü uygulamasıdır. Ekranını paylaşan cihaz kendi bağlantı noktasını açar ve adreslerini parolayla şifrelenmiş tek bir koda koyar. Karşı taraf bu kodu ve parolayı girip doğrudan bağlanır. Arada kimsenin sunucusu, hesabı ya da ücreti yoktur.
+AfuDesk, iki bilgisayarı **tek bir kodla** birbirine bağlayan açık kaynak bir uzak masaüstü uygulamasıdır: hesap yok, ücret yok, modem ayarı yok. Ekranını paylaşan cihaz kimliğini ve adreslerini parolayla şifrelenmiş tek bir koda koyar. Karşı taraf kodu ve parolayı girip bağlanır: mümkünse doğrudan (farklı internet bağlantılarında da, NAT delme ile), doğrudan yol kurulamazsa yalnız o zaman şifreli bir aktarma sunucusu (relay) üzerinden.
 
 ## Nasıl kullanılır
 
@@ -105,18 +108,21 @@ AfuDesk, iki bilgisayarı **hiçbir sunucu olmadan** birbirine bağlayan açık 
 
 **Android (izleyici):** aynı sayfadan `AfuDesk-android.apk` dosyasını indirip kur (tarayıcına ya da dosya yöneticine "bilinmeyen uygulamaları yükle" izni ver). Android 7.0 ve üzeri. Telefondan bir bilgisayara bağlanabilirsin: dokun = sol tık, uzun bas = sağ tık, sürükle = sürükleme, iki parmak = kaydırma; **Klavye** düğmesi telefon klavyesini açar. Telefonun kendi ekranını paylaşmak henüz yok.
 
+### Telefonla oyun kolu
+
+Bluetooth oyun kolunu Android telefona bağla ya da oturumda **🎮 Oyun kolu** düğmesine bas. Host oyun kolu izni vermelidir. Denemek için host'ta `joy.cpl` aç: ikinci bir Xbox 360 kolu görünmeli. İki çubuğu ve düğmeleri dene; titreşim gelince telefonun ve destekliyorsa Bluetooth kolunun titrediğini kontrol et.
+
 ## Hangi durumda çalışır?
 
-AfuDesk'te merkezi sunucu olmadığı için ekranını paylaşan cihaza **doğrudan ulaşılabilmesi** gerekir:
+İki cihaz **herhangi bir** internet bağlantısında olabilir (ev interneti, telefon hotspotu, iş yeri, başka operatör). Kimsenin modem ayarı yapması, port açması ya da IP adresi bilmesi gerekmez.
 
-| Durum | Çalışır mı |
+| Durum | Nasıl bağlanır |
 |---|---|
-| İki cihaz aynı ağda (ev/ofis Wi‑Fi) | ✅ Her zaman |
-| Paylaşan tarafın modeminde UPnP açık | ✅ İnternet üzerinden |
-| Paylaşan tarafta genel IPv6 var | ✅ İnternet üzerinden |
-| Operatör CGNAT / çift modem, UPnP ve IPv6 yok | ❌ İnternet üzerinden bağlanılamaz |
+| İki cihaz aynı ağda | ✅ Yerel ağda doğrudan |
+| Farklı internet bağlantıları, NAT delme başarılı (çoğu ev/mobil ağ, çift modem dahil) | ✅ İnternet üzerinden doğrudan |
+| NAT delme mümkün değil (sıkı güvenlik duvarı, UDP kapalı) | ✅ Relay üzerinden — daha yavaş ama çalışır |
 
-Uygulama bağlantı verirken hangi durumda olduğunu ekranda yazar ("İnternetten ulaşılabilir" ya da "Yalnız aynı ağdan ulaşılabilir").
+Relay yalnız uçtan uca şifreli paketleri aktarır; ekranı, girdiyi ya da dosyaları göremez. AfuDesk, [iroh](https://www.iroh.computer/)'un ücretsiz genel relay sunucularını (n0.computer) kullanır. Trafik relay'den geçiyorsa oturumdaki istatistikte "aktarmalı" yazar. Bağlantı koparsa (ör. ağ değişirse) izleyici 90 saniyeye kadar kendiliğinden yeniden bağlanır; host'a yeniden onay sorulmaz.
 
 ## Oyun Modu
 
