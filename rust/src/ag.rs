@@ -20,9 +20,26 @@ pub fn en_iyi_yol(adaylar: &[(usize, Duration)]) -> Option<usize> {
         .map(|(indeks, _)| *indeks)
 }
 
+
+fn baglan_hata_metni(ayrinti: &str) -> String {
+    if ayrinti.contains("parmak izi") {
+        "G?venlik kontrol? ba?ar?s?z; do?ru cihaz?n ba?lant? kodunu kullan?n.".into()
+    } else {
+        "Kar?? bilgisayara ula??lamad?.\nBa?lant?y?, ekran?nda '?nternetten ula??labilir' yazan taraf versin.".into()
+    }
+}
+
 #[cfg(test)]
 mod yol_testleri {
     use super::*;
+
+    #[test]
+    fn baglanti_hatasi_kullaniciya_teknik_ayrinti_gostermez() {
+        let metin = baglan_hata_metni("deadline has elapsed (zaman a??m?)");
+        assert_eq!(metin, "Kar?? bilgisayara ula??lamad?.\nBa?lant?y?, ekran?nda '?nternetten ula??labilir' yazan taraf versin.");
+        assert!(!metin.contains("deadline"));
+        assert!(!metin.contains('('));
+    }
 
     #[test]
     fn en_dusuk_rtt_yolu_secer() {
@@ -183,6 +200,7 @@ pub async fn baglan(
             Ok(e) => e,
             Err(e) => {
                 son_hata = e.to_string();
+                eprintln!("Ba?lant? u? noktas? a??lamad?: {e:#}");
                 continue;
             }
         };
@@ -216,9 +234,11 @@ pub async fn baglan(
             }
             Ok(Err(e)) => {
                 son_hata = format!("{e:#}");
+                eprintln!("Kar?? bilgisayara ba?lan?lamad?: {e:#}");
             }
             Err(e) => {
                 son_hata = e.to_string();
+                eprintln!("Ba?lant? denemesi sonland?: {e:#}");
             }
         }
     }
@@ -236,12 +256,7 @@ pub async fn baglan(
         gorevler.abort_all();
         return Ok(kazanan);
     }
-    if son_hata.contains("parmak izi") {
-        anyhow::bail!("Güvenlik kontrolü başarısız: karşıdaki cihaz koddaki cihaz değil.");
-    }
-    anyhow::bail!(
-        "Karşı tarafa ulaşılamadı. Aynı ağda değilseniz, bağlantı veren tarafın modeminde UPnP açık olmalı. ({son_hata})"
-    )
+    anyhow::bail!("{}", baglan_hata_metni(&son_hata))
 }
 
 #[cfg(test)]

@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:file_selector/file_selector.dart' as fs;
 
 import 'src/rust/api/afudesk.dart' as rust;
+import 'oyun_kolu.dart';
 
 /// Host tarafı olayı.
 class HostOlay {
@@ -29,10 +30,12 @@ class IzleyiciOlay {
   final Uint8List rgba;
   /// kabul: karşı taraf dosya almaya izin verdi mi.
   final bool dosya;
+  final bool oyunKolu;
   /// dosya: ilerleme (bayt). `bitti` ise `metin` boşsa başarılı, doluysa hata.
   final int gonderilen;
   final int toplam;
   final bool bitti;
+  final int slot, buyuk, kucuk;
   IzleyiciOlay(this.tur,
       {this.rttMs = 0,
       this.gecikmeMs = 0,
@@ -44,9 +47,13 @@ class IzleyiciOlay {
       this.genislik = 0,
       this.yukseklik = 0,
       this.dosya = false,
+      this.oyunKolu = false,
       this.gonderilen = 0,
       this.toplam = 0,
       this.bitti = false,
+      this.slot = 0,
+      this.buyuk = 0,
+      this.kucuk = 0,
       Uint8List? rgba})
       : rgba = rgba ?? Uint8List(0);
 }
@@ -85,6 +92,7 @@ Future<void> hostKabul({required bool kontrol, bool pano = false, bool dosya = f
   Stream<IzleyiciOlay> baglan({required String kod, required String parola, required String ad});
   void kareCizildi();
   void girdi(Girdi g);
+  void izleyiciKol(OyunKoluDurumu durum);
   /// Gönderilecek dosyayı kullanıcıya seçtirir; vazgeçilirse null.
   Future<String?> dosyaSec();
   /// Dosyayı karşı tarafa gönderir; ilerleme `baglan` akışına 'dosya' olayı olarak gelir.
@@ -139,9 +147,13 @@ class RustMotor implements Motor {
           fps: o.fps,
           gecikmeMs: o.gecikmeMs,
           dosya: o.dosya,
+          oyunKolu: o.oyunKolu,
           gonderilen: o.gonderilen.toInt(),
           toplam: o.toplam.toInt(),
           bitti: o.bitti,
+          slot: o.slot,
+          buyuk: o.buyuk,
+          kucuk: o.kucuk,
           rgba: o.rgba));
 
   @override
@@ -160,6 +172,9 @@ class RustMotor implements Motor {
             dy: g.dy,
             metin: g.metin));
   }
+
+  @override
+  void izleyiciKol(OyunKoluDurumu d) => rust.izleyiciKol(slot: 0, dugmeler: d.dugmeler, solX: d.solX, solY: d.solY, sagX: d.sagX, sagY: d.sagY, solTetik: d.solTetik, sagTetik: d.sagTetik);
 
   @override
   Future<String?> dosyaSec() async => (await fs.openFile(confirmButtonText: 'Gönder'))?.path;

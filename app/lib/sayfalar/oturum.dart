@@ -6,8 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../dokunma.dart';
+import '../bilesenler/oyun_kolu_katmani.dart';
 import '../klavye.dart';
 import '../motor.dart';
+import '../oyun_kolu.dart';
 import '../tema.dart';
 
 /// Uzak ekran oturumu: bağlanır, onayı bekler, kareleri çizer, girdiyi gönderir.
@@ -42,11 +44,18 @@ class _OturumDurum extends State<OturumSayfasi> {
   final _yaziOdak = FocusNode();
   final _yazi = TextEditingController(text: _gozcu);
   bool _klavyeAcik = false;
+  bool _oyunKoluIzni = false, _kolAcik = false;
+  OyunKoluDurumu? _sonKol, _bekleyenKol;
+  DateTime _kolSonGonderim = DateTime.fromMillisecondsSinceEpoch(0);
+  Timer? _kolGonderimBekle;
+  static const _kolKanal = MethodChannel('afudesk/kol');
+  static bool _kolIpucuGosterildi = false;
   static const _gozcu = '\u200b';
 
   @override
   void initState() {
     super.initState();
+    _kolKanal.setMethodCallHandler(_androidKol);
     if (widget.motor.dokunmatik) {
       // Telefonda bilgisayar ekranı yatayda ve tam ekranda çok daha okunaklı.
       SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
@@ -57,6 +66,34 @@ class _OturumDurum extends State<OturumSayfasi> {
         .listen(_olay, onError: (Object e) => _bitir(hataMetni(e)), onDone: () {
       if (_asama != _Asama.bitti) _bitir('Bağlantı kapandı.');
     });
+  }
+
+  Future<void> _androidKol(MethodCall call) async {
+    if (call.method == 'kol' && call.arguments is Map) {
+      _kolDurumuDegisti(OyunKoluDurumu.android(Map<Object?, Object?>.from(call.arguments as Map)));
+    }
+  }
+
+  void _kolDurumuDegisti(OyunKoluDurumu durum) {
+    if (!_oyunKoluIzni || durum == _sonKol) return;
+    _bekleyenKol = durum;
+    final kalan = const Duration(milliseconds: 4) - DateTime.now().difference(_kolSonGonderim);
+    if (kalan <= Duration.zero) {
+      _kolGonderimBekle?.cancel();
+      _kolGonderimBekle = null;
+      _kolGonder();
+    } else if (_kolGonderimBekle == null) {
+      _kolGonderimBekle = Timer(kalan, _kolGonder);
+    }
+  }
+
+  void _kolGonder() {
+    _kolGonderimBekle = null;
+    final durum = _bekleyenKol;
+    if (durum == null || !_oyunKoluIzni || durum == _sonKol) return;
+    _sonKol = durum;
+    _kolSonGonderim = DateTime.now();
+    widget.motor.izleyiciKol(durum);
   }
 
   void _bitir(String m) {
@@ -80,12 +117,19 @@ class _OturumDurum extends State<OturumSayfasi> {
           _asama = _Asama.bagli;
           _kontrol = o.kontrol;
           _dosyaIzni = o.dosya;
+          _oyunKoluIzni = o.oyunKolu;
         });
         _odak.requestFocus();
         if (widget.motor.dokunmatik && o.kontrol) {
           // Uzun basışı zamanında yakalamak için düzenli yokla.
           _dokunmaSaat?.cancel();
           _dokunmaSaat = Timer.periodic(const Duration(milliseconds: 100), (_) => _gonder(_dokunma.zaman(_ms)));
+        }
+        if (widget.motor.dokunmatik && o.oyunKolu && !_kolIpucuGosterildi) {
+          _kolIpucuGosterildi = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Kolu telefona Bluetooth ile bağla ya da ekrandaki kolu kullan.')));
+          });
         }
       case 'kol':
         setState(() => _p2 = true);
@@ -122,6 +166,8 @@ case 'dosya':
       case 'koptu':
       case 'hata':
         _bitir(o.metin);
+      case 'titresim':
+        _titresim(o.buyuk, o.kucuk);
     }
   }
 
@@ -183,6 +229,8 @@ case 'dosya':
 
   @override
   void dispose() {
+    _kolGonderimBekle?.cancel();
+    _kolKanal.setMethodCallHandler(null);
     if (widget.motor.dokunmatik) {
       SystemChrome.setPreferredOrientations(DeviceOrientation.values);
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -240,6 +288,15 @@ case 'dosya':
     if (g.any((x) => x.tur == 'konum') && mounted) setState(() {});
   }
 
+  Future<void> _titresim(int buyuk, int kucuk) async {
+    await HapticFeedback.mediumImpact();
+    try {
+      await _kolKanal.invokeMethod<void>('vibrate', {'duration': 25 + (buyuk + kucuk) ~/ 12});
+    } on PlatformException {
+      // Sistem dokunsal geri bildirimi kullanılmaya devam eder.
+    }
+  }
+
   /// Görünmez yazı alanı hep tek bir gözcü karakter tutar: silinirse Backspace,
   /// eklenen her şey metin olarak gider.
   void _yaziDegisti(String v) {
@@ -282,6 +339,18 @@ case 'dosya':
           },
           icon: Icon(_klavyeAcik ? Icons.keyboard_hide : Icons.keyboard),
           label: const Text('Klavye'),
+        ),
+        const SizedBox(width: 8),
+        Tooltip(
+          key: const Key('oturum_oyun_kolu_ipucu'),
+          message: _oyunKoluIzni ? 'Dokunmatik kolu aç' : 'Karşı taraf oyun kolu izni vermedi',
+          child: FilledButton.icon(
+            key: const Key('oturum_oyun_kolu'),
+            style: FilledButton.styleFrom(minimumSize: const Size(0, 56), backgroundColor: _kolAcik ? Renk.vurgu : null),
+            onPressed: _oyunKoluIzni ? () => setState(() => _kolAcik = !_kolAcik) : null,
+            icon: const Icon(Icons.sports_esports),
+            label: const Text('🎮 Oyun kolu'),
+          ),
         ),
         const SizedBox(width: 6),
         Expanded(
@@ -334,19 +403,23 @@ case 'dosya':
             return Listener(
               key: const Key('oturum_ekran'),
               onPointerDown: (e) {
+                if (_kolAcik) return;
                 if (!_kontrol) return;
                 final n = _normalizeKirp(e.localPosition, alan);
                 if (n != null) _gonder(_dokunma.bas(e.pointer, n.dx, n.dy, _ms));
               },
               onPointerMove: (e) {
+                if (_kolAcik) return;
                 if (!_kontrol) return;
                 final n = _normalizeKirp(e.localPosition, alan);
                 if (n != null) _gonder(_dokunma.hareket(e.pointer, n.dx, n.dy, _ms));
               },
               onPointerUp: (e) {
+                if (_kolAcik) return;
                 if (_kontrol) _gonder(_dokunma.birak(e.pointer, _ms));
               },
               onPointerCancel: (e) {
+                if (_kolAcik) return;
                 if (_kontrol) _gonder(_dokunma.iptal(e.pointer));
               },
               child: Stack(children: [
@@ -372,6 +445,8 @@ case 'dosya':
                       ),
                     ),
                   ),
+                if (_kolAcik)
+                  Positioned.fill(child: OyunKoluKatmani(key: const Key('dokunmatik_oyun_kolu_katmani'), onChanged: _kolDurumuDegisti)),
               ]),
             );
           }),
