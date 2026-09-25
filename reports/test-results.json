@@ -1,6 +1,6 @@
 {
-  "zaman": "2026-09-25 04:50",
-  "commit": "1ed22f8",
+  "zaman": "2026-09-25 04:57",
+  "commit": "d36e711",
   "sistemler": {
     "FASTPATH": {
       "ad": "Düşük gecikmeli görüntü ve ölçüm",
@@ -28,7 +28,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.7,
+              "sure_sn": 0.6,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
@@ -42,7 +42,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.7,
+              "sure_sn": 0.5,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
@@ -56,12 +56,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.5,
+              "sure_sn": 1.2,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.69s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.65s"
               ]
             }
           ],
@@ -88,7 +88,7 @@
               "cikis": 0,
               "gecen": 3,
               "basarisiz": 0,
-              "sure_sn": 0.8,
+              "sure_sn": 0.5,
               "gecti": true,
               "son_satirlar": [
                 "running 3 tests",
@@ -125,7 +125,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 8.1,
+              "sure_sn": 6.2,
               "gecti": true,
               "son_satirlar": [
                 "00:00 +0: loading C:/Users/afuuu/Desktop/afuproject/AfuDesk-kayitli/app/test/arayuz_test.dart",
@@ -167,7 +167,7 @@
               "cikis": 0,
               "gecen": 3,
               "basarisiz": 0,
-              "sure_sn": 0.9,
+              "sure_sn": 0.6,
               "gecti": true,
               "son_satirlar": [
                 "running 3 tests",
@@ -199,7 +199,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.7,
+              "sure_sn": 0.6,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
@@ -231,12 +231,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 3.9,
+              "sure_sn": 3.7,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 3.13s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 3.09s"
               ]
             }
           ],
@@ -306,7 +306,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.6,
+              "sure_sn": 0.7,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
@@ -320,12 +320,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.1,
+              "sure_sn": 1.3,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.51s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.60s"
               ]
             }
           ],
@@ -352,7 +352,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.6,
+              "sure_sn": 0.8,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
@@ -389,7 +389,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.6,
+              "sure_sn": 0.7,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
@@ -403,12 +403,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.7,
+              "sure_sn": 0.8,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.07s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.05s"
               ]
             },
             {
@@ -417,12 +417,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.2,
+              "sure_sn": 1.3,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.38s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.43s"
               ]
             }
           ],
@@ -449,12 +449,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.0,
+              "sure_sn": 1.1,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.27s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.31s"
               ]
             }
           ],
@@ -486,12 +486,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.1,
+              "sure_sn": 1.2,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.43s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.48s"
               ]
             },
             {
@@ -500,7 +500,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 6.3,
+              "sure_sn": 7.6,
               "gecti": true,
               "son_satirlar": [
                 "00:00 +0: loading C:/Users/afuuu/Desktop/afuproject/AfuDesk-kayitli/app/test/arayuz_test.dart",
@@ -557,7 +557,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.7,
+              "sure_sn": 0.8,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
@@ -571,12 +571,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 3.1,
+              "sure_sn": 2.9,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 2.34s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 2.22s"
               ]
             },
             {
@@ -585,12 +585,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 3.0,
+              "sure_sn": 2.8,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 2.23s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 2.22s"
               ]
             },
             {
@@ -599,12 +599,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 6.5,
+              "sure_sn": 5.8,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 5.26s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 5.24s"
               ]
             },
             {
@@ -613,7 +613,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 8.0,
+              "sure_sn": 6.7,
               "gecti": true,
               "son_satirlar": [
                 "00:00 +0: loading C:/Users/afuuu/Desktop/afuproject/AfuDesk-kayitli/app/test/arayuz_test.dart",
@@ -650,7 +650,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.8,
+              "sure_sn": 0.6,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
@@ -664,7 +664,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.9,
+              "sure_sn": 0.6,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
@@ -678,12 +678,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.2,
+              "sure_sn": 0.9,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.33s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.28s"
               ]
             },
             {
@@ -692,12 +692,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.1,
+              "sure_sn": 1.0,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.30s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.26s"
               ]
             },
             {
@@ -706,12 +706,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.6,
+              "sure_sn": 0.8,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.24s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.21s"
               ]
             },
             {
@@ -720,12 +720,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.5,
+              "sure_sn": 0.9,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.27s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.23s"
               ]
             },
             {
@@ -734,7 +734,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 8.5,
+              "sure_sn": 6.1,
               "gecti": true,
               "son_satirlar": [
                 "00:00 +0: loading C:/Users/afuuu/Desktop/afuproject/AfuDesk-kayitli/app/test/arayuz_test.dart",
@@ -748,12 +748,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 8.5,
+              "sure_sn": 6.2,
               "gecti": true,
               "son_satirlar": [
                 "00:00 +0: loading C:/Users/afuuu/Desktop/afuproject/AfuDesk-kayitli/app/test/arayuz_test.dart",
                 "00:00 +0: C:/Users/afuuu/Desktop/afuproject/AfuDesk-kayitli/app/test/arayuz_test.dart: Oturum dosya gönderme ilerlemesi gösterilir",
-                "00:02 +1: All tests passed!"
+                "00:01 +1: All tests passed!"
               ]
             }
           ],
@@ -812,7 +812,7 @@
               "cikis": 0,
               "gecen": 0,
               "basarisiz": 0,
-              "sure_sn": 0.7,
+              "sure_sn": 0.6,
               "gecti": false,
               "son_satirlar": [
                 "running 0 tests",
@@ -855,7 +855,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.8,
+              "sure_sn": 0.6,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
@@ -897,7 +897,7 @@
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.00s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.01s"
               ]
             },
             {
@@ -906,12 +906,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.7,
+              "sure_sn": 0.6,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.00s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 0.01s"
               ]
             }
           ],
@@ -999,7 +999,7 @@
               "cikis": 0,
               "gecen": 0,
               "basarisiz": 0,
-              "sure_sn": 0.7,
+              "sure_sn": 0.6,
               "gecti": false,
               "son_satirlar": [
                 "running 0 tests",
@@ -1036,7 +1036,7 @@
               "cikis": 79,
               "gecen": 0,
               "basarisiz": 0,
-              "sure_sn": 5.8,
+              "sure_sn": 5.4,
               "gecti": false,
               "son_satirlar": [
                 "00:00 +0: loading C:/Users/afuuu/Desktop/afuproject/AfuDesk-kayitli/app/test/arayuz_test.dart",
@@ -1050,7 +1050,7 @@
               "cikis": 79,
               "gecen": 0,
               "basarisiz": 0,
-              "sure_sn": 5.7,
+              "sure_sn": 5.6,
               "gecti": false,
               "son_satirlar": [
                 "00:00 +0: loading C:/Users/afuuu/Desktop/afuproject/AfuDesk-kayitli/app/test/arayuz_test.dart",
@@ -1064,7 +1064,7 @@
               "cikis": 79,
               "gecen": 0,
               "basarisiz": 0,
-              "sure_sn": 5.2,
+              "sure_sn": 5.4,
               "gecti": false,
               "son_satirlar": [
                 "00:00 +0: loading C:/Users/afuuu/Desktop/afuproject/AfuDesk-kayitli/app/test/arayuz_test.dart",
