@@ -17,7 +17,9 @@ class OturumSayfasi extends StatefulWidget {
   final Motor motor;
   final String kod;
   final String parola;
-  const OturumSayfasi({super.key, required this.motor, required this.kod, required this.parola});
+  /// Doluysa kod/parola yerine bu kayıtlı bilgisayara bağlanılır.
+  final String? kayitliKimlik;
+  const OturumSayfasi({super.key, required this.motor, this.kod = '', this.parola = '', this.kayitliKimlik});
 
   @override
   State<OturumSayfasi> createState() => _OturumDurum();
@@ -65,9 +67,10 @@ class _OturumDurum extends State<OturumSayfasi> {
       SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     }
-    _abonelik = widget.motor
-        .baglan(kod: widget.kod, parola: widget.parola, ad: widget.motor.cihazAdi())
-        .listen(_olay, onError: (Object e) => _bitir(hataMetni(e)), onDone: () {
+    final akis = widget.kayitliKimlik != null
+        ? widget.motor.kayitliBaglan(kimlik: widget.kayitliKimlik!, ad: widget.motor.cihazAdi())
+        : widget.motor.baglan(kod: widget.kod, parola: widget.parola, ad: widget.motor.cihazAdi());
+    _abonelik = akis.listen(_olay, onError: (Object e) => _bitir(hataMetni(e)), onDone: () {
       if (_asama != _Asama.bitti) _bitir('Bağlantı kapandı.');
     });
   }
@@ -162,6 +165,13 @@ class _OturumDurum extends State<OturumSayfasi> {
         });
       case 'yeniden':
         setState(() => _yeniden = o.metin);
+      case 'kaydedildi':
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(
+              key: const Key('oturum_kaydedildi'),
+              content: Text('${o.ad} kaydedildi. Bir dahaki sefere kod ve parola gerekmez.'),
+              duration: const Duration(seconds: 3)));
       case 'pano':
         // Masaüstünde çekirdek panoya zaten yazdı; dokunmatik cihazda (Android) çekirdeğin
         // pano erişimi yok, metni arayüz yazar.

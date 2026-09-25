@@ -21,10 +21,12 @@ chacha20poly1305 = "0.10"
 argon2 = "0.5"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "fs", "io-util"] }
 iroh = "1.2"
+iroh-mdns-address-lookup = "0.5"
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 log = "0.4"
 rayon = "1"
 dirs = "6"
+tempfile = "3"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 xcap = "0.9"

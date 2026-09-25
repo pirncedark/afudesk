@@ -6,15 +6,36 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `host_dto`, `host_komut`, `rt`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `host_dto`, `host_komut`, `izleyici_pompala`, `kayitlar`, `rt`, `veri`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`
+
+/// Uygulama açılışında çağrılır: kimlik ve kayıtlı cihazlar bu klasörde saklanır.
+void veriKlasoruAyarla({required String yol}) =>
+    RustLib.instance.api.crateApiAfudeskVeriKlasoruAyarla(yol: yol);
+
+/// Bu cihazın kod olmadan bağlanabileceği bilgisayarlar (en son görülen önce).
+List<KayitliCihaz> kayitliCihazlar() =>
+    RustLib.instance.api.crateApiAfudeskKayitliCihazlar();
+
+/// İzleyici: kaydı unut (karşı tarafa haber verilmez).
+void kayitliUnut({required String kimlik}) =>
+    RustLib.instance.api.crateApiAfudeskKayitliUnut(kimlik: kimlik);
+
+/// Bu bilgisayara kod olmadan bağlanabilen cihazlar (en son görülen önce).
+List<KayitliCihaz> guvenilenCihazlar() =>
+    RustLib.instance.api.crateApiAfudeskGuvenilenCihazlar();
+
+/// Host: güvenilen cihazı kaldır; o cihaz bir dahaki sefere kod gerektiğini öğrenir.
+void guvenilenKaldir({required String kimlik}) =>
+    RustLib.instance.api.crateApiAfudeskGuvenilenKaldir(kimlik: kimlik);
 
 /// Bu bilgisayarın görünen adı (karşı tarafa gösterilir).
 String cihazAdi() => RustLib.instance.api.crateApiAfudeskCihazAdi();
 
 String surum() => RustLib.instance.api.crateApiAfudeskSurum();
 
-/// Bağlantı ver: sunucuyu açar, olayları `olaylar` akışına yazar. Önceki host varsa durdurulur.
+/// Uygulama açıkken arka planda çalışan host'u başlatır (kayıtlı cihazlar onayla bağlanabilir);
+/// kodla bağlantı `host_kod_ac(true)` ile ("Bağlantı ver" ekranı) açılır. Önceki host durdurulur.
 Stream<HostOlayi> hostBaslat({
   required String ad,
   required String parola,
@@ -41,6 +62,10 @@ Future<void> hostRed() => RustLib.instance.api.crateApiAfudeskHostRed();
 
 Future<void> hostKes() => RustLib.instance.api.crateApiAfudeskHostKes();
 
+/// "Bağlantı ver" ekranı açılınca true, kapanınca false: kod yalnız ekran açıkken geçerli.
+void hostKodAc({required bool acik}) =>
+    RustLib.instance.api.crateApiAfudeskHostKodAc(acik: acik);
+
 Future<void> hostDurdur() => RustLib.instance.api.crateApiAfudeskHostDurdur();
 
 /// Koda bağlan. Her şey (hatalar dahil: `tur = "hata"`) `olaylar` akışından gelir.
@@ -53,6 +78,15 @@ Stream<IzleyiciOlayi> izleyiciBaglan({
 }) => RustLib.instance.api.crateApiAfudeskIzleyiciBaglan(
   kod: kod,
   parola: parola,
+  ad: ad,
+);
+
+/// Kayıtlı bilgisayara kod ve parola olmadan bağlan (karşı taraf yine onay verir).
+Stream<IzleyiciOlayi> izleyiciKayitliBaglan({
+  required String kimlik,
+  required String ad,
+}) => RustLib.instance.api.crateApiAfudeskIzleyiciKayitliBaglan(
+  kimlik: kimlik,
   ad: ad,
 );
 
@@ -162,6 +196,9 @@ class HostOlayi {
   final String yol;
   final bool oyunKolu;
 
+  /// istek: kayıtlı cihaz (kod olmadan) bağlanmak istiyor.
+  final bool kayitli;
+
   const HostOlayi({
     required this.tur,
     required this.kod,
@@ -175,6 +212,7 @@ class HostOlayi {
     required this.dosya,
     required this.yol,
     required this.oyunKolu,
+    required this.kayitli,
   });
 
   static Future<HostOlayi> default_() =>
@@ -193,7 +231,8 @@ class HostOlayi {
       pano.hashCode ^
       dosya.hashCode ^
       yol.hashCode ^
-      oyunKolu.hashCode;
+      oyunKolu.hashCode ^
+      kayitli.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -211,10 +250,12 @@ class HostOlayi {
           pano == other.pano &&
           dosya == other.dosya &&
           yol == other.yol &&
-          oyunKolu == other.oyunKolu;
+          oyunKolu == other.oyunKolu &&
+          kayitli == other.kayitli;
 }
 
-/// İzleyici olayı. `tur`: bekliyor | kabul | kare | istatistik (metin = yol) | yeniden | koptu | hata | pano | dosya.
+/// İzleyici olayı. `tur`: bekliyor | kabul | kare | istatistik (metin = yol) | yeniden | kaydedildi |
+/// koptu | hata | pano | dosya.
 class IzleyiciOlayi {
   final String tur;
   final int rttMs;
@@ -311,4 +352,35 @@ class IzleyiciOlayi {
           slot == other.slot &&
           buyuk == other.buyuk &&
           kucuk == other.kucuk;
+}
+
+/// Kayıtlı/güvenilen cihaz (listede yalnız ad ve son görülme gösterilir).
+class KayitliCihaz {
+  /// İç kimlik: yalnız Bağlan/Unut/Kaldır çağrılarında kullanılır, gösterilmez.
+  final String kimlik;
+  final String ad;
+
+  /// Unix saniye.
+  final PlatformInt64 sonGorulme;
+
+  const KayitliCihaz({
+    required this.kimlik,
+    required this.ad,
+    required this.sonGorulme,
+  });
+
+  static Future<KayitliCihaz> default_() =>
+      RustLib.instance.api.crateApiAfudeskKayitliCihazDefault();
+
+  @override
+  int get hashCode => kimlik.hashCode ^ ad.hashCode ^ sonGorulme.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is KayitliCihaz &&
+          runtimeType == other.runtimeType &&
+          kimlik == other.kimlik &&
+          ad == other.ad &&
+          sonGorulme == other.sonGorulme;
 }

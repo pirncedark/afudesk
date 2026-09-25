@@ -17,6 +17,8 @@ fn ayar(parola: &str) -> HostAyar {
         parola: parola.into(),
         yalniz_yerel: true,
         dosya_klasoru: None,
+        veri_klasoru: None,
+        kod_acik: true,
     }
 }
 
@@ -82,7 +84,10 @@ async fn tam_akis_goruntu_ve_girdi() {
         _ => unreachable!(),
     }
     match olay_bekle(&mut h, |o| matches!(o, HostOlay::Istek { .. })).await {
-        HostOlay::Istek { ad } => assert_eq!(ad, "Veli"),
+        HostOlay::Istek { ad, kayitli } => {
+            assert_eq!(ad, "Veli");
+            assert!(!kayitli, "kodla gelen istek kayıtlı sayılmaz");
+        }
         _ => unreachable!(),
     }
     h.komut(HostKomut::Kabul(Izinler {
@@ -972,4 +977,261 @@ async fn eski_bilet_devam_yerine_kullanilamaz() {
     }
     // Asıl izleyici etkilenmeden sürer.
     iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Kare { .. })).await;
+}
+
+// ---------------------------------------------------------------- kayıtlı cihazlar
+
+fn kayitli_ayar(parola: &str, veri: &std::path::Path) -> HostAyar {
+    let mut a = ayar(parola);
+    a.veri_klasoru = Some(veri.to_owned());
+    a
+}
+
+fn izinler_kontrollu() -> Izinler {
+    Izinler {
+        kontrol: true,
+        pano: false,
+        dosya: false,
+        oyun_kolu: false,
+    }
+}
+
+/// Kodla bağlanıp onaylanan ilk oturum: izleyici kaydedilir. Oturum kapatılır; host
+/// yeni kod üretene kadar beklenir. Dönen: izleyicinin kaydı ve host'un yeni kodu/parolası.
+async fn eslestir_kodlu(
+    h: &mut host::Host,
+    izleyici_veri: &std::path::Path,
+) -> (crate::guvenilen::IzleyiciKaydi, (String, String)) {
+    let (kod, parola) = hazir(h).await;
+    let mut i = izleyici::baglan_ayarli(&kod, &parola, "Veli", None, Some(izleyici_veri))
+        .await
+        .unwrap();
+    olay_bekle(h, |o| matches!(o, HostOlay::Istek { .. })).await;
+    h.komut(HostKomut::Kabul(izinler_kontrollu())).await;
+    match iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Kaydedildi { .. })).await {
+        IzleyiciOlay::Kaydedildi { ad } => assert_eq!(ad, "Ali PC"),
+        _ => unreachable!(),
+    }
+    let kayitlar = crate::guvenilen::oku(&crate::guvenilen::kayit_yolu(izleyici_veri));
+    assert_eq!(kayitlar.izleyiciler.len(), 1);
+    i.kapat();
+    olay_bekle(h, |o| matches!(o, HostOlay::Koptu { .. })).await;
+    let yeni_kod = hazir(h).await;
+    (kayitlar.izleyiciler[0].clone(), yeni_kod)
+}
+
+async fn eslestir(
+    h: &mut host::Host,
+    izleyici_veri: &std::path::Path,
+) -> crate::guvenilen::IzleyiciKaydi {
+    eslestir_kodlu(h, izleyici_veri).await.0
+}
+
+/// Kayıtlı bağlantının ilk olayı: Kabul ya da Koptu (sebep).
+async fn kayitli_sonuc(i: &mut izleyici::Izleyici) -> IzleyiciOlay {
+    iz_bekle(i, |o| {
+        matches!(o, IzleyiciOlay::Kabul { .. } | IzleyiciOlay::Koptu { .. })
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn kayitli_cihaz_kodsuz_baglanir() {
+    let (hv, iv) = (gecici_klasor("host_veri"), gecici_klasor("iz_veri"));
+    let fab = Arc::new(SahteFabrika::new(64, 48));
+    let girdiler = fab.girdiler.clone();
+    let mut h = host::baslat(kayitli_ayar("111222", &hv), fab).await.unwrap();
+    let kayit = eslestir(&mut h, &iv).await;
+    assert_eq!(kayit.host_kimlik, h.kimlik(), "kayıt host'un kalıcı kimliğine bağlı");
+    // Host da izleyiciyi hatırlıyor (jetonun kendisi değil, özeti).
+    let host_kayitlari = crate::guvenilen::oku(&crate::guvenilen::kayit_yolu(&hv));
+    assert_eq!(host_kayitlari.hostlar.len(), 1);
+    assert_ne!(host_kayitlari.hostlar[0].jeton_sha256, kayit.jeton);
+
+    // Kod ve parola OLMADAN: yalnız kayıtla bağlan, host yine onay verir.
+    let mut i = izleyici::kayitli_baglan(&kayit.host_kimlik, &iv, "Veli", None)
+        .await
+        .unwrap();
+    match iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::OnayBekleniyor { .. })).await {
+        IzleyiciOlay::OnayBekleniyor { karsi_ad } => assert_eq!(karsi_ad, "Ali PC"),
+        _ => unreachable!(),
+    }
+    match olay_bekle(&mut h, |o| matches!(o, HostOlay::Istek { .. })).await {
+        HostOlay::Istek { ad, kayitli } => {
+            assert_eq!(ad, "Veli");
+            assert!(kayitli, "onay penceresinde 'kayıtlı cihaz' rozeti için");
+        }
+        _ => unreachable!(),
+    }
+    h.komut(HostKomut::Kabul(izinler_kontrollu())).await;
+    assert!(matches!(kayitli_sonuc(&mut i).await, IzleyiciOlay::Kabul { .. }));
+    iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Kare { .. })).await;
+    i.gonder(Girdi::FareKonum { x: 0.2, y: 0.3 }).await;
+    kosul_bekle("kayıtlı oturumda girdi", || !girdiler.lock().unwrap().is_empty()).await;
+    // İkinci kez kayıtlı bağlantıda yeni jeton verilmez (kayıt tek kalır).
+    assert_eq!(crate::guvenilen::oku(&crate::guvenilen::kayit_yolu(&hv)).hostlar.len(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn kayitli_cihaz_onaysiz_baglanamaz() {
+    let (hv, iv) = (gecici_klasor("host_veri"), gecici_klasor("iz_veri"));
+    let mut h = host::baslat(kayitli_ayar("333444", &hv), Arc::new(SahteFabrika::new(64, 48)))
+        .await
+        .unwrap();
+    let kayit = eslestir(&mut h, &iv).await;
+    let mut i = izleyici::kayitli_baglan(&kayit.host_kimlik, &iv, "Veli", None)
+        .await
+        .unwrap();
+    olay_bekle(&mut h, |o| matches!(o, HostOlay::Istek { kayitli: true, .. })).await;
+    h.komut(HostKomut::Red).await;
+    match kayitli_sonuc(&mut i).await {
+        IzleyiciOlay::Koptu { sebep } => assert!(sebep.contains("reddetti"), "{sebep}"),
+        o => panic!("onay verilmeden bağlandı: {o:?}"),
+    }
+    // Reddetmek kaydı silmez: bir dahaki sefere yine onay istenebilir.
+    assert_eq!(crate::guvenilen::oku(&crate::guvenilen::kayit_yolu(&iv)).izleyiciler.len(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn kaldirilan_cihaz_reddedilir() {
+    let (hv, iv) = (gecici_klasor("host_veri"), gecici_klasor("iz_veri"));
+    let mut h = host::baslat(kayitli_ayar("555666", &hv), Arc::new(SahteFabrika::new(64, 48)))
+        .await
+        .unwrap();
+    let kayit = eslestir(&mut h, &iv).await;
+    // Host kullanıcısı "Güvenilen cihazlar"dan kaldırır.
+    let izleyici_kimlik = crate::guvenilen::oku(&crate::guvenilen::kayit_yolu(&hv)).hostlar[0]
+        .izleyici_kimlik
+        .clone();
+    crate::guvenilen::guncelle(&crate::guvenilen::kayit_yolu(&hv), |k| {
+        crate::guvenilen::hosttan_kaldir(k, &izleyici_kimlik)
+    })
+    .unwrap();
+    let mut i = izleyici::kayitli_baglan(&kayit.host_kimlik, &iv, "Veli", None)
+        .await
+        .unwrap();
+    match kayitli_sonuc(&mut i).await {
+        IzleyiciOlay::Koptu { sebep } => assert_eq!(sebep, crate::guvenilen::KALDIRILDI),
+        o => panic!("kaldırılan cihaz bağlandı: {o:?}"),
+    }
+    // Onay penceresi hiç açılmadı; izleyicinin kaydı kendiliğinden silindi.
+    let ek = tokio::time::timeout(Duration::from_millis(300), h.olaylar.recv()).await;
+    assert!(!matches!(ek, Ok(Some(HostOlay::Istek { .. }))));
+    kosul_bekle("izleyici kaydı silinmeli", || {
+        crate::guvenilen::oku(&crate::guvenilen::kayit_yolu(&iv)).izleyiciler.is_empty()
+    })
+    .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn yanlis_jeton_reddedilir() {
+    let (hv, iv) = (gecici_klasor("host_veri"), gecici_klasor("iz_veri"));
+    let mut h = host::baslat(kayitli_ayar("777888", &hv), Arc::new(SahteFabrika::new(64, 48)))
+        .await
+        .unwrap();
+    let kayit = eslestir(&mut h, &iv).await;
+    crate::guvenilen::guncelle(&crate::guvenilen::kayit_yolu(&iv), |k| {
+        k.izleyiciler[0].jeton = crate::guvenilen::yeni_jeton();
+    })
+    .unwrap();
+    let mut i = izleyici::kayitli_baglan(&kayit.host_kimlik, &iv, "Veli", None)
+        .await
+        .unwrap();
+    match kayitli_sonuc(&mut i).await {
+        IzleyiciOlay::Koptu { sebep } => assert_eq!(sebep, crate::guvenilen::GECERSIZ),
+        o => panic!("yanlış jetonla bağlandı: {o:?}"),
+    }
+    let ek = tokio::time::timeout(Duration::from_millis(300), h.olaylar.recv()).await;
+    assert!(!matches!(ek, Ok(Some(HostOlay::Istek { .. }))), "onay sorulmamalı");
+
+    // Jeton doğru ama BAŞKA cihaz (farklı izleyici kimliği) kullanırsa da reddedilir.
+    let hirsiz = gecici_klasor("hirsiz_veri");
+    let mut dogru = kayit.clone();
+    dogru.jeton = kayit.jeton.clone();
+    crate::guvenilen::yaz(
+        &crate::guvenilen::kayit_yolu(&hirsiz),
+        &crate::guvenilen::Kayitlar {
+            izleyiciler: vec![dogru],
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let mut i2 = izleyici::kayitli_baglan(&kayit.host_kimlik, &hirsiz, "Hırsız", None)
+        .await
+        .unwrap();
+    assert!(matches!(kayitli_sonuc(&mut i2).await, IzleyiciOlay::Koptu { .. }));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn host_sertifikasi_degisirse_reddedilir() {
+    // Kayıtlı host'un kimliği (anahtarı) değişirse — ör. aynı adreste başka bir cihaz —
+    // izleyici bağlanmaz: kimlik el sıkışmada doğrulanır.
+    let (hv, iv) = (gecici_klasor("host_veri"), gecici_klasor("iz_veri"));
+    let mut h = host::baslat(kayitli_ayar("121212", &hv), Arc::new(SahteFabrika::new(64, 48)))
+        .await
+        .unwrap();
+    let kayit = eslestir(&mut h, &iv).await;
+    let baska_veri = gecici_klasor("baska_host");
+    let mut baska = host::baslat(kayitli_ayar("343434", &baska_veri), Arc::new(SahteFabrika::new(64, 48)))
+        .await
+        .unwrap();
+    let (baska_kod, baska_parola) = hazir(&mut baska).await;
+    let baska_adres = crate::kod::coz(&baska_kod, &baska_parola, crate::kod::simdi())
+        .unwrap()
+        .adresler;
+    assert_ne!(baska.kimlik(), kayit.host_kimlik);
+    // Kayıtta eski kimlik, ama adres artık başka cihazın.
+    crate::guvenilen::guncelle(&crate::guvenilen::kayit_yolu(&iv), |k| {
+        k.izleyiciler[0].son_adresler = baska_adres.clone();
+    })
+    .unwrap();
+    h.durdur();
+    let e = match izleyici::kayitli_baglan(&kayit.host_kimlik, &iv, "Veli", None).await {
+        Ok(_) => panic!("kimliği değişen host'a bağlanıldı"),
+        Err(e) => e.to_string(),
+    };
+    assert!(
+        e.starts_with("Karşı bilgisayara ulaşılamadı") || e.starts_with("Güvenlik kontrolü"),
+        "{e}"
+    );
+    let ek = tokio::time::timeout(Duration::from_millis(300), baska.olaylar.recv()).await;
+    assert!(!matches!(ek, Ok(Some(HostOlay::Istek { .. }))), "başka host'a istek gitmemeli");
+    // Kayıt silinmez (host geri dönebilir).
+    assert_eq!(crate::guvenilen::oku(&crate::guvenilen::kayit_yolu(&iv)).izleyiciler.len(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn kod_kapaliyken_kodla_girilmez_kayitli_cihaz_yine_baglanir() {
+    // Uygulama arka planda dinlerken ("Bağlantı ver" kapalı): kodla gelen reddedilir,
+    // kayıtlı cihaz onayla bağlanabilir.
+    let (hv, iv) = (gecici_klasor("host_veri"), gecici_klasor("iz_veri"));
+    let mut h = host::baslat(kayitli_ayar("565656", &hv), Arc::new(SahteFabrika::new(64, 48)))
+        .await
+        .unwrap();
+    let (kayit, (kod, parola)) = eslestir_kodlu(&mut h, &iv).await;
+    h.kod_ac(false);
+    let mut yabanci = izleyici::baglan(&kod, &parola, "Yabancı").await.unwrap();
+    match kayitli_sonuc(&mut yabanci).await {
+        IzleyiciOlay::Koptu { sebep } => assert!(sebep.contains("bağlantı vermiyor"), "{sebep}"),
+        o => panic!("kod kapalıyken kodla girildi: {o:?}"),
+    }
+    let mut i = izleyici::kayitli_baglan(&kayit.host_kimlik, &iv, "Veli", None)
+        .await
+        .unwrap();
+    olay_bekle(&mut h, |o| matches!(o, HostOlay::Istek { kayitli: true, .. })).await;
+    h.komut(HostKomut::Kabul(izinler_kontrollu())).await;
+    assert!(matches!(kayitli_sonuc(&mut i).await, IzleyiciOlay::Kabul { .. }));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn host_kimligi_yeniden_acilista_ayni() {
+    let hv = gecici_klasor("host_veri");
+    let fab = Arc::new(SahteFabrika::new(64, 48));
+    let mut a = host::baslat(kayitli_ayar("1", &hv), fab.clone()).await.unwrap();
+    let ka = a.kimlik();
+    a.durdur();
+    let b = host::baslat(kayitli_ayar("1", &hv), fab.clone()).await.unwrap();
+    assert_eq!(ka, b.kimlik(), "veri klasörüyle kimlik kalıcı");
+    let c = host::baslat(ayar("1"), fab).await.unwrap();
+    assert_ne!(ka, c.kimlik(), "veri klasörü yoksa her açılışta yeni kimlik");
 }

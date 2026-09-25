@@ -1,6 +1,6 @@
 # AfuDesk Görev Kapısı — Denetim
 
-Tarih: 2026-09-25 15:59  ·  Commit: `fb25443`
+Tarih: 2026-09-25 16:59  ·  Commit: `ac8d91d`
 
 ## FASTPATH — Düşük gecikmeli görüntü ve ölçüm
 
@@ -51,10 +51,23 @@ Zorunlu: 4 · Tamam: 2 · Eksik: 2
 | Donanımsal H.264 (NVENC/QSV/AMF) algılama ve düşük gecikmeli kodlama | ⬜ TODO | ❌ | ❌ | kod yok: H264; test geçmedi/yok: kodek |
 | Ağa göre otomatik çözünürlük | ⬜ TODO | ❌ | ❌ | kod yok: cozunurluk; test geçmedi/yok: cozunurluk |
 
+## KAYITLI_CIHAZLAR — Kayıtlı (güvenilen) cihazlar
+
+Zorunlu: 6 · Tamam: 6 · Eksik: 0
+
+| Madde | Durum | Kod | Test | Not |
+|---|---|---|---|---|
+| Kalıcı cihaz kimliği (iroh anahtarı, host/izleyici ayrı) | ✅ DONE | ✅ | ✅ |  |
+| Atomik JSON eşleşme kaydı | ✅ DONE | ✅ | ✅ |  |
+| Kayıtlı cihaz kimlik/jeton doğrulaması, her seferinde onay | ✅ DONE | ✅ | ✅ |  |
+| Uygulama açıkken arka planda dinleme; kod yalnız 'Bağlantı ver' açıkken | ✅ DONE | ✅ | ✅ |  |
+| Yerel ağ keşfi (mDNS, cihaz kimliğiyle; IP değişse de) | ✅ DONE | ✅ | ✅ |  |
+| Kayıtlı cihazları yönetme arayüzü | ✅ DONE | ✅ | ✅ |  |
+
 ## Toplam
 
 | İSTENEN | UYGULANAN | TEST EDİLEN | GEÇEN | BAŞARISIZ | ENGELLİ | EKSİK | TEST EDİLMEYEN |
 |---|---|---|---|---|---|---|---|
-| 21 | 19 | 19 | 19 | 0 | 0 | 2 | 2 |
+| 27 | 25 | 25 | 25 | 0 | 0 | 2 | 2 |
 
 **SONUÇ: ❌ NOT_READY**

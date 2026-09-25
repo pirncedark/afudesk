@@ -5,8 +5,9 @@ use crate::{
     ag::{self, AlAkisi, Baglanti, GonderAkisi, Kurulum},
     dosya::{self, GonderAyari, Gonderim},
     goruntu::Birlestirici,
+    guvenilen,
     host::{istemsiz_kopus, KOPUS_KODU},
-    kod,
+    kimlik, kod,
     pano::{self, Esitleyici, Pano, PANO_ARALIGI},
     protokol::{self, Girdi, Izinler, Kare, Kontrol, SURUM},
     zaman,
@@ -15,7 +16,7 @@ use anyhow::Result;
 use iroh::{Endpoint, EndpointAddr};
 use std::{
     collections::VecDeque,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, AtomicI64, Ordering},
         Arc, Mutex,
@@ -58,6 +59,10 @@ pub enum IzleyiciOlay {
     /// Bağlantı koptu, yeniden deneniyor (`deneme` 1'den başlar).
     YenidenBaglaniyor {
         deneme: u32,
+    },
+    /// Host bu cihazı kaydetti: bundan sonra kod/parola olmadan bağlanılabilir.
+    Kaydedildi {
+        ad: String,
     },
     Koptu {
         sebep: String,
@@ -193,11 +198,11 @@ pub async fn baglan(kod_metni: &str, parola: &str, ad: &str) -> Result<Izleyici>
     baglan_panolu(kod_metni, parola, ad, None).await
 }
 
-/// Kodda yalnız yerel döngü adresi varsa (testler) dışarı hiçbir istek çıkarılmaz.
-fn kurulum_sec(d: &kod::Davet) -> Kurulum {
-    let yalniz_yerel = d.relaylar.is_empty()
-        && !d.adresler.is_empty()
-        && d.adresler.iter().all(|a| {
+/// Yalnız yerel döngü adresi varsa (testler) dışarı hiçbir istek çıkarılmaz.
+fn kurulum_sec(adresler: &[String], relaylar: &[String]) -> Kurulum {
+    let yalniz_yerel = relaylar.is_empty()
+        && !adresler.is_empty()
+        && adresler.iter().all(|a| {
             a.parse::<std::net::SocketAddr>()
                 .is_ok_and(|s| s.ip().is_loopback())
         });
@@ -216,25 +221,86 @@ pub async fn baglan_panolu(
     ad: &str,
     pano: Option<Box<dyn Pano>>,
 ) -> Result<Izleyici> {
+    baglan_ayarli(kod_metni, parola, ad, pano, None).await
+}
+
+/// `veri_klasoru`: kalıcı izleyici kimliği ve kayıtlı cihazlar. Verilirse host bu cihazı
+/// kaydeder; sonra `kayitli_baglan` ile kod olmadan bağlanılır.
+pub async fn baglan_ayarli(
+    kod_metni: &str,
+    parola: &str,
+    ad: &str,
+    pano: Option<Box<dyn Pano>>,
+    veri_klasoru: Option<&Path>,
+) -> Result<Izleyici> {
     let d = kod::coz(kod_metni, parola, kod::simdi())?;
-    let ep = ag::uc_nokta(kurulum_sec(&d), false).await?;
     let hedef = ag::hedef_adres(&d.parmak_izi, &d.adresler, &d.relaylar)?;
+    let ilk = Kontrol::Merhaba {
+        surum: SURUM,
+        bilet: d.bilet.clone(),
+        ad: ad.to_owned(),
+    };
+    oturum_ac(kurulum_sec(&d.adresler, &d.relaylar), hedef, ilk, &d.ad, ad, pano, veri_klasoru, None)
+        .await
+}
+
+/// Kayıtlı host'a kod/parola olmadan bağlanır; host yine onay verir. Host bu cihazı
+/// kaldırdıysa ya da kayıt geçersizse kayıt kendiliğinden silinir.
+pub async fn kayitli_baglan(
+    host_kimlik: &str,
+    veri_klasoru: &Path,
+    ad: &str,
+    pano: Option<Box<dyn Pano>>,
+) -> Result<Izleyici> {
+    let yol = guvenilen::kayit_yolu(veri_klasoru);
+    let kayit = guvenilen::oku(&yol)
+        .izleyiciler
+        .into_iter()
+        .find(|k| k.host_kimlik == host_kimlik)
+        .ok_or_else(|| anyhow::anyhow!("Bu cihaz kayıtlı değil. Bağlanmak için kod gerekir."))?;
+    let hedef = ag::hedef_adres(&kayit.host_kimlik, &kayit.son_adresler, &kayit.relaylar)?;
+    let ilk = Kontrol::MerhabaKayitli {
+        surum: SURUM,
+        jeton: kayit.jeton.clone(),
+        ad: ad.to_owned(),
+    };
+    oturum_ac(
+        kurulum_sec(&kayit.son_adresler, &kayit.relaylar),
+        hedef,
+        ilk,
+        &kayit.ad,
+        ad,
+        pano,
+        Some(veri_klasoru),
+        Some(kayit.host_kimlik),
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn oturum_ac(
+    kurulum: Kurulum,
+    hedef: EndpointAddr,
+    ilk_mesaj: Kontrol,
+    karsi_ad: &str,
+    ad: &str,
+    pano: Option<Box<dyn Pano>>,
+    veri_klasoru: Option<&Path>,
+    kayitli_host: Option<String>,
+) -> Result<Izleyici> {
+    let gizli = match veri_klasoru {
+        Some(v) => Some(kimlik::yukle_veya_uret(&v.join(kimlik::IZLEYICI_DOSYASI))?.gizli),
+        None => None,
+    };
+    let ep = ag::uc_nokta_kimlikli(kurulum, false, gizli).await?;
     let c = ag::baglan(&ep, hedef.clone(), BAGLANMA_SURESI).await?;
     let (mut w, r) = c.open_bi().await?;
-    protokol::yaz(
-        &mut w,
-        &Kontrol::Merhaba {
-            surum: SURUM,
-            bilet: d.bilet.clone(),
-            ad: ad.to_owned(),
-        },
-    )
-    .await?;
+    protokol::yaz(&mut w, &ilk_mesaj).await?;
     let (olay_tx, olaylar) = mpsc::channel(4);
     let (girdi, girdi_rx) = mpsc::channel::<Girdi>(256);
     let _ = olay_tx
         .send(IzleyiciOlay::OnayBekleniyor {
-            karsi_ad: d.ad.clone(),
+            karsi_ad: karsi_ad.to_owned(),
         })
         .await;
     let olay = olay_tx.downgrade();
@@ -271,6 +337,8 @@ pub async fn baglan_panolu(
         saat_esitlendi: Arc::new(AtomicBool::new(false)),
         kol_olay: kol_olay_rx,
         titresim: titresim_tx,
+        veri: veri_klasoru.map(Path::to_path_buf),
+        kayitli_host,
     };
     tokio::spawn(gozetmen.calis(c, w, r));
     Ok(Izleyici {
@@ -304,6 +372,10 @@ struct Gozetmen {
     saat_esitlendi: Arc<AtomicBool>,
     kol_olay: mpsc::UnboundedReceiver<()>,
     titresim: std::sync::mpsc::Sender<(u8, u8)>,
+    /// Kalıcı kimlik + kayıtlar (varsa host'un verdiği eşleşme jetonu saklanır).
+    veri: Option<PathBuf>,
+    /// Kayıtlı bağlantıysa host'un kimliği.
+    kayitli_host: Option<String>,
 }
 
 /// Yeniden bağlanma denemeleri arasındaki bekleme: 0.5, 1, 2, 4, 5, 5… sn.
@@ -339,6 +411,12 @@ impl Gozetmen {
                 None => break "Bağlantı koptu; yeniden bağlanılamadı.".into(),
             }
         };
+        // Host bu cihazı kaldırdıysa ya da kayıt geçersizse kayıt artık işe yaramaz.
+        if let (Some(v), Some(h)) = (&self.veri, &self.kayitli_host) {
+            if sebep == guvenilen::KALDIRILDI || sebep == guvenilen::GECERSIZ {
+                let _ = guvenilen::guncelle(&guvenilen::kayit_yolu(v), |k| guvenilen::hostu_unut(k, h));
+            }
+        }
         let _ = self.olay.send(IzleyiciOlay::Koptu { sebep }).await;
         self.ep.close().await;
     }
@@ -396,6 +474,13 @@ impl Gozetmen {
                 genislik,
                 yukseklik,
             }))) => {
+                if let (Some(v), Some(h)) = (&self.veri, &self.kayitli_host) {
+                    let _ = guvenilen::guncelle(&guvenilen::kayit_yolu(v), |k| {
+                        if let Some(x) = k.izleyiciler.iter_mut().find(|x| &x.host_kimlik == h) {
+                            x.son_gorulme = guvenilen::simdi();
+                        }
+                    });
+                }
                 let _ = olay
                     .send(IzleyiciOlay::Kabul {
                         izinler: izinler.clone(),
@@ -533,6 +618,22 @@ impl Gozetmen {
                 m = gelen_rx.recv() => match m {
                     Some(Kontrol::Kapat(s)) => { *jeton = None; break s }
                     Some(Kontrol::DevamJetonu(j)) => { *jeton = Some(j); }
+                    Some(Kontrol::KayitJetonu { host_ad, adresler, relaylar, jeton: eslesme }) => {
+                        if let Some(v) = &self.veri {
+                            let kayit = guvenilen::IzleyiciKaydi {
+                                host_kimlik: ag::kimlik_metni(c.remote_id()),
+                                ad: host_ad.chars().filter(|c| !c.is_control()).take(40).collect(),
+                                son_adresler: adresler,
+                                relaylar,
+                                jeton: eslesme,
+                                son_gorulme: guvenilen::simdi(),
+                            };
+                            let ad = kayit.ad.clone();
+                            if guvenilen::guncelle(&guvenilen::kayit_yolu(v), |k| guvenilen::izleyiciye_ekle(k, kayit)).is_ok() {
+                                let _ = olay.send(IzleyiciOlay::Kaydedildi { ad }).await;
+                            }
+                        }
+                    }
                     Some(Kontrol::SaatCevap { izleyici_ms, host_ms }) => {
                         let alim_ms = unix_ms();
                         self.saat_farki.store(zaman::saat_farki(izleyici_ms, host_ms, alim_ms), Ordering::Relaxed);
@@ -596,29 +697,17 @@ mod testler {
         assert_eq!(bekleme(50), Duration::from_millis(5_000));
     }
 
-    fn davet(adresler: &[&str], relaylar: &[&str]) -> kod::Davet {
-        kod::Davet {
-            v: kod::DAVET_SURUMU,
-            ad: "a".into(),
-            adresler: adresler.iter().map(|s| s.to_string()).collect(),
-            parmak_izi: String::new(),
-            relaylar: relaylar.iter().map(|s| s.to_string()).collect(),
-            bilet: String::new(),
-            bitis: 0,
-        }
+    fn sec(adresler: &[&str], relaylar: &[&str]) -> Kurulum {
+        let a: Vec<String> = adresler.iter().map(|s| s.to_string()).collect();
+        let r: Vec<String> = relaylar.iter().map(|s| s.to_string()).collect();
+        kurulum_sec(&a, &r)
     }
 
     #[test]
     fn yalniz_dongu_adresli_kod_disari_cikmaz() {
-        assert_eq!(kurulum_sec(&davet(&["127.0.0.1:5"], &[])), Kurulum::YalnizYerel);
-        assert_ne!(
-            kurulum_sec(&davet(&["127.0.0.1:5", "192.168.1.2:5"], &[])),
-            Kurulum::YalnizYerel
-        );
-        assert_ne!(
-            kurulum_sec(&davet(&["127.0.0.1:5"], &["https://r.example/"])),
-            Kurulum::YalnizYerel
-        );
-        assert_ne!(kurulum_sec(&davet(&[], &[])), Kurulum::YalnizYerel);
+        assert_eq!(sec(&["127.0.0.1:5"], &[]), Kurulum::YalnizYerel);
+        assert_ne!(sec(&["127.0.0.1:5", "192.168.1.2:5"], &[]), Kurulum::YalnizYerel);
+        assert_ne!(sec(&["127.0.0.1:5"], &["https://r.example/"]), Kurulum::YalnizYerel);
+        assert_ne!(sec(&[], &[]), Kurulum::YalnizYerel);
     }
 }

@@ -654,6 +654,125 @@ expect(m.cagrilar, contains('kabul:true:true'));
     });
   });
 
+  group('Kayıtlı cihazlar', () {
+    Future<SahteMotor> kayitliAc(WidgetTester t) async {
+      t.view.physicalSize = const Size(1200, 900);
+      t.view.devicePixelRatio = 1;
+      addTearDown(t.view.reset);
+      final m = SahteMotor()
+        ..kayitli.addAll([
+          KayitliCihaz('kimlik-ofis-0123456789abcdef', 'Ofis PC', DateTime.now().subtract(const Duration(minutes: 5))),
+          KayitliCihaz('kimlik-ev', 'Ev Laptop', DateTime.now().subtract(const Duration(days: 2))),
+        ]);
+      await t.pumpWidget(AfuDeskUygulama(motor: m));
+      return m;
+    }
+
+    testWidgets('kayıtlı cihazlar listesi', (t) async {
+      final m = await kayitliAc(t);
+      expect(find.text('Kayıtlı cihazlar'), findsOneWidget);
+      expect(find.text('Ofis PC'), findsOneWidget);
+      expect(find.text('Son görülme: 5 dk önce'), findsOneWidget);
+      expect(find.text('Son görülme: 2 gün önce'), findsOneWidget);
+      // Kullanıcı dostu: kimlik/IP/jeton gösterilmez.
+      expect(find.textContaining('kimlik-'), findsNothing);
+      await t.tap(find.byKey(const Key('kayitli_baglan_0')));
+      await gec(t);
+      expect(m.cagrilar, contains('kayitliBaglan:kimlik-ofis-0123456789abcdef'));
+      expect(m.sonKod, isNull, reason: 'kod/parola istenmez');
+      m.izleyici.add(IzleyiciOlay('bekliyor', ad: 'Ofis PC'));
+      await gec(t);
+      expect(find.textContaining('Ofis PC'), findsWidgets);
+    });
+
+    testWidgets('kayıtlı cihazı unut', (t) async {
+      final m = await kayitliAc(t);
+      await t.tap(find.byKey(const Key('kayitli_unut_0')));
+      await t.pump();
+      expect(m.cagrilar, contains('unut:kimlik-ofis-0123456789abcdef'));
+      expect(find.text('Ofis PC'), findsNothing);
+      expect(find.text('Ev Laptop'), findsOneWidget);
+      await t.tap(find.byKey(const Key('kayitli_unut_0')));
+      await t.pump();
+      expect(find.text('Kayıtlı cihazlar'), findsNothing, reason: 'liste boşalınca bölüm gizlenir');
+    });
+
+    testWidgets('kayıt yoksa bölüm görünmez', (t) async {
+      await ac(t);
+      expect(find.text('Kayıtlı cihazlar'), findsNothing);
+    });
+
+    testWidgets('güvenilen cihazı kaldır', (t) async {
+      t.view.physicalSize = const Size(1200, 1400);
+      t.view.devicePixelRatio = 1;
+      addTearDown(t.view.reset);
+      final m = SahteMotor()
+        ..guvenilen.add(KayitliCihaz('izleyici-1', 'Telefon', DateTime.now().subtract(const Duration(hours: 3))));
+      await t.pumpWidget(AfuDeskUygulama(motor: m));
+      await t.tap(find.byKey(const Key('secenek_ver')));
+      await gec(t);
+      m.host.add(const HostOlay('hazir', kod: ornekKod, parola: '1', erisim: 'x'));
+      await t.pump();
+      expect(find.text('Güvenilen cihazlar'), findsOneWidget);
+      expect(find.text('Telefon'), findsOneWidget);
+      expect(find.text('Son görülme: 3 saat önce'), findsOneWidget);
+      await t.tap(find.byKey(const Key('guvenilen_kaldir_0')));
+      await t.pump();
+      expect(m.cagrilar, contains('kaldir:izleyici-1'));
+      expect(find.text('Güvenilen cihazlar'), findsNothing);
+      expect(find.textContaining('Bir dahaki sefere kod gerekecek'), findsOneWidget);
+    });
+
+    testWidgets('arka planda kayıtlı cihaz isteği onay penceresi açar (Bağlantı ver kapalıyken)', (t) async {
+      final m = await ac(t);
+      expect(m.cagrilar, contains('arkaPlan'), reason: 'uygulama açılınca arka planda dinler');
+      m.host.add(const HostOlay('istek', ad: 'Telefon', kayitli: true));
+      await gec(t);
+      expect(find.text('Telefon bağlanmak istiyor'), findsOneWidget);
+      expect(find.byKey(const Key('istek_kayitli')), findsOneWidget);
+      await t.tap(find.byKey(const Key('istek_kabul')));
+      await gec(t);
+      expect(m.cagrilar, contains('kabul:true:true'));
+      // Bağlanınca oturum ekranı (Kes düğmesiyle) kendiliğinden açılır.
+      m.host.add(const HostOlay('baglandi', ad: 'Telefon', kontrol: true));
+      await gec(t);
+      expect(find.text('Telefon ekranını görüyor'), findsOneWidget);
+      expect(find.byKey(const Key('ver_kes')), findsOneWidget);
+    });
+
+    testWidgets('arka plan isteği reddedilebilir; kodla gelen istekte rozet yok', (t) async {
+      final m = await ac(t);
+      m.host.add(const HostOlay('istek', ad: 'Yabancı'));
+      await gec(t);
+      expect(find.byKey(const Key('istek_kayitli')), findsNothing);
+      await t.tap(find.byKey(const Key('istek_red')));
+      await gec(t);
+      expect(m.cagrilar, contains('red'));
+    });
+
+    testWidgets('kayıt olunca oturumda bildirilir', (t) async {
+      final m = await ac(t);
+      await t.tap(find.byKey(const Key('secenek_baglan')));
+      await gec(t);
+      await t.enterText(find.byType(TextField).first, ornekKod);
+      await t.enterText(find.byType(TextField).last, '123456');
+      await t.tap(find.widgetWithText(FilledButton, 'Bağlan'));
+      await gec(t);
+      m.izleyici.add(IzleyiciOlay('kaydedildi', ad: 'Ofis PC'));
+      await t.pump();
+      expect(find.textContaining('Ofis PC kaydedildi'), findsOneWidget);
+    });
+
+    test('göreli zaman', () {
+      final s = DateTime(2026, 9, 25, 12);
+      expect(goreliZaman(s.subtract(const Duration(seconds: 20)), simdi: s), 'az önce');
+      expect(goreliZaman(s.subtract(const Duration(minutes: 7)), simdi: s), '7 dk önce');
+      expect(goreliZaman(s.subtract(const Duration(hours: 5)), simdi: s), '5 saat önce');
+      expect(goreliZaman(s.subtract(const Duration(days: 3)), simdi: s), '3 gün önce');
+      expect(goreliZaman(DateTime(2026, 1, 2), simdi: s), '02.01.2026');
+    });
+  });
+
   group('Yardımcılar', () {
     test('tuş adları', () {
       expect(tusAdi(LogicalKeyboardKey.enter), 'Enter');

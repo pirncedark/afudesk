@@ -34,6 +34,10 @@ On first launch Windows Firewall may ask for permission: allow **Private network
 
 Connect a Bluetooth gamepad to the Android phone, or open a remote session and tap **🎮 Oyun kolu** to use the on-screen controls. The host must grant gamepad permission. To verify it, accept the session with gamepad permission and check `joy.cpl` on the host: a second Xbox 360 controller should appear. Move both sticks and press the buttons to test input; trigger vibration to check phone/controller haptics.
 
+### Registered devices (no code next time)
+
+After the first connection with a code and password is accepted, the two devices remember each other. Next time the connecting side just picks the computer under **Kayıtlı cihazlar** (Registered devices) on the home screen and taps **Bağlan** — no code or password. The other side is **always asked to accept**, even for a registered device; this works while AfuDesk is open, even if the "Give access" screen is closed. The host can remove a device under **Güvenilen cihazlar** (Trusted devices); that device then needs a code again. The viewer can tap **Unut** (Forget). Devices are identified by a key that is checked on every connection, and they are found on the local network even if their IP changes.
+
 ## When does it work?
 
 The two devices can be on **any** internet connections (home internet, mobile hotspot, office, another ISP). Nobody has to change router settings, open ports or know an IP address.
@@ -111,6 +115,10 @@ AfuDesk, iki bilgisayarı **tek bir kodla** birbirine bağlayan açık kaynak bi
 ### Telefonla oyun kolu
 
 Bluetooth oyun kolunu Android telefona bağla ya da oturumda **🎮 Oyun kolu** düğmesine bas. Host oyun kolu izni vermelidir. Denemek için host'ta `joy.cpl` aç: ikinci bir Xbox 360 kolu görünmeli. İki çubuğu ve düğmeleri dene; titreşim gelince telefonun ve destekliyorsa Bluetooth kolunun titrediğini kontrol et.
+
+### Kayıtlı cihazlar (bir dahaki sefere kod yok)
+
+Kodla ve parolayla yapılan ilk bağlantı kabul edilince iki cihaz birbirini hatırlar. Bir dahaki sefere bağlanan taraf ana ekranda **Kayıtlı cihazlar** altından bilgisayarı seçip **Bağlan**'a basar — kod ve parola gerekmez. Karşı tarafa **her seferinde onay sorulur**, kayıtlı cihaz için de; AfuDesk açık olduğu sürece "Bağlantı ver" ekranı kapalıyken de çalışır. Bağlantı veren taraf cihazı **Güvenilen cihazlar** altından **Kaldır**abilir; o cihaz bir dahaki sefere yine kod ister. Bağlanan taraf **Unut** diyebilir. Cihazlar her bağlantıda doğrulanan bir anahtarla tanınır ve IP'leri değişse de yerel ağda bulunur.
 
 ## Hangi durumda çalışır?
 

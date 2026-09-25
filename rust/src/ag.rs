@@ -61,6 +61,19 @@ fn tasima() -> QuicTransportConfig {
 }
 
 pub async fn uc_nokta(kurulum: Kurulum, portmapper: bool) -> Result<Endpoint> {
+    uc_nokta_kimlikli(kurulum, portmapper, None).await
+}
+
+/// mDNS servis adı: `_afudesk._udp.local`. Aynı ağdaki kayıtlı cihaz, IP'si değişse de
+/// internet olmadan bulunur.
+pub const MDNS_SERVISI: &str = "afudesk";
+
+/// `gizli`: kalıcı cihaz anahtarı (kayıtlı cihazlar); `None` = her açılışta yeni kimlik.
+pub async fn uc_nokta_kimlikli(
+    kurulum: Kurulum,
+    portmapper: bool,
+    gizli: Option<iroh::SecretKey>,
+) -> Result<Endpoint> {
     let b = match kurulum {
         Kurulum::YalnizYerel => Endpoint::builder(presets::Minimal)
             .relay_mode(RelayMode::Disabled)
@@ -70,6 +83,14 @@ pub async fn uc_nokta(kurulum: Kurulum, portmapper: bool) -> Result<Endpoint> {
         Kurulum::SadeceRelay => Endpoint::builder(presets::N0).clear_ip_transports(),
     };
     let mut b = b.alpns(vec![ALPN.to_vec()]).transport_config(tasima());
+    if let Some(g) = gizli {
+        b = b.secret_key(g);
+    }
+    if kurulum == Kurulum::Internet {
+        b = b.address_lookup(
+            iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVISI),
+        );
+    }
     if !portmapper || kurulum != Kurulum::Internet {
         b = b.portmapper_config(iroh::endpoint::PortmapperConfig::Disabled);
     }
@@ -315,6 +336,44 @@ mod testler {
         let e = baglan(&ep, hedef, Duration::from_secs(2)).await.unwrap_err();
         assert_eq!(e.to_string(), ULASILAMADI);
         assert!(hedef_adres("bozuk", &[], &[]).is_err());
+    }
+
+    /// Yerel ağ keşfi: adres ve relay OLMADAN yalnız cihaz kimliğiyle, mDNS üzerinden bulunur
+    /// (kayıtlı cihazın IP'si değişse de). Çoklu yayın gerektirdiği için CI'da atlanır.
+    #[tokio::test]
+    async fn gercek_mdns_kimlikle_bulunur() {
+        async fn uc() -> Endpoint {
+            Endpoint::builder(presets::Minimal)
+                .relay_mode(RelayMode::Disabled)
+                .alpns(vec![ALPN.to_vec()])
+                .address_lookup(
+                    iroh_mdns_address_lookup::MdnsAddressLookup::builder()
+                        .service_name(MDNS_SERVISI),
+                )
+                .bind()
+                .await
+                .unwrap()
+        }
+        let h = uc().await;
+        let e = h.clone();
+        tokio::spawn(async move {
+            if let Some(g) = e.accept().await {
+                let c = g.await?;
+                let (mut w, mut r) = c.accept_bi().await?;
+                let v = r.read_to_end(64).await?;
+                w.write_all(&v).await?;
+                w.finish()?;
+                c.closed().await;
+            }
+            Ok::<_, anyhow::Error>(())
+        });
+        let v = uc().await;
+        let yalniz_kimlik = EndpointAddr::from_parts(h.id(), std::iter::empty());
+        let c = baglan(&v, yalniz_kimlik, Duration::from_secs(20)).await.unwrap();
+        let (mut w, mut r) = c.open_bi().await.unwrap();
+        w.write_all(b"yerel").await.unwrap();
+        w.finish().unwrap();
+        assert_eq!(r.read_to_end(64).await.unwrap(), b"yerel");
     }
 
     #[test]

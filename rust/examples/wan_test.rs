@@ -124,6 +124,8 @@ async fn host_kipi(klasor: PathBuf) -> Result<()> {
             parola: String::new(),
             yalniz_yerel: false,
             dosya_klasoru: None,
+            veri_klasoru: None,
+            kod_acik: true,
         },
         Arc::new(Izleyen {
             ic: Gercek,
@@ -147,7 +149,7 @@ async fn host_kipi(klasor: PathBuf) -> Result<()> {
                         std::fs::rename(&gecici, klasor.join("kod.txt"))?;
                         json!({"tur": "hazir", "adresler": adresler, "erisim": erisim})
                     }
-                    HostOlay::Istek { ad } => {
+                    HostOlay::Istek { ad, .. } => {
                         let _ = komut.send(HostKomut::Kabul(Izinler {
                             kontrol: true, pano: false, dosya: false, oyun_kolu: false,
                         })).await;

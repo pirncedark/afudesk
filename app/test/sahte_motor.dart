@@ -23,13 +23,59 @@ class SahteMotor implements Motor {
   @override
   bool dokunmatik = false;
 
+  final kayitli = <KayitliCihaz>[];
+  final guvenilen = <KayitliCihaz>[];
+
   @override
   String cihazAdi() => 'TEST-PC';
 
   @override
-  Stream<HostOlay> hostBaslat({required String ad, String parola = '', bool upnp = true}) {
+  void arkaPlanBaslat() {
+    cagrilar.add('arkaPlan');
+    _durumuIzle();
+  }
+  @override
+  Stream<HostOlay> get hostOlaylari => host.stream;
+  @override
+  Stream<IzleyiciOlay> kayitliBaglan({required String kimlik, required String ad}) {
+    cagrilar.add('kayitliBaglan:$kimlik');
+    return izleyici.stream;
+  }
+  @override
+  List<KayitliCihaz> kayitliCihazlar() => List.of(kayitli);
+  @override
+  void kayitliUnut(String kimlik) {
+    cagrilar.add('unut:$kimlik');
+    kayitli.removeWhere((k) => k.kimlik == kimlik);
+  }
+  @override
+  List<KayitliCihaz> guvenilenCihazlar() => List.of(guvenilen);
+  @override
+  void guvenilenKaldir(String kimlik) {
+    cagrilar.add('kaldir:$kimlik');
+    guvenilen.removeWhere((k) => k.kimlik == kimlik);
+  }
+
+  HostOlay? _sonHazir, _bagli;
+  bool _izleniyor = false;
+
+  /// Gerçek motor gibi: sayfa sonradan açılırsa son durumu (bağlı oturum / geçerli kod) görür.
+  void _durumuIzle() {
+    if (_izleniyor) return;
+    _izleniyor = true;
+    host.stream.listen((o) {
+      if (o.tur == 'hazir') _sonHazir = o;
+      if (o.tur == 'baglandi') _bagli = o;
+      if (o.tur == 'koptu') _bagli = null;
+    }, onError: (Object _) {});
+  }
+
+  @override
+  Stream<HostOlay> hostBaslat({required String ad, String parola = '', bool upnp = true}) async* {
     cagrilar.add('hostBaslat:$ad');
-    return host.stream;
+    final son = _bagli ?? _sonHazir;
+    if (son != null) yield son;
+    yield* host.stream;
   }
 
   @override

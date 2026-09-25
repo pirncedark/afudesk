@@ -1,5 +1,6 @@
 //! Tel protokolü: iroh (QUIC) akışları üzerinde uzunluk önekli (u32 BE) bincode mesajları.
-//! Kontrol akışı (çift yönlü): Merhaba|Devam / DevamJetonu+Kabul / Red / Girdi / Pano / Kapat.
+//! Kontrol akışı (çift yönlü): Merhaba|MerhabaKayitli|Devam / DevamJetonu+Kabul(+KayitJetonu) / Red /
+//! Girdi / Pano / Kapat.
 //! Görüntü akışı (tek yönlü, host → izleyici): Kare.
 //! Dosya akışı (çift yönlü, izleyici açar; dosya başına bir akış):
 //! DosyaBaslik → DosyaDevam | DosyaHata, sonra DosyaParca… ve DosyaTamam | DosyaHata.
@@ -7,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 pub const ALPN: &[u8] = b"afudesk/2";
-pub const SURUM: u32 = 3;
+pub const SURUM: u32 = 4;
 /// Tek mesaj için üst sınır (kötü niyetli uzunluk alanına karşı).
 pub const AZAMI_MESAJ: usize = 32 * 1024 * 1024;
 
@@ -124,6 +125,21 @@ pub enum Kontrol {
         surum: u32,
         jeton: String,
         ad: String,
+    },
+    /// İzleyici → host, kayıtlı cihaz olarak bağlanma (kod yerine eşleşme jetonu).
+    /// Cihaz kimliği mesajda değil, el sıkışmada doğrulanan uç kimliğindedir.
+    MerhabaKayitli {
+        surum: u32,
+        jeton: String,
+        ad: String,
+    },
+    /// Host → izleyici, kodla yapılan onaylı ilk oturumda (Kabul'den sonra): bundan sonra
+    /// kodsuz bağlanabilmek için eşleşme jetonu ve host'a ulaşma bilgisi.
+    KayitJetonu {
+        host_ad: String,
+        adresler: Vec<String>,
+        relaylar: Vec<String>,
+        jeton: String,
     },
 }
 

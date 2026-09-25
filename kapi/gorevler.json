@@ -519,6 +519,166 @@
           ]
         }
       }
+    },
+    "KAYITLI_CIHAZLAR": {
+      "ad": "Kayıtlı (güvenilen) cihazlar",
+      "zorunlu": true,
+      "maddeler": {
+        "kalici_kimlik": {
+          "ad": "Kalıcı cihaz kimliği (iroh anahtarı, host/izleyici ayrı)",
+          "kanit": [
+            [
+              "rust/src/kimlik.rs",
+              "yukle_veya_uret"
+            ],
+            [
+              "rust/src/host.rs",
+              "HOST_DOSYASI"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "kimlik::testler::cihaz_kimligi_kalici"
+            ],
+            [
+              "cargo",
+              "uctan_uca::host_kimligi_yeniden_acilista_ayni"
+            ]
+          ]
+        },
+        "eslesme_kaydi": {
+          "ad": "Atomik JSON eşleşme kaydı",
+          "kanit": [
+            [
+              "rust/src/guvenilen.rs",
+              "pub struct HostKaydi"
+            ],
+            [
+              "rust/src/guvenilen.rs",
+              "NamedTempFile"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "guvenilen::testler::kayit_gidis_donus"
+            ],
+            [
+              "cargo",
+              "guvenilen::testler::atomik_yazma"
+            ],
+            [
+              "cargo",
+              "guvenilen::testler::eszamanli_guncelleme_kayit_kaybetmez"
+            ]
+          ]
+        },
+        "kayitsiz_kod": {
+          "ad": "Kayıtlı cihaz kimlik/jeton doğrulaması, her seferinde onay",
+          "kanit": [
+            [
+              "rust/src/protokol.rs",
+              "MerhabaKayitli"
+            ],
+            [
+              "rust/src/host.rs",
+              "sabit_zamanli_esit"
+            ],
+            [
+              "rust/src/guvenilen.rs",
+              "fn jeton_dogrula"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "uctan_uca::kayitli_cihaz_kodsuz_baglanir"
+            ],
+            [
+              "cargo",
+              "uctan_uca::kayitli_cihaz_onaysiz_baglanamaz"
+            ],
+            [
+              "cargo",
+              "uctan_uca::kaldirilan_cihaz_reddedilir"
+            ],
+            [
+              "cargo",
+              "uctan_uca::yanlis_jeton_reddedilir"
+            ],
+            [
+              "cargo",
+              "uctan_uca::host_sertifikasi_degisirse_reddedilir"
+            ]
+          ]
+        },
+        "arka_plan": {
+          "ad": "Uygulama açıkken arka planda dinleme; kod yalnız 'Bağlantı ver' açıkken",
+          "kanit": [
+            [
+              "app/lib/main.dart",
+              "arkaPlanBaslat"
+            ],
+            [
+              "rust/src/host.rs",
+              "pub fn kod_ac"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "uctan_uca::kod_kapaliyken_kodla_girilmez_kayitli_cihaz_yine_baglanir"
+            ],
+            [
+              "flutter",
+              "arka planda kayıtlı cihaz isteği onay penceresi açar"
+            ]
+          ]
+        },
+        "yerel_kesif": {
+          "ad": "Yerel ağ keşfi (mDNS, cihaz kimliğiyle; IP değişse de)",
+          "kanit": [
+            [
+              "rust/src/ag.rs",
+              "MDNS_SERVISI"
+            ]
+          ],
+          "testler": [
+            [
+              "cargo",
+              "ag::testler::gercek_mdns_kimlikle_bulunur"
+            ]
+          ]
+        },
+        "ui": {
+          "ad": "Kayıtlı cihazları yönetme arayüzü",
+          "kanit": [
+            [
+              "app/lib/sayfalar/ana.dart",
+              "Kayıtlı cihazlar"
+            ],
+            [
+              "app/lib/sayfalar/baglanti_ver.dart",
+              "Güvenilen cihazlar"
+            ]
+          ],
+          "testler": [
+            [
+              "flutter",
+              "kayıtlı cihazlar listesi"
+            ],
+            [
+              "flutter",
+              "kayıtlı cihazı unut"
+            ],
+            [
+              "flutter",
+              "güvenilen cihazı kaldır"
+            ]
+          ]
+        }
+      }
     }
   }
 }
