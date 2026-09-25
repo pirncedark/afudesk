@@ -1,6 +1,6 @@
 {
-  "zaman": "2026-09-25 16:59",
-  "commit": "ac8d91d",
+  "zaman": "2026-09-25 18:04",
+  "commit": "a54d791",
   "sistemler": {
     "FASTPATH": {
       "ad": "Düşük gecikmeli görüntü ve ölçüm",
@@ -28,7 +28,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 175.1,
+              "sure_sn": 0.9,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
@@ -42,7 +42,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.4,
+              "sure_sn": 0.8,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
@@ -56,12 +56,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 2.3,
+              "sure_sn": 1.7,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.81s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.77s"
               ]
             }
           ],
@@ -88,7 +88,7 @@
               "cikis": 0,
               "gecen": 3,
               "basarisiz": 0,
-              "sure_sn": 0.9,
+              "sure_sn": 1.0,
               "gecti": true,
               "son_satirlar": [
                 "running 3 tests",
@@ -125,7 +125,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 6.6,
+              "sure_sn": 6.7,
               "gecti": true,
               "son_satirlar": [
                 "",
@@ -209,7 +209,7 @@
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.07s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.08s"
               ]
             }
           ],
@@ -236,12 +236,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 3.7,
+              "sure_sn": 3.3,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 2.78s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 2.46s"
               ]
             }
           ],
@@ -279,7 +279,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.0,
+              "sure_sn": 0.8,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
@@ -311,7 +311,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.0,
+              "sure_sn": 0.8,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
@@ -325,12 +325,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.5,
+              "sure_sn": 1.4,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.56s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.52s"
               ]
             }
           ],
@@ -413,7 +413,7 @@
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.03s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.02s"
               ]
             },
             {
@@ -422,12 +422,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 2.2,
+              "sure_sn": 1.5,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.60s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.40s"
               ]
             }
           ],
@@ -454,12 +454,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.4,
+              "sure_sn": 1.2,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.40s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.34s"
               ]
             }
           ],
@@ -491,12 +491,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.4,
+              "sure_sn": 1.2,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.33s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.30s"
               ]
             },
             {
@@ -557,12 +557,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 2.2,
+              "sure_sn": 1.5,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.60s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.40s"
               ]
             },
             {
@@ -571,7 +571,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.1,
+              "sure_sn": 1.0,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
@@ -585,7 +585,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 6.8,
+              "sure_sn": 7.5,
               "gecti": true,
               "son_satirlar": [
                 "",
@@ -599,7 +599,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 5.7,
+              "sure_sn": 7.5,
               "gecti": true,
               "son_satirlar": [
                 "",
@@ -613,7 +613,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 6.5,
+              "sure_sn": 6.9,
               "gecti": true,
               "son_satirlar": [
                 "",
@@ -627,7 +627,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 6.2,
+              "sure_sn": 6.7,
               "gecti": true,
               "son_satirlar": [
                 "",
@@ -641,7 +641,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 6.3,
+              "sure_sn": 6.7,
               "gecti": true,
               "son_satirlar": [
                 "",
@@ -655,7 +655,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 5.3,
+              "sure_sn": 8.1,
               "gecti": true,
               "son_satirlar": [
                 "",
@@ -703,7 +703,7 @@
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.07s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.08s"
               ]
             },
             {
@@ -712,7 +712,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.1,
+              "sure_sn": 1.3,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
@@ -744,7 +744,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.0,
+              "sure_sn": 1.1,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
@@ -781,7 +781,21 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.3,
+              "sure_sn": 1.6,
+              "gecti": true,
+              "son_satirlar": [
+                "running 1 test",
+                ".",
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.44s"
+              ]
+            },
+            {
+              "tur": "cargo",
+              "filtre": "uctan_uca::izleyici_kapatinca_yeniden_baglanmaz_host_yeni_kod_uretir",
+              "cikis": 0,
+              "gecen": 1,
+              "basarisiz": 0,
+              "sure_sn": 1.6,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
@@ -791,30 +805,16 @@
             },
             {
               "tur": "cargo",
-              "filtre": "uctan_uca::izleyici_kapatinca_yeniden_baglanmaz_host_yeni_kod_uretir",
-              "cikis": 0,
-              "gecen": 1,
-              "basarisiz": 0,
-              "sure_sn": 1.2,
-              "gecti": true,
-              "son_satirlar": [
-                "running 1 test",
-                ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.35s"
-              ]
-            },
-            {
-              "tur": "cargo",
               "filtre": "uctan_uca::eski_bilet_devam_yerine_kullanilamaz",
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 9.1,
+              "sure_sn": 9.3,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 8.28s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 8.30s"
               ]
             }
           ],
@@ -841,7 +841,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 6.3,
+              "sure_sn": 6.6,
               "gecti": true,
               "son_satirlar": [
                 "",
@@ -855,7 +855,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 6.2,
+              "sure_sn": 6.5,
               "gecti": true,
               "son_satirlar": [
                 "",
@@ -898,7 +898,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.9,
+              "sure_sn": 0.8,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
@@ -926,12 +926,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 3.3,
+              "sure_sn": 3.1,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 2.35s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 2.29s"
               ]
             },
             {
@@ -945,7 +945,7 @@
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 2.28s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 2.27s"
               ]
             },
             {
@@ -954,12 +954,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 6.2,
+              "sure_sn": 6.3,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 5.29s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 5.34s"
               ]
             },
             {
@@ -968,7 +968,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 6.1,
+              "sure_sn": 6.4,
               "gecti": true,
               "son_satirlar": [
                 "",
@@ -1005,7 +1005,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.9,
+              "sure_sn": 0.8,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
@@ -1019,7 +1019,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.9,
+              "sure_sn": 0.8,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
@@ -1033,12 +1033,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.2,
+              "sure_sn": 1.3,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.34s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.33s"
               ]
             },
             {
@@ -1047,12 +1047,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.2,
+              "sure_sn": 1.4,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.32s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.36s"
               ]
             },
             {
@@ -1061,12 +1061,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.1,
+              "sure_sn": 1.3,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.27s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.29s"
               ]
             },
             {
@@ -1089,7 +1089,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 5.9,
+              "sure_sn": 6.6,
               "gecti": true,
               "son_satirlar": [
                 "",
@@ -1103,7 +1103,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 6.1,
+              "sure_sn": 6.8,
               "gecti": true,
               "son_satirlar": [
                 "",
@@ -1135,7 +1135,7 @@
               "cikis": 0,
               "gecen": 0,
               "basarisiz": 0,
-              "sure_sn": 0.9,
+              "sure_sn": 1.0,
               "gecti": false,
               "son_satirlar": [
                 "running 0 tests",
@@ -1167,7 +1167,7 @@
               "cikis": 0,
               "gecen": 0,
               "basarisiz": 0,
-              "sure_sn": 0.9,
+              "sure_sn": 0.8,
               "gecti": false,
               "son_satirlar": [
                 "running 0 tests",
@@ -1210,12 +1210,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.9,
+              "sure_sn": 0.8,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.03s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.01s"
               ]
             },
             {
@@ -1224,12 +1224,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.1,
+              "sure_sn": 1.0,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.22s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.21s"
               ]
             }
           ],
@@ -1261,7 +1261,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.8,
+              "sure_sn": 1.0,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
@@ -1275,12 +1275,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 0.9,
+              "sure_sn": 0.8,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.01s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.03s"
               ]
             },
             {
@@ -1294,7 +1294,7 @@
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.06s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.04s"
               ]
             }
           ],
@@ -1336,7 +1336,7 @@
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.52s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.50s"
               ]
             },
             {
@@ -1345,12 +1345,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.2,
+              "sure_sn": 1.4,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.40s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.42s"
               ]
             },
             {
@@ -1359,12 +1359,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.6,
+              "sure_sn": 1.8,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.75s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.80s"
               ]
             },
             {
@@ -1373,12 +1373,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.9,
+              "sure_sn": 1.7,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.83s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.76s"
               ]
             },
             {
@@ -1387,7 +1387,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.9,
+              "sure_sn": 1.7,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
@@ -1424,12 +1424,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.6,
+              "sure_sn": 1.3,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.58s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.50s"
               ]
             },
             {
@@ -1438,7 +1438,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 6.6,
+              "sure_sn": 6.0,
               "gecti": true,
               "son_satirlar": [
                 "",
@@ -1470,12 +1470,12 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 1.7,
+              "sure_sn": 1.6,
               "gecti": true,
               "son_satirlar": [
                 "running 1 test",
                 ".",
-                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.86s"
+                "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.82s"
               ]
             }
           ],
@@ -1507,7 +1507,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 6.7,
+              "sure_sn": 6.0,
               "gecti": true,
               "son_satirlar": [
                 "",
@@ -1521,7 +1521,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 6.4,
+              "sure_sn": 5.7,
               "gecti": true,
               "son_satirlar": [
                 "",
@@ -1535,7 +1535,7 @@
               "cikis": 0,
               "gecen": 1,
               "basarisiz": 0,
-              "sure_sn": 6.1,
+              "sure_sn": 5.7,
               "gecti": true,
               "son_satirlar": [
                 "",

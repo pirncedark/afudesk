@@ -1,6 +1,6 @@
 # AfuDesk Görev Kapısı — Denetim
 
-Tarih: 2026-09-25 16:59  ·  Commit: `ac8d91d`
+Tarih: 2026-09-25 18:04  ·  Commit: `a54d791`
 
 ## FASTPATH — Düşük gecikmeli görüntü ve ölçüm
 
