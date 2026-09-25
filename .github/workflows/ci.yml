@@ -5,9 +5,19 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      wan:
+        description: "WAN testi: boş = normal CI | derle | baglan"
+        required: false
+        default: ""
+      derleme_run:
+        description: "baglan için: derle çalışmasının run id'si"
+        required: false
+        default: ""
 
 jobs:
   test:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.wan == '' }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,3 +43,55 @@ jobs:
         with:
           name: AfuDesk-windows-x64
           path: app/build/windows/x64/runner/Release/
+
+  # WAN TEST-1: izleyici GitHub'ın makinesinde (farklı makine, farklı ağ), host
+  # geliştiricinin bilgisayarında. Kod+parola `WAN_KOD` secret'ından gelir (log'a
+  # yazılmaz); sonuçlar ekran görüntüsü içerdiği için `WAN_ANAHTAR` ile şifrelenir.
+  wan_derle:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.wan == 'derle' }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: WAN test programı
+        working-directory: rust
+        run: cargo build --release --example wan_test --features wan_testi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wan_test
+          path: rust/target/release/examples/wan_test.exe
+          retention-days: 2
+
+  wan_baglan:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.wan == 'baglan' }}
+    runs-on: windows-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: wan_test
+          run-id: ${{ inputs.derleme_run }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: bin
+      - name: İzleyici (farklı makine, farklı ağ)
+        shell: bash
+        env:
+          WAN_KOD: ${{ secrets.WAN_KOD }}
+          WAN_ANAHTAR: ${{ secrets.WAN_ANAHTAR }}
+          AFUDESK_TEST_GENEL_YOL: "1"
+        run: |
+          mkdir -p sonuc
+          printf '%s\n' "$WAN_KOD" > sonuc/kod.txt
+          curl -s --max-time 10 https://api.ipify.org > sonuc/izleyici_ip.txt || true
+          ./bin/wan_test.exe izle sonuc 25 > sonuc/izle.log 2>&1 || echo "izleyici çıkış kodu: $?"
+          rm -f sonuc/kod.txt
+          tar czf s.tgz sonuc
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:WAN_ANAHTAR -in s.tgz -out sonuc.enc
+          ls -la sonuc.enc
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wan_sonuc
+          path: sonuc.enc
+          retention-days: 2

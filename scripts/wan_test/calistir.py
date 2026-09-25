@@ -170,7 +170,25 @@ def degerlendir(klasor: Path, test: int) -> dict:
                 "doğrudan yol kapalıyken tüm trafik relay üzerinden aktı")
         kontrol(host_yol and all(o["yol"] == "relay" for o in host_yol), "host tarafı da yalnız relay gördü")
         kontrol(iz.get("ortam", {}).get("AFUDESK_SADECE_RELAY") == "1", "izleyicide doğrudan UDP kapalıydı")
-    if test == 1:
+    uzak_ip_dosyasi = klasor / "izleyici_ip.txt"
+    if test == 1 and uzak_ip_dosyasi.exists():
+        # Uzak makine kipi: izleyici başka bir bilgisayarda, başka bir ağda (GitHub Actions).
+        ozel = [s["adres"] for s in ist if (ip := adres_ip(s["adres"])) and not genel_mi(ip)]
+        ozel += [o["adres"] for o in host_yol if (ip := adres_ip(o["adres"])) and not genel_mi(ip)]
+        kontrol(not ozel, "hiçbir veri yolu yerel/özel adres kullanmadı" + (f" (bulunan: {ozel})" if ozel else ""))
+        uzak_ip = uzak_ip_dosyasi.read_text(encoding="utf-8").strip()
+        hazir = next((o for o in h.get("olaylar", []) if o["tur"] == "hazir"), {})
+        ev_ip = {adres_ip(a) for a in hazir.get("adresler", []) if adres_ip(a) and genel_mi(adres_ip(a))}
+        kontrol(genel_mi(uzak_ip) and uzak_ip not in ev_ip,
+                f"izleyici farklı internet bağlantısında: {uzak_ip} (host'un genel IP'si: {', '.join(sorted(ev_ip)) or '?'})")
+        gorulen = {adres_ip(o["adres"]) for o in host_yol if o["yol"] == "doğrudan" and adres_ip(o["adres"])}
+        if gorulen:
+            kontrol(gorulen <= {uzak_ip} or all(genel_mi(g) and g not in ev_ip for g in gorulen),
+                    f"host izleyiciyi doğrudan internetten gördü ({', '.join(sorted(gorulen))})")
+            notlar.append("📌 doğrudan (NAT delme) yol KURULDU")
+        else:
+            notlar.append("📌 doğrudan yol kurulamadı; bağlantı relay üzerinden (izin verilen yedek yol)")
+    elif test == 1:
         ozel = [s["adres"] for s in ist if (ip := adres_ip(s["adres"])) and not genel_mi(ip)]
         ozel += [o["adres"] for o in host_yol if (ip := adres_ip(o["adres"])) and not genel_mi(ip)]
         kontrol(not ozel, "hiçbir veri yolu yerel/özel adres kullanmadı" + (f" (bulunan: {ozel})" if ozel else ""))
