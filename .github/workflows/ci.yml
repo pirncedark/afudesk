@@ -14,6 +14,10 @@ on:
         description: "baglan için: derle çalışmasının run id'si"
         required: false
         default: ""
+      sadece_relay:
+        description: "baglan için: 1 = izleyicide doğrudan UDP kapalı (TEST-2)"
+        required: false
+        default: ""
 
 jobs:
   test:
@@ -81,6 +85,7 @@ jobs:
           WAN_KOD: ${{ secrets.WAN_KOD }}
           WAN_ANAHTAR: ${{ secrets.WAN_ANAHTAR }}
           AFUDESK_TEST_GENEL_YOL: "1"
+          AFUDESK_SADECE_RELAY: ${{ inputs.sadece_relay }}
         run: |
           mkdir -p sonuc
           printf '%s\n' "$WAN_KOD" > sonuc/kod.txt
