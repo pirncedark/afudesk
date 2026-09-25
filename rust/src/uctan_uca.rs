@@ -1,4 +1,4 @@
-//! Uçtan uca: aynı süreçte host + izleyici, gerçek QUIC, sahte ekran/girdi.
+//! Uçtan uca: aynı süreçte host + izleyici, gerçek iroh/QUIC (yalnız 127.0.0.1), sahte ekran/girdi.
 use crate::{
     host::{self, HostAyar, HostKomut, HostOlay},
     izleyici::{self, IzleyiciOlay},
@@ -13,7 +13,6 @@ const SURE: Duration = Duration::from_secs(20);
 fn ayar(parola: &str) -> HostAyar {
     HostAyar {
         ad: "Ali PC".into(),
-        port: 0,
         upnp: false,
         parola: parola.into(),
         yalniz_yerel: true,
@@ -35,16 +34,31 @@ async fn olay_bekle(h: &mut host::Host, f: impl Fn(&HostOlay) -> bool) -> HostOl
 }
 
 async fn iz_bekle(i: &mut izleyici::Izleyici, f: impl Fn(&IzleyiciOlay) -> bool) -> IzleyiciOlay {
-    tokio::time::timeout(SURE, async {
+    // Zaman aşımında teşhis için son görülen olaylar (kare içeriği atılır).
+    let mut son: std::collections::VecDeque<String> = Default::default();
+    let sonuc = tokio::time::timeout(SURE, async {
         loop {
-            let o = i.olaylar.recv().await.expect("izleyici kapandı");
+            let Some(o) = i.olaylar.recv().await else {
+                panic!("izleyici kapandı; son olaylar: {son:?}");
+            };
             if f(&o) {
                 return o;
             }
+            let ozet = match &o {
+                IzleyiciOlay::Kare { .. } => "Kare".to_owned(),
+                d => format!("{d:?}"),
+            };
+            son.push_back(ozet);
+            if son.len() > 8 {
+                son.pop_front();
+            }
         }
     })
-    .await
-    .expect("izleyici olayı gelmedi")
+    .await;
+    match sonuc {
+        Ok(o) => o,
+        Err(_) => panic!("izleyici olayı gelmedi; son olaylar: {son:?}"),
+    }
 }
 
 async fn hazir(h: &mut host::Host) -> (String, String) {
@@ -734,7 +748,9 @@ async fn oyun_kolu_izni_yoksa_uygulanmaz() {
         basili: true,
     })
     .await;
-    tokio::time::sleep(Duration::from_millis(250)).await;
+    // Fare girdisi ulaşana kadar bekle (sabit bekleme yük altında yetmeyebilir); kol
+    // girdisi fareden önce gönderildiği için o ana kadar ulaşmadıysa hiç uygulanmamıştır.
+    kosul_bekle("fare girdisi", || !girdiler.lock().unwrap().is_empty()).await;
     assert!(durumlar.lock().unwrap().is_empty());
     assert_eq!(
         *girdiler.lock().unwrap(),
@@ -827,4 +843,126 @@ async fn eski_sirali_kol_durumu_atilir() {
     i.kapat();
     olay_bekle(&mut h, |o| matches!(o, HostOlay::Koptu { .. })).await;
     assert_eq!(*kaldirilan.lock().unwrap(), vec![0]);
+}
+
+/// Onaylı, kare akan bir oturum kurar.
+async fn akan_oturum(fab: Arc<SahteFabrika>, parola: &str) -> (host::Host, izleyici::Izleyici) {
+    let mut h = host::baslat(ayar(parola), fab).await.unwrap();
+    let (kod, parola) = hazir(&mut h).await;
+    let mut i = izleyici::baglan(&kod, &parola, "Veli").await.unwrap();
+    olay_bekle(&mut h, |o| matches!(o, HostOlay::Istek { .. })).await;
+    h.komut(HostKomut::Kabul(Izinler {
+        kontrol: true,
+        pano: false,
+        dosya: false,
+        oyun_kolu: false,
+    }))
+    .await;
+    iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Kabul { .. })).await;
+    iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Kare { .. })).await;
+    (h, i)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn kopunca_onay_sormadan_yeniden_baglanir_goruntu_ve_girdi_surer() {
+    let fab = Arc::new(SahteFabrika::new(96, 64));
+    let girdiler = fab.girdiler.clone();
+    let (mut h, mut i) = akan_oturum(fab, "424242").await;
+    olay_bekle(&mut h, |o| matches!(o, HostOlay::Baglandi { .. })).await;
+
+    // Ağ değişti: bağlantı düşer, izleyici kendiliğinden geri döner.
+    i.yeniden_baglan();
+    iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::YenidenBaglaniyor { .. })).await;
+    // Host yeniden onay sormamalı: Istek gelmeden Baglandi gelmeli.
+    let o = olay_bekle(&mut h, |o| {
+        matches!(o, HostOlay::Istek { .. } | HostOlay::Baglandi { .. })
+    })
+    .await;
+    assert!(matches!(o, HostOlay::Baglandi { .. }), "onay yeniden soruldu: {o:?}");
+    iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Kabul { .. })).await;
+    iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Kare { .. })).await;
+
+    // Girdi yeni bağlantıdan ulaşır.
+    let once = girdiler.lock().unwrap().len();
+    i.gonder(Girdi::FareKonum { x: 0.1, y: 0.9 }).await;
+    tokio::time::timeout(SURE, async {
+        while girdiler.lock().unwrap().len() <= once {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("yeniden bağlandıktan sonra girdi ulaşmadı");
+    assert_eq!(
+        girdiler.lock().unwrap().last().cloned(),
+        Some(Girdi::FareKonum { x: 0.1, y: 0.9 })
+    );
+
+    // İkinci kopuş da atlatılır (jeton her dönüşte yenilenir).
+    i.yeniden_baglan();
+    let o = olay_bekle(&mut h, |o| {
+        matches!(o, HostOlay::Istek { .. } | HostOlay::Baglandi { .. })
+    })
+    .await;
+    assert!(matches!(o, HostOlay::Baglandi { .. }), "{o:?}");
+    iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Kare { .. })).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn izleyici_kapatinca_yeniden_baglanmaz_host_yeni_kod_uretir() {
+    let fab = Arc::new(SahteFabrika::new(64, 64));
+    let (mut h, mut i) = akan_oturum(fab, "515151").await;
+    i.kapat();
+    match iz_bekle(&mut i, |o| {
+        matches!(o, IzleyiciOlay::Koptu { .. } | IzleyiciOlay::YenidenBaglaniyor { .. })
+    })
+    .await
+    {
+        IzleyiciOlay::Koptu { .. } => {}
+        o => panic!("kapatılan izleyici yeniden bağlanmaya çalıştı: {o:?}"),
+    }
+    // Host devam beklemeden oturumu bitirir ve yeni kod verir.
+    let o = olay_bekle(&mut h, |o| {
+        matches!(o, HostOlay::Koptu { .. } | HostOlay::YenidenBekleniyor)
+    })
+    .await;
+    assert!(matches!(o, HostOlay::Koptu { .. }), "{o:?}");
+    hazir(&mut h).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn eski_bilet_devam_yerine_kullanilamaz() {
+    // Kopuştan sonra host devam penceresinde; koddaki (kullanılmış) biletle yeni
+    // bağlantı reddedilmeli.
+    let fab = Arc::new(SahteFabrika::new(64, 64));
+    let mut h = host::baslat(ayar("626262"), fab).await.unwrap();
+    let (kod, parola) = hazir(&mut h).await;
+    let mut i = izleyici::baglan(&kod, &parola, "Veli").await.unwrap();
+    olay_bekle(&mut h, |o| matches!(o, HostOlay::Istek { .. })).await;
+    h.komut(HostKomut::Kabul(Izinler {
+        kontrol: false,
+        pano: false,
+        dosya: false,
+        oyun_kolu: false,
+    }))
+    .await;
+    iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Kare { .. })).await;
+    i.yeniden_baglan();
+    olay_bekle(&mut h, |o| matches!(o, HostOlay::Baglandi { .. })).await;
+    // Oturum sürerken: kullanılmış biletle giren olmamalı. Host oturumdayken yeni bağlantı
+    // ya hiç kurulamaz, ya kurulur ama yanıt almaz, ya da reddedilir — asla Kabul gelmez.
+    let deneme = async {
+        let mut ikinci = izleyici::baglan(&kod, &parola, "Hırsız").await.ok()?;
+        loop {
+            match ikinci.olaylar.recv().await? {
+                o @ IzleyiciOlay::Kabul { .. } => return Some(o),
+                IzleyiciOlay::Koptu { .. } => return None,
+                _ => {}
+            }
+        }
+    };
+    if let Ok(Some(o)) = tokio::time::timeout(Duration::from_secs(8), deneme).await {
+        panic!("kullanılmış biletle girildi: {o:?}");
+    }
+    // Asıl izleyici etkilenmeden sürer.
+    iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Kare { .. })).await;
 }

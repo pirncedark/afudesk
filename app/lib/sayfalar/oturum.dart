@@ -33,6 +33,10 @@ class _OturumDurum extends State<OturumSayfasi> {
   _Aktarim? _aktarim;
   bool _p2 = false;
   int _rtt = -1, _fps = 0, _gecikme = 0;
+  // Veri relay üzerinden mi geçiyor (doğrudan yol kurulamadı)?
+  bool _aktarmali = false;
+  // Bağlantı koptu, kendiliğinden yeniden bağlanılıyor: gösterilecek metin.
+  String? _yeniden;
   ui.Image? _kare;
   final _odak = FocusNode();
   // Dokunmatik kip
@@ -77,6 +81,7 @@ class _OturumDurum extends State<OturumSayfasi> {
         });
       case 'kabul':
         setState(() {
+          _yeniden = null;
           _asama = _Asama.bagli;
           _kontrol = o.kontrol;
           _dosyaIzni = o.dosya;
@@ -108,7 +113,11 @@ class _OturumDurum extends State<OturumSayfasi> {
           _rtt = o.rttMs;
           _fps = o.fps;
           _gecikme = o.gecikmeMs;
+          _aktarmali = o.metin == 'relay';
+          _yeniden = null;
         });
+      case 'yeniden':
+        setState(() => _yeniden = o.metin);
       case 'pano':
         // Masaüstünde çekirdek panoya zaten yazdı; dokunmatik cihazda (Android) çekirdeğin
         // pano erişimi yok, metni arayüz yazar.
@@ -416,12 +425,22 @@ case 'dosya':
           if (_asama == _Asama.bagli && _p2) const Padding(padding: EdgeInsets.only(left: 8), child: Chip(key: Key('oturum_p2'), label: Text('🎮 P2'))),
         ]),
         actions: [
-          if (_asama == _Asama.bagli && _rtt >= 0)
+          if (_asama == _Asama.bagli && _yeniden != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Center(
+                child: Text(_yeniden!,
+                    key: const Key('oturum_yeniden'), style: const TextStyle(fontSize: 12, color: Renk.tehlike)),
+              ),
+            )
+          else if (_asama == _Asama.bagli && _rtt >= 0)
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: Tooltip(
-                message: 'Ekran yakalamadan sende görünene kadar geçen süre',
-                child: Text('${_gecikme > 0 ? _gecikme : _rtt} ms · $_fps fps',
+                message: _aktarmali
+                    ? 'Doğrudan bağlantı kurulamadı; görüntü aktarma sunucusu üzerinden geliyor'
+                    : 'Ekran yakalamadan sende görünene kadar geçen süre',
+                child: Text('${_gecikme > 0 ? _gecikme : _rtt} ms · $_fps fps${_aktarmali ? ' · aktarmalı' : ''}',
                     key: const Key('oturum_istatistik'),
                     style: TextStyle(
                         fontSize: 12,
