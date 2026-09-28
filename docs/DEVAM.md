@@ -12,6 +12,10 @@ Son guncelleme: 2026-09-29 (koordinator oturumu)
 - Codex'in 3 hatasini (relay kapali, E6 oturumu kesiyordu, E8/E9) AfuDesk terminali duzeltti; hepsi 868334e icinde.
 - DIKKAT: eski surumlerle baglanti artik kurulmaz -> surum notunda "iki cihaz da guncellenmeli" yaz.
 
+- DAVRANIS DEGISIKLIGI: pkarr kalktigi icin internet adresi degisen kayitli cihaz artik yalniz ayni agda (mDNS) kendiliginden bulunur;
+  internetten bir kez kodla baglaninca kayit yenilenir (izleyici.rs ~632). 1.4.0 notu "internette adres aramasiyla bulunur" diyordu.
+- Yayin oncesi: rust/Cargo.toml ve app/pubspec.yaml hala 1.4.0 -> 1.5.0'a artir; notu docs/SURUM_NOTLARI_1.5.0.md hazir.
+
 ## Dogrulama (koordinator, sandbox disinda gercekten calistirildi)
 - `cd rust && cargo test --release` -> 102-103/102-103 gecti (koordinator 102, AfuDesk terminali 103) (codex sandbox'inda 3 ekran/mDNS testi ortam yuzunden kalmisti). Cikti: `reports/cargo-test-release.txt`.
 - `cargo clippy --release --all-targets` -> 9 uyari, HEPSI bu degisiklikten once de vardi (goruntu.rs, platform.rs, host.rs oturum/read_datagram); yeni uyari yok.
