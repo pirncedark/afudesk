@@ -13,11 +13,9 @@ Son guncelleme: 2026-09-29 (koordinator oturumu)
 - `cargo clippy --release --all-targets` -> 9 uyari, HEPSI bu degisiklikten once de vardi (goruntu.rs, platform.rs, host.rs oturum/read_datagram); yeni uyari yok.
 - Flutter bu makinede yok: `flutter analyze/test` CI'da (ci.yml) kosar.
 
-## ENGEL - kullanici karari bekliyor (merge EDILMEDI)
-`AFUDESK_RELAY` bos iken ne olacak? Su anki kod: relay tamamen KAPALI (RelayMode::Disabled). Sonuc: ayni ag / genel IP disinda
-uzaktan baglanti kutudan cikti haliyle calismayabilir. Rapor bu karari acikca kullaniciya birakti ("varsayilan n0 olsun veya olmasin").
-Secenekler: (a) bos -> kapali (su anki), (b) bos -> n0 relay'leri yalniz relay olarak (pkarr/DNS yayini yine kapali), (c) varsayilan kendi relay adresi.
+## Relay karari (2026-09-29, kullanici: "n0 relay yedek olsun") - UYGULANMIS
+`AFUDESK_RELAY` yok -> `RelayMode::Default` (n0 relay'leri YALNIZ trafik yedegi; pkarr/DNS kimlik yayini kapali, `clear_address_lookup`).
+`AFUDESK_RELAY=kapali|yok|off|0` -> relay tamamen kapali. `AFUDESK_RELAY=url1,url2` -> yalniz bu relay'ler. Test: `relay_listesi_ayristirilir_ve_bos_liste_merkeze_dusmez`.
 
 ## Sonraki adim
-1. Kullanicinin relay kararini uygula (gerekirse `ag.rs` relay_modu), testleri tekrar kos.
-2. CI yesil -> PR'i taslaktan cikar -> merge -> surum notu.
+1. CI yesil -> PR'i taslaktan cikar -> merge -> surum notu.
