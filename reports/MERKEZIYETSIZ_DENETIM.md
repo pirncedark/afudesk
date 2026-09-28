@@ -303,16 +303,18 @@ olmadan da merkeziyetçi kalır. İkisi birlikte "kendi relay'ın var" modunu a�
 
 ## Düzeltme durumu
 
-- **E1 — tamamlandı.** `rust/src/ag.rs`: `presets::N0` kaldırıldı; `presets::Minimal`, `clear_address_lookup()` ve açık relay seçimi kullanılıyor. Varsayılan relay listesi boşsa relay kapalıdır. mDNS ayrı eklenir. `kurulan_endpointte_n0_address_lookup_yoktur` yalnız mDNS lookup kaldığını doğrular.
-- **E2 — tamamlandı.** `rust/src/ag.rs`, `rust/src/host.rs`, `rust/src/izleyici.rs`: `uc_nokta_kimlikli` relay listesi alır; `AFUDESK_RELAY` virgülle ayrılmış URL'leri yükler; davet ve kayıt bilgisi yapılandırılan URL'leri taşır. Liste boşsa n0'a düşmeden relay devre dışı kalır. `relay_listesi_ayristirilir_ve_bos_liste_merkeze_dusmez`, `yayinlanan_relayler_kullanici_relayini_koda_katar`.
-- **E3 — tamamlandı.** `rust/src/host.rs`: relay bağlantısı yoksa ve genel IP adresi de bulunmuyorsa kullanıcıya aynı ağ uyarısı verilir. Kontrol `genel_mi()` CGNAT elemesini korur. `relay_ve_genel_adres_yoksa_erisim_uyarisi_gerekir`.
-- **E4 — tamamlandı.** `rust/src/ag.rs`: Yalnız Yerel dışında mDNS etkin. `mdns_yalniz_yerel_haric_tum_kurulumlarda_acik`.
-- **E5 — tamamlandı.** `rust/src/kod.rs`, `rust/src/host.rs`, `app/integration_test/gercek_test.dart`: rastgele parola 10 haneye çıktı; modulo yerine rand 0.8 `gen_range` kullanıldı; hatalı bilet başına üç denemede yeni kod üretilir. `rastgelelik`, `uc_hatali_bilet_kod_dongusunu_yeniler`.
-- **E6 — tamamlandı.** `rust/src/host.rs`: kod ekranı kapanınca komutla mevcut bilet yenilenir; kayıtlı cihaz akışı çalışmaya devam eder. `kod_ekrani_kapaninca_yeni_kod_uretilir`, `kod_kapaliyken_kodla_girilmez_kayitli_cihaz_yine_baglanir`.
-- **E7 — tamamlandı.** `rust/src/host.rs`, `rust/src/izleyici.rs`: devam jetonunun host tarafındaki ömrü 120 saniye; izleyici yeniden deneme süresi 90 saniyedir ve son deneme kalan pencereye göre sınırlandırılır. `izleyici_yeniden_deneme_jeton_omrunden_kisa`.
-- **E8 — tamamlandı.** `rust/src/izleyici.rs`, `rust/src/protokol.rs`: eşzamanlı tek yönlü akışlar semaphore ile üçte sınırlanır; fazlası görev oluşturmadan kapatılır. `akim_tavani_bos_yeni_akimi_reddeder`.
-- **E9 — tamamlandı.** `rust/src/protokol.rs`, `rust/src/host.rs`, `rust/src/izleyici.rs`: ALPN `afudesk/<Cargo sürümü>` oldu; yük içindeki eşitlik kontrolleri ve sürüm alanları kaldırıldı. `alpn_paket_surumuyle_surumludur`.
+Codex uyguladı, Claude denetleyip 3 noktayı düzeltti (29 Eyl 2026).
 
-**Doğrulama:** `cargo test --release`: 102 testten 99 geçti, 3 başarısız. Başarısızlar `gercek_ekran_yakalanir`, `gercek_wgc_yakalanir` (bu oturumda etkileşimli masaüstü yakalama yok) ve `gercek_mdns_kimlikle_bulunur` (çoklu yayın/ağ erişimi yok). Bu üçü atlanınca 99 test geçti. Tam çıktı `reports/cargo-test-release.txt` dosyasındadır. `cargo clippy --release --all-targets` çalıştırılamadı: clippy bileşeni kurulu değil ve rustup indirmesi başarısız oldu. `flutter analyze` / `flutter test` çalıştırılamadı: Flutter SDK bu makinede kurulu veya PATH'te değil.
+- **E1 — tamamlandı.** `ag.rs`: `presets::N0` yerine `presets::Minimal` + `clear_address_lookup()`; hiçbir pkarr/DNS yayını yok, yalnız mDNS. Test: `kurulan_endpointte_n0_address_lookup_yoktur`.
+- **E2 — tamamlandı.** `AFUDESK_RELAY`: boşsa varsayılan relay **yalnız yedek taşıma yolu** (kimlik yayınlanmaz; n0 kapansa da koddaki doğrudan adresler + mDNS çalışır), `kapali`/`yok`/`off`/`0` relay'i tamamen kapatır, URL listesi özel relay'leri kullanır ve koda yazar. *Denetim düzeltmesi:* codex boş listede relay'i tamamen kapatıyordu → NAT arkasındaki herkes için internet bağlantısı kırılırdı. Test: `relay_listesi_ayristirilir_ve_bos_liste_merkeze_dusmez`, `yayinlanan_relayler_kullanici_relayini_koda_katar`.
+- **E3 — tamamlandı.** `host.rs`: relay'e ulaşılamadı ve genel adres yoksa "Bu kod yalnız aynı ağda çalışır." uyarısı. Test: `relay_ve_genel_adres_yoksa_erisim_uyarisi_gerekir`.
+- **E4 — tamamlandı.** mDNS YalnizYerel dışında açık. Test: `mdns_yalniz_yerel_haric_tum_kurulumlarda_acik`.
+- **E5 — tamamlandı.** 10 haneli parola (`gen_range`, yanlılık yok), kod başına 3 hatalı denemede yeni kod. Test: `uc_hatali_bilet_kod_dongusunu_yeniler`.
+- **E6 — tamamlandı.** `kod_ac(false)` bekleyen kodu hemen geçersiz kılar. *Denetim düzeltmesi:* codex bunu `HostKomut::Kes` ile yapıyordu; uygulamadaki `hostDurdur` açık oturumu/bekleyen onayı keserdi → ayrı `Notify` kullanıldı. Test: `kod_ekrani_kapaninca_yeni_kod_uretilir`, `kod_kapaliyken_kodla_girilmez_kayitli_cihaz_yine_baglanir`.
+- **E7 — tamamlandı.** Devam jetonu ömrü 120 sn (`DevamBilgisi.jeton_omru`), izleyici 90 sn içinde kalır. Test: `izleyici_yeniden_deneme_jeton_omrunden_kisa`.
+- **E8 — tamamlandı.** İzleyicide eşzamanlı tek yönlü akış tavanı (semaphore). *Denetim düzeltmesi:* tavan 3 → 64 (dosya akışları + kareler birlikte kare düşürmesin). Test: `akim_tavani_bos_yeni_akimi_reddeder`.
+- **E9 — tamamlandı.** ALPN `afudesk/5` (protokol sürümü; `SURUM` alanı mesajlardan çıktı). *Denetim düzeltmesi:* codex ALPN'yi Cargo paket sürümüne bağlamıştı (her yamada uyumsuzluk); ayrıca uyuşmazlıkta "ulaşılamadı" yerine açık `SURUM_FARKLI` mesajı. Test: `alpn_protokol_surumunu_tasir`, `farkli_protokol_surumu_acik_hata_verir`.
 
-{"karar":"RET","yapilan":"E1–E9 düzeltildi ve testler eklendi.","test":"99 geçti, 3 çevre kaynaklı kaldı; clippy ve Flutter çalışmadı.","kalan":"Masaüstü/mDNS ortam kısıtları; clippy kurulumu ve Flutter SDK gerekli."}
+**Doğrulama (Claude, bu makine):** `cargo test --release` → **103 geçti, 0 kaldı** (`reports/cargo-test-release.txt`). `cargo clippy --release --all-targets` → yeni uyarı yok (kalan 9 uyarı değişmeyen dosyalarda, önceden vardı). Flutter SDK bu makinede yok: `flutter analyze/test` koşulmadı; app tarafında tek değişiklik entegrasyon testindeki parola deseni (6→10 hane).
+
+Not: eski sürümle (ALPN `afudesk/2`) bağlantı kurulmaz; iki taraf da bu sürüme güncellenmeli.
