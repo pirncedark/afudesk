@@ -9,7 +9,7 @@ use crate::{
     host::{istemsiz_kopus, KOPUS_KODU},
     kimlik, kod,
     pano::{self, Esitleyici, Pano, PANO_ARALIGI},
-    protokol::{self, Girdi, Izinler, Kare, Kontrol, SURUM},
+    protokol::{self, Girdi, Izinler, Kare, Kontrol},
     zaman,
 };
 use anyhow::Result;
@@ -236,7 +236,6 @@ pub async fn baglan_ayarli(
     let d = kod::coz(kod_metni, parola, kod::simdi())?;
     let hedef = ag::hedef_adres(&d.parmak_izi, &d.adresler, &d.relaylar)?;
     let ilk = Kontrol::Merhaba {
-        surum: SURUM,
         bilet: d.bilet.clone(),
         ad: ad.to_owned(),
     };
@@ -260,7 +259,6 @@ pub async fn kayitli_baglan(
         .ok_or_else(|| anyhow::anyhow!("Bu cihaz kayıtlı değil. Bağlanmak için kod gerekir."))?;
     let hedef = ag::hedef_adres(&kayit.host_kimlik, &kayit.son_adresler, &kayit.relaylar)?;
     let ilk = Kontrol::MerhabaKayitli {
-        surum: SURUM,
         jeton: kayit.jeton.clone(),
         ad: ad.to_owned(),
     };
@@ -292,7 +290,7 @@ async fn oturum_ac(
         Some(v) => Some(kimlik::yukle_veya_uret(&v.join(kimlik::IZLEYICI_DOSYASI))?.gizli),
         None => None,
     };
-    let ep = ag::uc_nokta_kimlikli(kurulum, false, gizli).await?;
+    let ep = ag::uc_nokta_kimlikli(kurulum, false, gizli, ag::relaylar_ortamdan()?).await?;
     let c = ag::baglan(&ep, hedef.clone(), BAGLANMA_SURESI).await?;
     let (mut w, r) = c.open_bi().await?;
     protokol::yaz(&mut w, &ilk_mesaj).await?;
@@ -431,11 +429,13 @@ impl Gozetmen {
                 .send(IzleyiciOlay::YenidenBaglaniyor { deneme })
                 .await;
             let kalan = bitis.saturating_duration_since(tokio::time::Instant::now());
-            let sure = BAGLANMA_SURESI.min(kalan).max(Duration::from_secs(1));
+            let sure = BAGLANMA_SURESI.min(kalan);
+            if sure < Duration::from_secs(1) {
+                break;
+            }
             if let Ok(c) = ag::baglan(&self.ep, self.hedef.clone(), sure).await {
                 if let Ok((mut w, r)) = c.open_bi().await {
                     let devam = Kontrol::Devam {
-                        surum: SURUM,
                         jeton: jeton.to_owned(),
                         ad: self.ad.clone(),
                     };
@@ -514,9 +514,15 @@ impl Gozetmen {
             let (kare_tx, mut kare_rx) = mpsc::channel::<Kare>(8);
             let c3 = c2.clone();
             let kabul = tokio::spawn(async move {
+                let akis_sayaci = Arc::new(tokio::sync::Semaphore::new(protokol::AZAMI_ESZAMANLI_AKIS));
                 while let Ok(mut akis) = c3.accept_uni().await {
+                    let Ok(izin) = akis_sayaci.clone().try_acquire_owned() else {
+                        let _ = akis.stop(0u32.into());
+                        continue;
+                    };
                     let tx = kare_tx.clone();
                     tokio::spawn(async move {
+                        let _izin = izin;
                         if let Ok(Some(k)) = protokol::oku::<_, Kare>(&mut akis).await {
                             let _ = tx.send(k).await;
                         }
