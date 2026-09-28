@@ -38,7 +38,7 @@ void main() {
     final kod = metin(t, const Key('ver_kod'));
     final parola = metin(t, const Key('ver_parola'));
     expect(kod, startsWith('AFU2.'));
-    expect(parola, matches(RegExp(r'^\d{6}$')));
+    expect(parola, matches(RegExp(r'^\d{10}$')));
     expect(metin(t, const Key('ver_erisim')), isNotEmpty);
     debugPrint('KOD uzunluğu=${kod.length} erişim="${metin(t, const Key('ver_erisim'))}"');
 

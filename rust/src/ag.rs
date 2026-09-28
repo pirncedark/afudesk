@@ -26,6 +26,10 @@ pub const PROXY_ORTAM: &str = "AFUDESK_PROXY";
 /// (Yalnız `wan_testi` özelliğiyle) yerel/özel adresli yollar hiç seçilmez: aynı
 /// bilgisayardaki test, LAN kısayolundan değil gerçek internetten geçer.
 pub const GENEL_YOL_ORTAM: &str = "AFUDESK_TEST_GENEL_YOL";
+/// Virgülle ayrılmış özel relay adresleri. Verilmezse varsayılan relay yalnız yedek
+/// taşıma yolu olarak kullanılır (kimlik hiçbir DNS/pkarr sunucusuna yayınlanmaz);
+/// `kapali` (ya da `yok`/`off`/`0`) relay'i tamamen kapatır.
+pub const RELAY_ORTAM: &str = "AFUDESK_RELAY";
 
 /// Uç noktanın nasıl kurulacağı.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,7 +65,7 @@ fn tasima() -> QuicTransportConfig {
 }
 
 pub async fn uc_nokta(kurulum: Kurulum, portmapper: bool) -> Result<Endpoint> {
-    uc_nokta_kimlikli(kurulum, portmapper, None).await
+    uc_nokta_kimlikli(kurulum, portmapper, None, relaylar_ortamdan()?).await
 }
 
 /// mDNS servis adı: `_afudesk._udp.local`. Aynı ağdaki kayıtlı cihaz, IP'si değişse de
@@ -73,20 +77,32 @@ pub async fn uc_nokta_kimlikli(
     kurulum: Kurulum,
     portmapper: bool,
     gizli: Option<iroh::SecretKey>,
+    relaylar: Option<Vec<RelayUrl>>,
 ) -> Result<Endpoint> {
+    let relay_modu = if kurulum == Kurulum::YalnizYerel {
+        RelayMode::Disabled
+    } else {
+        relay_modu(relaylar.as_deref())
+    };
     let b = match kurulum {
         Kurulum::YalnizYerel => Endpoint::builder(presets::Minimal)
-            .relay_mode(RelayMode::Disabled)
+            .clear_address_lookup()
+            .relay_mode(relay_modu)
             .clear_ip_transports()
             .bind_addr("127.0.0.1:0")?,
-        Kurulum::Internet => Endpoint::builder(presets::N0),
-        Kurulum::SadeceRelay => Endpoint::builder(presets::N0).clear_ip_transports(),
+        Kurulum::Internet => Endpoint::builder(presets::Minimal)
+            .clear_address_lookup()
+            .relay_mode(relay_modu),
+        Kurulum::SadeceRelay => Endpoint::builder(presets::Minimal)
+            .clear_address_lookup()
+            .relay_mode(relay_modu)
+            .clear_ip_transports(),
     };
     let mut b = b.alpns(vec![ALPN.to_vec()]).transport_config(tasima());
     if let Some(g) = gizli {
         b = b.secret_key(g);
     }
-    if kurulum == Kurulum::Internet {
+    if mdns_acik(kurulum) {
         b = b.address_lookup(
             iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVISI),
         );
@@ -109,6 +125,46 @@ pub async fn uc_nokta_kimlikli(
         }
     }
     b.bind().await.context("Ağ başlatılamadı.")
+}
+
+/// `None`: varsayılan relay (yalnız yedek yol). `Some(boş)`: relay kapalı. `Some(liste)`: özel relay'ler.
+pub fn relaylar_ortamdan() -> Result<Option<Vec<RelayUrl>>> {
+    relay_secimi(ortam(RELAY_ORTAM).as_deref())
+}
+
+fn relay_secimi(deger: Option<&str>) -> Result<Option<Vec<RelayUrl>>> {
+    match deger {
+        None => Ok(None),
+        Some(d) if ["kapali", "kapalı", "yok", "off", "0"].contains(&d.to_lowercase().as_str()) => {
+            Ok(Some(Vec::new()))
+        }
+        Some(adresler) => relay_url_listesi(adresler).map(Some),
+    }
+}
+
+fn relay_url_listesi(adresler: &str) -> Result<Vec<RelayUrl>> {
+    adresler
+        .split(',')
+        .map(str::trim)
+        .filter(|adres| !adres.is_empty())
+        .map(|adres| {
+            adres
+                .parse::<RelayUrl>()
+                .with_context(|| format!("Geçersiz relay adresi: {adres}"))
+        })
+        .collect()
+}
+
+fn relay_modu(relaylar: Option<&[RelayUrl]>) -> RelayMode {
+    match relaylar {
+        None => RelayMode::Default,
+        Some([]) => RelayMode::Disabled,
+        Some(l) => RelayMode::custom(l.iter().cloned()),
+    }
+}
+
+fn mdns_acik(kurulum: Kurulum) -> bool {
+    kurulum != Kurulum::YalnizYerel
 }
 
 fn ortam(ad: &str) -> Option<String> {
@@ -196,13 +252,31 @@ pub fn hedef_adres(kimlik: &str, adresler: &[String], relaylar: &[String]) -> Re
 }
 
 /// Koda yazılacak adres listesi ve relay adresleri.
-pub fn yayinlanacak(ep: &Endpoint) -> (Vec<String>, Vec<String>) {
+pub fn yayinlanacak(ep: &Endpoint, ek_relayler: &[RelayUrl]) -> (Vec<String>, Vec<String>) {
     let a = ep.addr();
     let mut ipler: Vec<String> = a.ip_addrs().map(|s| s.to_string()).collect();
     ipler.sort();
     ipler.dedup();
-    let relaylar = a.relay_urls().map(|r| r.to_string()).collect();
+    let mut relaylar: Vec<RelayUrl> = a.relay_urls().cloned().collect();
+    ek_relayleri_birlestir(&mut relaylar, ek_relayler);
+    let relaylar = relaylar.into_iter().map(|r| r.to_string()).collect();
     (ipler, relaylar)
+}
+
+fn ek_relayleri_birlestir(relaylar: &mut Vec<RelayUrl>, ek_relayler: &[RelayUrl]) {
+    for relay in ek_relayler {
+        if !relaylar.contains(relay) {
+            relaylar.push(relay.clone());
+        }
+    }
+}
+
+pub const SURUM_FARKLI: &str = "AfuDesk sürümleri uyuşmuyor; iki taraf da güncellemeli.";
+
+/// TLS "no_application_protocol" (alert 120): karşı taraf başka protokol sürümünde.
+fn alpn_uyusmadi(hata: &str) -> bool {
+    let h = hata.to_lowercase();
+    h.contains("error 120") || h.contains("no_application_protocol") || h.contains("no application protocol")
 }
 
 /// Kullanıcıya gösterilen bağlantı hatası: teknik ayrıntı (adres, iç hata) içermez;
@@ -221,6 +295,9 @@ pub async fn baglan(ep: &Endpoint, hedef: EndpointAddr, sure: Duration) -> Resul
         }
         Ok(Err(e)) => {
             log::warn!("bağlantı kurulamadı: {e:#}");
+            if alpn_uyusmadi(&format!("{e:#}")) {
+                anyhow::bail!(SURUM_FARKLI)
+            }
             anyhow::bail!(ULASILAMADI)
         }
         Ok(Ok(c)) => c,
@@ -338,6 +415,30 @@ mod testler {
         assert!(hedef_adres("bozuk", &[], &[]).is_err());
     }
 
+    #[tokio::test]
+    async fn farkli_protokol_surumu_acik_hata_verir() {
+        let eski = Endpoint::builder(presets::Minimal)
+            .relay_mode(RelayMode::Disabled)
+            .clear_ip_transports()
+            .bind_addr("127.0.0.1:0")
+            .unwrap()
+            .alpns(vec![b"afudesk/4".to_vec()])
+            .bind()
+            .await
+            .unwrap();
+        let e = eski.clone();
+        tokio::spawn(async move {
+            while let Some(g) = e.accept().await {
+                let _ = g.await;
+            }
+        });
+        let adres: Vec<String> = eski.bound_sockets().iter().map(|a| a.to_string()).collect();
+        let hedef = hedef_adres(&kimlik_metni(eski.id()), &adres, &[]).unwrap();
+        let ep = uc_nokta(Kurulum::YalnizYerel, false).await.unwrap();
+        let hata = baglan(&ep, hedef, Duration::from_secs(5)).await.unwrap_err();
+        assert_eq!(hata.to_string(), SURUM_FARKLI);
+    }
+
     /// Yerel ağ keşfi: adres ve relay OLMADAN yalnız cihaz kimliğiyle, mDNS üzerinden bulunur
     /// (kayıtlı cihazın IP'si değişse de). Çoklu yayın gerektirdiği için CI'da atlanır.
     #[tokio::test]
@@ -400,5 +501,44 @@ mod testler {
         assert_eq!(Kurulum::degerden(Some(" 1 ")), Kurulum::SadeceRelay);
         assert_eq!(Kurulum::degerden(Some("0")), Kurulum::Internet);
         assert_eq!(Kurulum::degerden(None), Kurulum::Internet);
+    }
+
+    #[test]
+    fn relay_listesi_ayristirilir_ve_bos_liste_merkeze_dusmez() {
+        let relays = relay_url_listesi(" https://relay.example./,https://relay2.example./ ").unwrap();
+        assert_eq!(relays.len(), 2);
+        assert!(relay_url_listesi("").unwrap().is_empty());
+        assert!(relay_url_listesi("bozuk").is_err());
+        assert_eq!(relay_modu(None), RelayMode::Default);
+        assert_eq!(relay_modu(Some(&[])), RelayMode::Disabled);
+        assert_eq!(relay_modu(Some(&relays)), RelayMode::custom(relays.clone()));
+        assert_eq!(relay_secimi(None).unwrap(), None);
+        assert_eq!(relay_secimi(Some("KAPALI")).unwrap(), Some(vec![]));
+        assert_eq!(relay_secimi(Some("https://relay.example./")).unwrap().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn kurulan_endpointte_n0_address_lookup_yoktur() {
+        let ep = uc_nokta_kimlikli(Kurulum::Internet, false, None, Some(vec![]))
+            .await
+            .unwrap();
+        // İnternet kurulumunda yalnız mDNS kalır; n0 pkarr ve DNS servisleri kurulmamıştır.
+        assert_eq!(ep.address_lookup().unwrap().len(), 1);
+        assert!(ep.addr().relay_urls().next().is_none());
+    }
+
+    #[test]
+    fn mdns_yalniz_yerel_haric_tum_kurulumlarda_acik() {
+        assert!(!mdns_acik(Kurulum::YalnizYerel));
+        assert!(mdns_acik(Kurulum::Internet));
+        assert!(mdns_acik(Kurulum::SadeceRelay));
+    }
+
+    #[tokio::test]
+    async fn yayinlanan_relayler_kullanici_relayini_koda_katar() {
+        let ep = uc_nokta(Kurulum::YalnizYerel, false).await.unwrap();
+        let ek = vec!["https://relay.example./".parse::<RelayUrl>().unwrap()];
+        let (_, relaylar) = yayinlanacak(&ep, &ek);
+        assert_eq!(relaylar, vec!["https://relay.example./"]);
     }
 }

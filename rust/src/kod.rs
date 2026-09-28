@@ -7,7 +7,7 @@ use chacha20poly1305::{
     aead::{Aead, KeyInit, Payload},
     XChaCha20Poly1305, XNonce,
 };
-use rand::RngCore;
+use rand::{Rng, RngCore};
 use serde::{Deserialize, Serialize};
 
 pub const GECERLILIK_SN: i64 = 600;
@@ -128,9 +128,9 @@ pub fn coz(kod: &str, parola: &str, simdi: i64) -> Result<Davet, KodHata> {
     Ok(d)
 }
 
-/// 6 haneli rakam parola.
+/// 10 haneli rakam parola.
 pub fn yeni_parola() -> String {
-    format!("{:06}", rand::random::<u32>() % 1_000_000)
+    format!("{:010}", rand::thread_rng().gen_range(0..10_000_000_000u64))
 }
 
 /// 32 hex karakter rastgele bilet.
@@ -271,7 +271,7 @@ mod testler {
         assert_ne!(yeni_bilet(), yeni_bilet());
         for _ in 0..100 {
             let p = yeni_parola();
-            assert!(p.len() == 6 && p.chars().all(|c| c.is_ascii_digit()));
+            assert!(p.len() == 10 && p.chars().all(|c| c.is_ascii_digit()));
         }
     }
 

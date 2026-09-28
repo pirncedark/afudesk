@@ -7,10 +7,14 @@
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-pub const ALPN: &[u8] = b"afudesk/2";
-pub const SURUM: u32 = 4;
+/// Protokol sürümü ALPN'nin içindedir: tel biçimi değişince ikisi birlikte artar.
+/// Uyuşmayan sürümler el sıkışmada ayrılır (paket sürümüne bağlı değildir).
+pub const SURUM: u32 = 5;
+pub const ALPN: &[u8] = b"afudesk/5";
 /// Tek mesaj için üst sınır (kötü niyetli uzunluk alanına karşı).
 pub const AZAMI_MESAJ: usize = 32 * 1024 * 1024;
+/// İzleyicide aynı anda işlenen tek yönlü akış tavanı (kareler + dosyalar).
+pub const AZAMI_ESZAMANLI_AKIS: usize = 64;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum FareTusu {
@@ -74,7 +78,6 @@ pub struct Izinler {
 pub enum Kontrol {
     /// İzleyici → host, ilk mesaj.
     Merhaba {
-        surum: u32,
         bilet: String,
         ad: String,
     },
@@ -122,14 +125,12 @@ pub enum Kontrol {
     DevamJetonu(String),
     /// İzleyici → host, kopan oturuma dönüş (Merhaba yerine ilk mesaj).
     Devam {
-        surum: u32,
         jeton: String,
         ad: String,
     },
     /// İzleyici → host, kayıtlı cihaz olarak bağlanma (kod yerine eşleşme jetonu).
     /// Cihaz kimliği mesajda değil, el sıkışmada doğrulanan uç kimliğindedir.
     MerhabaKayitli {
-        surum: u32,
         jeton: String,
         ad: String,
     },
@@ -193,6 +194,22 @@ pub async fn oku<R: AsyncReadExt + Unpin, T: for<'de> Deserialize<'de>>(
 #[cfg(test)]
 mod testler {
     use super::*;
+
+    #[test]
+    fn alpn_protokol_surumunu_tasir() {
+        assert_eq!(ALPN, format!("afudesk/{SURUM}").as_bytes());
+    }
+
+    #[tokio::test]
+    async fn akim_tavani_bos_yeni_akimi_reddeder() {
+        let sayac = std::sync::Arc::new(tokio::sync::Semaphore::new(AZAMI_ESZAMANLI_AKIS));
+        let izinler: Vec<_> = (0..AZAMI_ESZAMANLI_AKIS)
+            .map(|_| sayac.clone().try_acquire_owned().unwrap())
+            .collect();
+        assert!(sayac.clone().try_acquire_owned().is_err());
+        drop(izinler);
+        assert!(sayac.clone().try_acquire_owned().is_ok());
+    }
 
     #[tokio::test]
     async fn yaz_oku_gidis_donus() {
