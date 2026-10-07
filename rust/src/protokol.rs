@@ -9,8 +9,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// Protokol sürümü ALPN'nin içindedir: tel biçimi değişince ikisi birlikte artar.
 /// Uyuşmayan sürümler el sıkışmada ayrılır (paket sürümüne bağlı değildir).
-pub const SURUM: u32 = 5;
-pub const ALPN: &[u8] = b"afudesk/5";
+pub const SURUM: u32 = 6;
+pub const ALPN: &[u8] = b"afudesk/6";
 /// Tek mesaj için üst sınır (kötü niyetli uzunluk alanına karşı).
 pub const AZAMI_MESAJ: usize = 32 * 1024 * 1024;
 /// İzleyicide aynı anda işlenen tek yönlü akış tavanı (kareler + dosyalar).
@@ -41,6 +41,8 @@ pub enum Girdi {
     },
     /// Adlandırılmış tuş ("Enter", "Backspace", "Ctrl", "a", "ş" ...).
     Tus {
+        /// USB HID usage (sayfa ve kullan?m birlikte); s?f?rsa ad yede?i.
+        hid: u32,
         ad: String,
         basili: bool,
     },
@@ -215,6 +217,7 @@ mod testler {
     async fn yaz_oku_gidis_donus() {
         let (mut a, mut b) = tokio::io::duplex(1 << 20);
         let m = Kontrol::Girdi(Girdi::Tus {
+            hid: 0x00070033,
             ad: "ş".into(),
             basili: true,
         });

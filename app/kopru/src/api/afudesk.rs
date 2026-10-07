@@ -159,6 +159,7 @@ pub struct GirdiOlayi {
     pub y: f64,
     /// fare: sol | sag | orta; tus: tuş adı.
     pub ad: String,
+    pub hid: u32,
     pub basili: bool,
     pub dx: i32,
     pub dy: i32,
@@ -381,7 +382,7 @@ pub fn izleyici_girdi(g: GirdiOlayi) {
             basili: g.basili,
         },
         "kaydir" => Girdi::Kaydir { dx: g.dx, dy: g.dy },
-        "tus" => Girdi::Tus { ad: g.ad, basili: g.basili },
+        "tus" => Girdi::Tus { hid: g.hid, ad: g.ad, basili: g.basili },
         "metin" => Girdi::Metin(g.metin),
         _ => return,
     };

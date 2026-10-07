@@ -133,6 +133,7 @@ async fn tam_akis_goruntu_ve_girdi() {
     })
     .await;
     i.gonder(Girdi::Tus {
+        hid: 0x00070033,
         ad: "ş".into(),
         basili: true,
     })

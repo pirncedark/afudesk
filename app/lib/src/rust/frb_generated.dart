@@ -930,17 +930,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   GirdiOlayi dco_decode_girdi_olayi(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return GirdiOlayi(
       tur: dco_decode_String(arr[0]),
       x: dco_decode_f_64(arr[1]),
       y: dco_decode_f_64(arr[2]),
       ad: dco_decode_String(arr[3]),
-      basili: dco_decode_bool(arr[4]),
-      dx: dco_decode_i_32(arr[5]),
-      dy: dco_decode_i_32(arr[6]),
-      metin: dco_decode_String(arr[7]),
+      hid: dco_decode_u_32(arr[4]),
+      basili: dco_decode_bool(arr[5]),
+      dx: dco_decode_i_32(arr[6]),
+      dy: dco_decode_i_32(arr[7]),
+      metin: dco_decode_String(arr[8]),
     );
   }
 
@@ -1130,6 +1131,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_x = sse_decode_f_64(deserializer);
     var var_y = sse_decode_f_64(deserializer);
     var var_ad = sse_decode_String(deserializer);
+    var var_hid = sse_decode_u_32(deserializer);
     var var_basili = sse_decode_bool(deserializer);
     var var_dx = sse_decode_i_32(deserializer);
     var var_dy = sse_decode_i_32(deserializer);
@@ -1139,6 +1141,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       x: var_x,
       y: var_y,
       ad: var_ad,
+      hid: var_hid,
       basili: var_basili,
       dx: var_dx,
       dy: var_dy,
@@ -1394,6 +1397,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.x, serializer);
     sse_encode_f_64(self.y, serializer);
     sse_encode_String(self.ad, serializer);
+    sse_encode_u_32(self.hid, serializer);
     sse_encode_bool(self.basili, serializer);
     sse_encode_i_32(self.dx, serializer);
     sse_encode_i_32(self.dy, serializer);

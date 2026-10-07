@@ -975,6 +975,7 @@ impl SseDecode for crate::api::afudesk::GirdiOlayi {
         let mut var_x = <f64>::sse_decode(deserializer);
         let mut var_y = <f64>::sse_decode(deserializer);
         let mut var_ad = <String>::sse_decode(deserializer);
+        let mut var_hid = <u32>::sse_decode(deserializer);
         let mut var_basili = <bool>::sse_decode(deserializer);
         let mut var_dx = <i32>::sse_decode(deserializer);
         let mut var_dy = <i32>::sse_decode(deserializer);
@@ -984,6 +985,7 @@ impl SseDecode for crate::api::afudesk::GirdiOlayi {
             x: var_x,
             y: var_y,
             ad: var_ad,
+            hid: var_hid,
             basili: var_basili,
             dx: var_dx,
             dy: var_dy,
@@ -1252,6 +1254,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::afudesk::GirdiOlayi {
             self.x.into_into_dart().into_dart(),
             self.y.into_into_dart().into_dart(),
             self.ad.into_into_dart().into_dart(),
+            self.hid.into_into_dart().into_dart(),
             self.basili.into_into_dart().into_dart(),
             self.dx.into_into_dart().into_dart(),
             self.dy.into_into_dart().into_dart(),
@@ -1417,6 +1420,7 @@ impl SseEncode for crate::api::afudesk::GirdiOlayi {
         <f64>::sse_encode(self.x, serializer);
         <f64>::sse_encode(self.y, serializer);
         <String>::sse_encode(self.ad, serializer);
+        <u32>::sse_encode(self.hid, serializer);
         <bool>::sse_encode(self.basili, serializer);
         <i32>::sse_encode(self.dx, serializer);
         <i32>::sse_encode(self.dy, serializer);

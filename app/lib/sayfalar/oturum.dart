@@ -17,6 +17,7 @@ class OturumSayfasi extends StatefulWidget {
   final Motor motor;
   final String kod;
   final String parola;
+
   /// Doluysa kod/parola yerine bu kayıtlı bilgisayara bağlanılır.
   final String? kayitliKimlik;
   const OturumSayfasi({super.key, required this.motor, this.kod = '', this.parola = '', this.kayitliKimlik});
@@ -27,7 +28,7 @@ class OturumSayfasi extends StatefulWidget {
 
 enum _Asama { baglaniyor, onayBekleniyor, bagli, bitti }
 
-class _OturumDurum extends State<OturumSayfasi> {
+class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   StreamSubscription<IzleyiciOlay>? _abonelik;
   _Asama _asama = _Asama.baglaniyor;
   String _karsiAd = '';
@@ -47,7 +48,11 @@ class _OturumDurum extends State<OturumSayfasi> {
   final _dokunma = DokunmaCevirici();
   Timer? _dokunmaSaat;
   final _saat = Stopwatch()..start();
-  final _yaziOdak = FocusNode();
+  late final _yaziOdak = FocusNode(onKeyEvent: _klavye);
+  final Set<int> _basiliTuslar = {};
+  final Map<int, String> _tusAdlari = {};
+  final Map<int, Duration> _sonTekrar = {};
+  final Set<String> _basiliFare = {};
   final _yazi = TextEditingController(text: _gozcu);
   bool _klavyeAcik = false;
   bool _oyunKoluIzni = false, _kolAcik = false;
@@ -61,6 +66,8 @@ class _OturumDurum extends State<OturumSayfasi> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _yaziOdak.addListener(_yaziOdakDegisti);
     _kolKanal.setMethodCallHandler(_androidKol);
     if (widget.motor.dokunmatik) {
       // Telefonda bilgisayar ekranı yatayda ve tam ekranda çok daha okunaklı.
@@ -70,9 +77,13 @@ class _OturumDurum extends State<OturumSayfasi> {
     final akis = widget.kayitliKimlik != null
         ? widget.motor.kayitliBaglan(kimlik: widget.kayitliKimlik!, ad: widget.motor.cihazAdi())
         : widget.motor.baglan(kod: widget.kod, parola: widget.parola, ad: widget.motor.cihazAdi());
-    _abonelik = akis.listen(_olay, onError: (Object e) => _bitir(hataMetni(e)), onDone: () {
-      if (_asama != _Asama.bitti) _bitir('Bağlantı kapandı.');
-    });
+    _abonelik = akis.listen(
+      _olay,
+      onError: (Object e) => _bitir(hataMetni(e)),
+      onDone: () {
+        if (_asama != _Asama.bitti) _bitir('Bağlantı kapandı.');
+      },
+    );
   }
 
   Future<void> _androidKol(MethodCall call) async {
@@ -105,6 +116,8 @@ class _OturumDurum extends State<OturumSayfasi> {
 
   void _bitir(String m) {
     if (!mounted) return;
+    _tuslariBirak();
+    _kontrol = false;
     setState(() {
       _asama = _Asama.bitti;
       _mesaj = m;
@@ -120,6 +133,7 @@ class _OturumDurum extends State<OturumSayfasi> {
           _karsiAd = o.ad;
         });
       case 'kabul':
+        if (_kontrol && !o.kontrol) _tuslariBirak();
         setState(() {
           _yeniden = null;
           _asama = _Asama.bagli;
@@ -136,7 +150,11 @@ class _OturumDurum extends State<OturumSayfasi> {
         if (widget.motor.dokunmatik && o.oyunKolu && !_kolIpucuGosterildi) {
           _kolIpucuGosterildi = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Kolu telefona Bluetooth ile bağla ya da ekrandaki kolu kullan.')));
+            if (mounted) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('Kolu telefona Bluetooth ile bağla ya da ekrandaki kolu kullan.')));
+            }
           });
         }
       case 'kol':
@@ -164,14 +182,18 @@ class _OturumDurum extends State<OturumSayfasi> {
           _yeniden = null;
         });
       case 'yeniden':
+        _tuslariBirak();
         setState(() => _yeniden = o.metin);
       case 'kaydedildi':
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
-          ..showSnackBar(SnackBar(
+          ..showSnackBar(
+            SnackBar(
               key: const Key('oturum_kaydedildi'),
               content: Text('${o.ad} kaydedildi. Bir dahaki sefere kod ve parola gerekmez.'),
-              duration: const Duration(seconds: 3)));
+              duration: const Duration(seconds: 3),
+            ),
+          );
       case 'pano':
         // Masaüstünde çekirdek panoya zaten yazdı; dokunmatik cihazda (Android) çekirdeğin
         // pano erişimi yok, metni arayüz yazar.
@@ -179,7 +201,7 @@ class _OturumDurum extends State<OturumSayfasi> {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(const SnackBar(content: Text('Pano güncellendi'), duration: Duration(seconds: 1)));
-case 'dosya':
+      case 'dosya':
         _dosyaOlayi(o);
 
       case 'koptu':
@@ -248,6 +270,9 @@ case 'dosya':
 
   @override
   void dispose() {
+    _tuslariBirak();
+    WidgetsBinding.instance.removeObserver(this);
+    _yaziOdak.removeListener(_yaziOdakDegisti);
     _kolGonderimBekle?.cancel();
     _kolKanal.setMethodCallHandler(null);
     if (widget.motor.dokunmatik) {
@@ -301,6 +326,13 @@ case 'dosya':
   void _gonder(List<Girdi> g) {
     if (g.isEmpty) return;
     for (final x in g) {
+      if (x.tur == 'fare') {
+        if (x.basili) {
+          _basiliFare.add(x.ad);
+        } else {
+          _basiliFare.remove(x.ad);
+        }
+      }
       widget.motor.girdi(x);
     }
     // İmleç işaretini güncelle.
@@ -335,146 +367,168 @@ case 'dosya':
   Widget _dokunmatikCubuk() {
     final dar = MediaQuery.sizeOf(context).width < 520;
     Widget t(String etiket, String ad, {IconData? simge}) => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 3),
-          child: OutlinedButton(
-            key: Key('ozel_$ad'),
-            style: OutlinedButton.styleFrom(minimumSize: const Size(44, 40), padding: const EdgeInsets.symmetric(horizontal: 10)),
-            onPressed: () => _ozelTus(ad),
-            child: simge != null ? Icon(simge, size: 18) : Text(etiket),
-          ),
-        );
+      padding: const EdgeInsets.symmetric(horizontal: 3),
+      child: OutlinedButton(
+        key: Key('ozel_$ad'),
+        style: OutlinedButton.styleFrom(minimumSize: const Size(44, 40), padding: const EdgeInsets.symmetric(horizontal: 10)),
+        onPressed: () => _ozelTus(ad),
+        child: simge != null ? Icon(simge, size: 18) : Text(etiket),
+      ),
+    );
     return Container(
       color: Renk.yuzey,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      child: Row(children: [
-        FilledButton.icon(
-          key: const Key('oturum_klavye'),
-          style: FilledButton.styleFrom(minimumSize: Size(dar ? 56 : 0, 56), padding: EdgeInsets.symmetric(horizontal: dar ? 8 : 16)),
-          onPressed: () {
-            setState(() => _klavyeAcik = !_klavyeAcik);
-            if (_klavyeAcik) {
-              _yaziOdak.requestFocus();
-              SystemChannels.textInput.invokeMethod<void>('TextInput.show');
-            } else {
-              _yaziOdak.unfocus();
-            }
-          },
-          icon: Icon(_klavyeAcik ? Icons.keyboard_hide : Icons.keyboard),
-          label: dar ? const SizedBox.shrink() : const Text('Klavye'),
-        ),
-        const SizedBox(width: 8),
-        Tooltip(
-          key: const Key('oturum_oyun_kolu_ipucu'),
-          message: _oyunKoluIzni ? 'Dokunmatik kolu aç' : 'Karşı taraf oyun kolu izni vermedi',
-          child: FilledButton(
-            key: const Key('oturum_oyun_kolu'),
-            style: FilledButton.styleFrom(minimumSize: Size(dar ? 56 : 0, 56), padding: EdgeInsets.symmetric(horizontal: dar ? 8 : 16), backgroundColor: _kolAcik ? Renk.vurgu : null),
-            onPressed: _oyunKoluIzni ? () => setState(() => _kolAcik = !_kolAcik) : null,
-            child: dar ? const Icon(Icons.sports_esports) : const Text('🎮 Oyun kolu'),
-          ),
-        ),
-        const SizedBox(width: 6),
-        Expanded(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(children: [
-              t('Esc', 'Escape'),
-              t('Tab', 'Tab'),
-              t('', 'Enter', simge: Icons.keyboard_return),
-              t('', 'Backspace', simge: Icons.backspace_outlined),
-              t('', 'ArrowLeft', simge: Icons.arrow_back),
-              t('', 'ArrowUp', simge: Icons.arrow_upward),
-              t('', 'ArrowDown', simge: Icons.arrow_downward),
-              t('', 'ArrowRight', simge: Icons.arrow_forward),
-              t('Win', 'Meta'),
-            ]),
-          ),
-        ),
-        SizedBox(
-          width: 1,
-          height: 1,
-          child: Opacity(
-            opacity: 0,
-            child: TextField(
-              key: const Key('oturum_yazi'),
-              focusNode: _yaziOdak,
-              controller: _yazi,
-              autocorrect: false,
-              enableSuggestions: false,
-              onChanged: _yaziDegisti,
-              onSubmitted: (_) {
-                _ozelTus('Enter');
+      child: Row(
+        children: [
+          FilledButton.icon(
+            key: const Key('oturum_klavye'),
+            style: FilledButton.styleFrom(
+              minimumSize: Size(dar ? 56 : 0, 56),
+              padding: EdgeInsets.symmetric(horizontal: dar ? 8 : 16),
+            ),
+            onPressed: () {
+              setState(() => _klavyeAcik = !_klavyeAcik);
+              if (_klavyeAcik) {
                 _yaziOdak.requestFocus();
-              },
+                SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+              } else {
+                _yaziOdak.unfocus();
+                _odak.requestFocus();
+              }
+            },
+            icon: Icon(_klavyeAcik ? Icons.keyboard_hide : Icons.keyboard),
+            label: dar ? const SizedBox.shrink() : const Text('Klavye'),
+          ),
+          const SizedBox(width: 8),
+          Tooltip(
+            key: const Key('oturum_oyun_kolu_ipucu'),
+            message: _oyunKoluIzni ? 'Dokunmatik kolu aç' : 'Karşı taraf oyun kolu izni vermedi',
+            child: FilledButton(
+              key: const Key('oturum_oyun_kolu'),
+              style: FilledButton.styleFrom(
+                minimumSize: Size(dar ? 56 : 0, 56),
+                padding: EdgeInsets.symmetric(horizontal: dar ? 8 : 16),
+                backgroundColor: _kolAcik ? Renk.vurgu : null,
+              ),
+              onPressed: _oyunKoluIzni ? () => setState(() => _kolAcik = !_kolAcik) : null,
+              child: dar ? const Icon(Icons.sports_esports) : const Text('🎮 Oyun kolu'),
             ),
           ),
-        ),
-      ]),
+          const SizedBox(width: 6),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  t('Esc', 'Escape'),
+                  t('Tab', 'Tab'),
+                  t('', 'Enter', simge: Icons.keyboard_return),
+                  t('', 'Backspace', simge: Icons.backspace_outlined),
+                  t('', 'ArrowLeft', simge: Icons.arrow_back),
+                  t('', 'ArrowUp', simge: Icons.arrow_upward),
+                  t('', 'ArrowDown', simge: Icons.arrow_downward),
+                  t('', 'ArrowRight', simge: Icons.arrow_forward),
+                  t('Win', 'Meta'),
+                ],
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 1,
+            height: 1,
+            child: Opacity(
+              opacity: 0,
+              child: TextField(
+                key: const Key('oturum_yazi'),
+                focusNode: _yaziOdak,
+                controller: _yazi,
+                autocorrect: false,
+                enableSuggestions: false,
+                onChanged: _yaziDegisti,
+                onSubmitted: (_) {
+                  _ozelTus('Enter');
+                  _yaziOdak.requestFocus();
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _dokunmatikEkran(ui.Image? k) {
-    return Column(children: [
-      Expanded(
-        child: Container(
-          color: Colors.black,
-          child: LayoutBuilder(builder: (context, c) {
-            final alan = Size(c.maxWidth, c.maxHeight);
-            final imlec = _imlecKonumu(alan);
-            return Listener(
-              key: const Key('oturum_ekran'),
-              onPointerDown: (e) {
-                if (_kolAcik) return;
-                if (!_kontrol) return;
-                final n = _normalizeKirp(e.localPosition, alan);
-                if (n != null) _gonder(_dokunma.bas(e.pointer, n.dx, n.dy, _ms));
-              },
-              onPointerMove: (e) {
-                if (_kolAcik) return;
-                if (!_kontrol) return;
-                final n = _normalizeKirp(e.localPosition, alan);
-                if (n != null) _gonder(_dokunma.hareket(e.pointer, n.dx, n.dy, _ms));
-              },
-              onPointerUp: (e) {
-                if (_kolAcik) return;
-                if (_kontrol) _gonder(_dokunma.birak(e.pointer, _ms));
-              },
-              onPointerCancel: (e) {
-                if (_kolAcik) return;
-                if (_kontrol) _gonder(_dokunma.iptal(e.pointer));
-              },
-              child: Stack(children: [
-                Positioned.fill(
-                  child: k == null
-                      ? const Center(child: CircularProgressIndicator())
-                      : RawImage(key: const Key('oturum_kare'), image: k, fit: BoxFit.contain, filterQuality: FilterQuality.medium),
-                ),
-                if (imlec != null)
-                  Positioned(
-                    key: const Key('oturum_imlec'),
-                    left: imlec.dx - 9,
-                    top: imlec.dy - 9,
-                    child: IgnorePointer(
-                      child: Container(
-                        width: 18,
-                        height: 18,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                          color: Renk.vurgu.withValues(alpha: 0.5),
+    return _klavyeOdak(
+      Column(
+        children: [
+          Expanded(
+            child: Container(
+              color: Colors.black,
+              child: LayoutBuilder(
+                builder: (context, c) {
+                  final alan = Size(c.maxWidth, c.maxHeight);
+                  final imlec = _imlecKonumu(alan);
+                  return Listener(
+                    key: const Key('oturum_ekran'),
+                    onPointerDown: (e) {
+                      if (_kolAcik) return;
+                      if (!_kontrol) return;
+                      final n = _normalizeKirp(e.localPosition, alan);
+                      if (n != null) _gonder(_dokunma.bas(e.pointer, n.dx, n.dy, _ms));
+                    },
+                    onPointerMove: (e) {
+                      if (_kolAcik) return;
+                      if (!_kontrol) return;
+                      final n = _normalizeKirp(e.localPosition, alan);
+                      if (n != null) _gonder(_dokunma.hareket(e.pointer, n.dx, n.dy, _ms));
+                    },
+                    onPointerUp: (e) {
+                      if (_kolAcik) return;
+                      if (_kontrol) _gonder(_dokunma.birak(e.pointer, _ms));
+                    },
+                    onPointerCancel: (e) {
+                      if (_kolAcik) return;
+                      if (_kontrol) _gonder(_dokunma.iptal(e.pointer));
+                    },
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: k == null
+                              ? const Center(child: CircularProgressIndicator())
+                              : RawImage(key: const Key('oturum_kare'), image: k, fit: BoxFit.contain, filterQuality: FilterQuality.medium),
                         ),
-                      ),
+                        if (imlec != null)
+                          Positioned(
+                            key: const Key('oturum_imlec'),
+                            left: imlec.dx - 9,
+                            top: imlec.dy - 9,
+                            child: IgnorePointer(
+                              child: Container(
+                                width: 18,
+                                height: 18,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white, width: 2),
+                                  color: Renk.vurgu.withValues(alpha: 0.5),
+                                ),
+                              ),
+                            ),
+                          ),
+                        if (_kolAcik)
+                          Positioned.fill(
+                            child: OyunKoluKatmani(key: const Key('dokunmatik_oyun_kolu_katmani'), onChanged: _kolDurumuDegisti),
+                          ),
+                      ],
                     ),
-                  ),
-                if (_kolAcik)
-                  Positioned.fill(child: OyunKoluKatmani(key: const Key('dokunmatik_oyun_kolu_katmani'), onChanged: _kolDurumuDegisti)),
-              ]),
-            );
-          }),
-        ),
+                  );
+                },
+              ),
+            ),
+          ),
+          if (_kontrol) SafeArea(top: false, child: _dokunmatikCubuk()),
+        ],
       ),
-      if (_kontrol) SafeArea(top: false, child: _dokunmatikCubuk()),
-    ]);
+    );
   }
 
   Offset? _imlecKonumu(Size alan) {
@@ -485,16 +539,79 @@ case 'dosya':
     return Offset((alan.width - g) / 2 + x * g, (alan.height - yy) / 2 + y * yy);
   }
 
-  String _tus(int dugmeler) =>
-      dugmeler & kSecondaryMouseButton != 0 ? 'sag' : (dugmeler & kMiddleMouseButton != 0 ? 'orta' : 'sol');
-
   int _sonDugme = 0;
 
+  void _fareDugmeleri(int simdi) {
+    final once = _sonDugme;
+    _sonDugme = simdi;
+    for (final (bit, ad) in [(kPrimaryMouseButton, 'sol'), (kSecondaryMouseButton, 'sag'), (kMiddleMouseButton, 'orta')]) {
+      if ((once & bit) == (simdi & bit)) continue;
+      _gonder([Girdi('fare', ad: ad, basili: simdi & bit != 0)]);
+    }
+  }
+
+  void _tuslariBirak() {
+    for (final hid in _basiliTuslar) {
+      widget.motor.girdi(Girdi('tus', hid: hid, ad: _tusAdlari[hid] ?? '', basili: false));
+    }
+    _basiliTuslar.clear();
+    _tusAdlari.clear();
+    _sonTekrar.clear();
+    for (final ad in _basiliFare) {
+      widget.motor.girdi(Girdi('fare', ad: ad, basili: false));
+    }
+    _basiliFare.clear();
+    _sonDugme = 0;
+  }
+
+  void _yaziOdakDegisti() {
+    if (!_yaziOdak.hasFocus && !_odak.hasFocus) _tuslariBirak();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden) {
+      _tuslariBirak();
+    }
+  }
+
+  Widget _klavyeOdak(Widget child) => Focus(
+    focusNode: _odak,
+    autofocus: true,
+    onKeyEvent: _klavye,
+    onFocusChange: (odakli) {
+      if (!odakli && !_yaziOdak.hasFocus) _tuslariBirak();
+    },
+    child: child,
+  );
+
   KeyEventResult _klavye(FocusNode _, KeyEvent e) {
-    if (!_kontrol || e is KeyRepeatEvent) return _kontrol ? KeyEventResult.handled : KeyEventResult.ignored;
-    final ad = tusAdi(e.logicalKey);
-    if (ad == null) return KeyEventResult.ignored;
-    widget.motor.girdi(Girdi('tus', ad: ad, basili: e is KeyDownEvent));
+    if (!_kontrol || _yeniden != null) return KeyEventResult.ignored;
+    final hid = e.physicalKey.usbHidUsage;
+    final ad = tusAdi(e.logicalKey) ?? '';
+    if (hid == 0 && ad.isEmpty) return KeyEventResult.ignored;
+    if (e is KeyRepeatEvent) {
+      if (!_basiliTuslar.contains(hid)) return KeyEventResult.handled;
+      final once = _sonTekrar[hid];
+      if (once != null && e.timeStamp - once < const Duration(milliseconds: 34)) {
+        return KeyEventResult.handled;
+      }
+    }
+    final basili = e is KeyDownEvent || e is KeyRepeatEvent;
+    if (basili) {
+      _basiliTuslar.add(hid);
+      _tusAdlari[hid] = ad;
+      if (e is KeyRepeatEvent) _sonTekrar[hid] = e.timeStamp;
+    } else {
+      _basiliTuslar.remove(hid);
+      _tusAdlari.remove(hid);
+      _sonTekrar.remove(hid);
+    }
+    widget.motor.girdi(Girdi('tus', hid: hid, ad: ad, basili: basili));
+    // Fiziksel tu?u TextField t?ketmez; ekran klavyesi onChanged ?zerinden gider.
     return KeyEventResult.handled;
   }
 
@@ -598,64 +715,71 @@ case 'dosya':
         return const _Bilgi(anahtar: Key('oturum_baglaniyor'), yukleniyor: true, metin: 'Bağlanılıyor…');
       case _Asama.onayBekleniyor:
         return _Bilgi(
-            anahtar: const Key('oturum_onay'),
-            yukleniyor: true,
-            metin: '$_karsiAd onayı bekleniyor…\nKarşı tarafın ekranında “Kabul et”e basması gerekiyor.');
+          anahtar: const Key('oturum_onay'),
+          yukleniyor: true,
+          metin: '$_karsiAd onayı bekleniyor…\nKarşı tarafın ekranında “Kabul et”e basması gerekiyor.',
+        );
       case _Asama.bitti:
         return Center(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.link_off, size: 40, color: Renk.soluk),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Text(_mesaj, key: const Key('oturum_mesaj'), textAlign: TextAlign.center),
-            ),
-            const SizedBox(height: 16),
-            FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Geri dön')),
-          ]),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.link_off, size: 40, color: Renk.soluk),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Text(_mesaj, key: const Key('oturum_mesaj'), textAlign: TextAlign.center),
+              ),
+              const SizedBox(height: 16),
+              FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Geri dön')),
+            ],
+          ),
         );
       case _Asama.bagli:
         final k = _kare;
         if (widget.motor.dokunmatik) return _dokunmatikEkran(k);
         return Container(
           color: Colors.black,
-          child: LayoutBuilder(builder: (context, c) {
-            final alan = Size(c.maxWidth, c.maxHeight);
-            return Focus(
-              focusNode: _odak,
-              autofocus: true,
-              onKeyEvent: _klavye,
-              child: MouseRegion(
-                cursor: _kontrol ? SystemMouseCursors.precise : SystemMouseCursors.basic,
-                child: Listener(
-                  key: const Key('oturum_ekran'),
-                  onPointerHover: (e) => _konum(e.localPosition, alan),
-                  onPointerMove: (e) => _konum(e.localPosition, alan),
-                  onPointerDown: (e) {
-                    _odak.requestFocus();
-                    if (!_kontrol) return;
-                    _konum(e.localPosition, alan);
-                    _sonDugme = e.buttons;
-                    widget.motor.girdi(Girdi('fare', ad: _tus(e.buttons), basili: true));
-                  },
-                  onPointerUp: (e) {
-                    if (!_kontrol) return;
-                    widget.motor.girdi(Girdi('fare', ad: _tus(_sonDugme), basili: false));
-                  },
-                  onPointerSignal: (e) {
-                    if (!_kontrol || e is! PointerScrollEvent) return;
-                    final dy = e.scrollDelta.dy.sign.toInt(), dx = e.scrollDelta.dx.sign.toInt();
-                    if (dx != 0 || dy != 0) widget.motor.girdi(Girdi('kaydir', dx: dx, dy: dy));
-                  },
-                  child: SizedBox.expand(
-                    child: k == null
-                        ? const Center(child: CircularProgressIndicator())
-                        : RawImage(key: const Key('oturum_kare'), image: k, fit: BoxFit.contain, filterQuality: FilterQuality.medium),
+          child: LayoutBuilder(
+            builder: (context, c) {
+              final alan = Size(c.maxWidth, c.maxHeight);
+              return _klavyeOdak(
+                MouseRegion(
+                  cursor: _kontrol ? SystemMouseCursors.precise : SystemMouseCursors.basic,
+                  child: Listener(
+                    key: const Key('oturum_ekran'),
+                    onPointerHover: (e) => _konum(e.localPosition, alan),
+                    onPointerMove: (e) {
+                      if (!_kontrol) return;
+                      _fareDugmeleri(e.buttons);
+                      _konum(e.localPosition, alan);
+                    },
+                    onPointerDown: (e) {
+                      _odak.requestFocus();
+                      if (!_kontrol) return;
+                      _konum(e.localPosition, alan);
+                      _fareDugmeleri(e.buttons);
+                    },
+                    onPointerUp: (e) {
+                      if (!_kontrol) return;
+                      _fareDugmeleri(e.buttons);
+                    },
+                    onPointerCancel: (_) => _fareDugmeleri(0),
+                    onPointerSignal: (e) {
+                      if (!_kontrol || e is! PointerScrollEvent) return;
+                      final dy = e.scrollDelta.dy.sign.toInt(), dx = e.scrollDelta.dx.sign.toInt();
+                      if (dx != 0 || dy != 0) widget.motor.girdi(Girdi('kaydir', dx: dx, dy: dy));
+                    },
+                    child: SizedBox.expand(
+                      child: k == null
+                          ? const Center(child: CircularProgressIndicator())
+                          : RawImage(key: const Key('oturum_kare'), image: k, fit: BoxFit.contain, filterQuality: FilterQuality.medium),
+                    ),
                   ),
                 ),
-              ),
-            );
-          }),
+              );
+            },
+          ),
         );
     }
   }
@@ -676,11 +800,18 @@ class _Bilgi extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        key: anahtar,
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          if (yukleniyor) const CircularProgressIndicator(),
-          const SizedBox(height: 16),
-          Text(metin, textAlign: TextAlign.center, style: const TextStyle(color: Renk.soluk)),
-        ]),
-      );
+    key: anahtar,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (yukleniyor) const CircularProgressIndicator(),
+        const SizedBox(height: 16),
+        Text(
+          metin,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Renk.soluk),
+        ),
+      ],
+    ),
+  );
 }

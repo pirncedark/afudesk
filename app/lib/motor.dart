@@ -85,6 +85,7 @@ class Girdi {
   final String tur; // konum | fare | kaydir | tus | metin
   final double x, y;
   final String ad;
+  final int hid;
   final bool basili;
   final int dx, dy;
   final String metin;
@@ -92,12 +93,13 @@ class Girdi {
       {this.x = 0,
       this.y = 0,
       this.ad = '',
+      this.hid = 0,
       this.basili = false,
       this.dx = 0,
       this.dy = 0,
       this.metin = ''});
   @override
-  String toString() => 'Girdi($tur, x=$x, y=$y, ad=$ad, basili=$basili, dx=$dx, dy=$dy)';
+  String toString() => 'Girdi($tur, x=$x, y=$y, hid=$hid, ad=$ad, basili=$basili, dx=$dx, dy=$dy)';
 }
 
 abstract class Motor {
@@ -257,6 +259,7 @@ class RustMotor implements Motor {
             x: g.x,
             y: g.y,
             ad: g.ad,
+            hid: g.hid,
             basili: g.basili,
             dx: g.dx,
             dy: g.dy,

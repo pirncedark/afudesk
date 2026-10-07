@@ -132,6 +132,7 @@ class GirdiOlayi {
 
   /// fare: sol | sag | orta; tus: tuş adı.
   final String ad;
+  final int hid;
   final bool basili;
   final int dx;
   final int dy;
@@ -142,6 +143,7 @@ class GirdiOlayi {
     required this.x,
     required this.y,
     required this.ad,
+    required this.hid,
     required this.basili,
     required this.dx,
     required this.dy,
@@ -157,6 +159,7 @@ class GirdiOlayi {
       x.hashCode ^
       y.hashCode ^
       ad.hashCode ^
+      hid.hashCode ^
       basili.hashCode ^
       dx.hashCode ^
       dy.hashCode ^
@@ -171,6 +174,7 @@ class GirdiOlayi {
           x == other.x &&
           y == other.y &&
           ad == other.ad &&
+          hid == other.hid &&
           basili == other.basili &&
           dx == other.dx &&
           dy == other.dy &&
