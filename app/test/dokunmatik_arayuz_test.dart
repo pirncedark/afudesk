@@ -45,6 +45,96 @@ List<String> fare(SahteMotor m) =>
     m.girdiler.where((g) => g.tur == 'fare').map((g) => '${g.ad}:${g.basili}').toList();
 
 void main() {
+  testWidgets('zoom ipucu ilk oturumda bir kez gösterilir', (t) async {
+    final m = await telefon(t);
+    expect(find.text('İki parmakla yakınlaştır.'), findsOneWidget);
+    for (var i = 0; i < 60; i++) {
+      await t.pump(const Duration(milliseconds: 100));
+    }
+    m.izleyici.add(IzleyiciOlay('kabul', kontrol: true));
+    await t.pump();
+    expect(find.text('İki parmakla yakınlaştır.'), findsNothing);
+    await t.tap(find.byTooltip('Bağlantıyı kes'));
+    await gec(t);
+    await t.pumpWidget(const SizedBox.shrink());
+    await telefon(t);
+    expect(find.text('İki parmakla yakınlaştır.'), findsNothing);
+  });
+
+  testWidgets('pinch, ters koordinat, sabit imleç ve 1x tıksız sıfırlama', (t) async {
+    final m = await telefon(t);
+    final alan = t.getRect(find.byKey(const Key('oturum_ekran')));
+    final merkez = alan.center;
+    final a = await t.startGesture(merkez - const Offset(50, 0), pointer: 1);
+    final b = await t.startGesture(merkez + const Offset(50, 0), pointer: 2);
+    await a.moveTo(merkez - const Offset(100, 0));
+    await b.moveTo(merkez + const Offset(100, 0));
+    await a.up();
+    await b.up();
+    await t.pump();
+    expect(m.girdiler, isEmpty);
+    expect(find.byKey(const Key('oturum_zoom_sifirla')), findsOneWidget);
+    await t.tapAt(merkez + const Offset(80, 0));
+    await t.pump();
+    final konum = m.girdiler.firstWhere((g) => g.tur == 'konum');
+    expect(konum.x, closeTo(0.6, 0.001));
+    expect(konum.y, closeTo(0.5, 0.001));
+    expect(fare(m), ['sol:true', 'sol:false']);
+    expect(t.getSize(find.byKey(const Key('oturum_imlec'))), const Size(18, 18));
+    final once = m.girdiler.length;
+    await t.tap(find.byKey(const Key('oturum_zoom_sifirla')));
+    await t.pump();
+    expect(find.byKey(const Key('oturum_zoom_sifirla')), findsNothing);
+    expect(m.girdiler.length, once);
+  });
+
+  testWidgets('sabit mesafeli iki parmak kaydırma zoom açmaz', (t) async {
+    final m = await telefon(t);
+    final merkez = t.getRect(find.byKey(const Key('oturum_ekran'))).center;
+    final a = await t.startGesture(merkez - const Offset(50, 0), pointer: 1);
+    final b = await t.startGesture(merkez + const Offset(50, 0), pointer: 2);
+    for (var i = 0; i < 10; i++) {
+      await a.moveBy(const Offset(0, -2));
+      await b.moveBy(const Offset(0, -2));
+    }
+    await a.up();
+    await b.up();
+    await t.pump();
+    expect(find.byKey(const Key('oturum_zoom_sifirla')), findsNothing);
+    expect(m.girdiler.where((g) => g.tur == 'kaydir'), isNotEmpty);
+    expect(fare(m), isEmpty);
+  });
+  testWidgets('2x iki parmak pan uzak kaydırma veya tık göndermez', (t) async {
+    final m = await telefon(t);
+    final merkez = t.getRect(find.byKey(const Key('oturum_ekran'))).center;
+    final a = await t.startGesture(merkez - const Offset(50, 0), pointer: 1);
+    final b = await t.startGesture(merkez + const Offset(50, 0), pointer: 2);
+    await a.moveTo(merkez - const Offset(100, 0));
+    await b.moveTo(merkez + const Offset(100, 0));
+    await a.up();
+    await b.up();
+    await t.pump();
+    expect(find.byKey(const Key('oturum_zoom_sifirla')), findsOneWidget);
+    m.girdiler.clear();
+    final c = await t.startGesture(merkez - const Offset(50, 0), pointer: 3);
+    final d = await t.startGesture(merkez + const Offset(50, 0), pointer: 4);
+    for (var i = 0; i < 10; i++) {
+      await c.moveBy(const Offset(0, -2));
+      await d.moveBy(const Offset(0, -2));
+    }
+    await c.up();
+    await d.up();
+    await t.pump();
+    expect(m.girdiler.where((g) => g.tur == 'kaydir'), isEmpty);
+    expect(fare(m), isEmpty);
+    final e = await t.startGesture(merkez - const Offset(50, 0), pointer: 5);
+    final f = await t.startGesture(merkez + const Offset(50, 0), pointer: 6);
+    await e.up();
+    await f.up();
+    await t.pump();
+    expect(m.girdiler, isEmpty);
+  });
+
   testWidgets('telefonda "Bağlantı ver" devre dışı, "Bağlan" üstte', (t) async {
     t.view.physicalSize = const Size(400, 800);
     t.view.devicePixelRatio = 1;
