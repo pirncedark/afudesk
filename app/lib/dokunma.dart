@@ -4,6 +4,7 @@
 //  - Tek parmak uzun bas        → o noktaya git + sağ tık
 //  - Tek parmak sürükle         → sol tuş basılı sürükleme (seçme/taşıma)
 //  - İki parmak sürükle         → tekerlek kaydırma
+//  - İki parmak aç/kapat        → görüntüyü yakınlaştır
 //  - İki parmak dokun           → sağ tık
 //
 // Konumlar 0..1 aralığında normalize gelir (ekran dışı: null). Zaman milisaniye.
@@ -32,6 +33,13 @@ class DokunmaCevirici {
   bool _uzunBasildi = false;
   bool _ikiParmakOldu = false;
   bool _ikiParmakHareket = false;
+  bool _yakinlastiriyor = false;
+  void yakinlastirmaBasladi() {
+    _yakinlastiriyor = true;
+    _ikiParmakHareket = true;
+    _kaydirmaBirikim = 0;
+  }
+
   int _ikiParmakBasla = 0;
   double _kaydirmaBirikim = 0;
   double? _kaydirmaY;
@@ -46,6 +54,7 @@ class DokunmaCevirici {
       _uzunBasildi = false;
       _ikiParmakOldu = false;
       _ikiParmakHareket = false;
+      _yakinlastiriyor = false;
     } else if (_parmaklar.length == 2) {
       _ikiParmakOldu = true;
       _ikiParmakBasla = t;
@@ -66,6 +75,7 @@ class DokunmaCevirici {
     p.x = x;
     p.y = y;
     final cikti = <Girdi>[];
+    if (_yakinlastiriyor) return const [];
     if (_parmaklar.length >= 2) {
       final oy = _ortY();
       final onceki = _kaydirmaY ?? oy;
@@ -108,14 +118,19 @@ class DokunmaCevirici {
     final cikti = <Girdi>[];
     if (_ikiParmakOldu) {
       // Son parmak kalkınca: hareket yoksa ve kısa sürdüyse sağ tık.
-      if (_parmaklar.isEmpty && !_ikiParmakHareket && t - _ikiParmakBasla <= ikiParmakDokunMs + 200) {
+      if (_parmaklar.isEmpty && !_yakinlastiriyor && !_ikiParmakHareket && t - _ikiParmakBasla <= ikiParmakDokunMs + 200) {
         cikti.addAll([
           _konum(p.bx, p.by),
           const Girdi('fare', ad: 'sag', basili: true),
           const Girdi('fare', ad: 'sag', basili: false),
         ]);
       }
-      if (_parmaklar.isEmpty) _ikiParmakOldu = false;
+      if (_parmaklar.isEmpty) {
+        _ikiParmakOldu = false;
+        _yakinlastiriyor = false;
+        _kaydirmaY = null;
+        _kaydirmaBirikim = 0;
+      }
       return cikti;
     }
     if (_surukleniyor) {
@@ -134,6 +149,14 @@ class DokunmaCevirici {
   /// Parmak iptal (sistem hareketi vb.): basılı tuş kalmasın.
   List<Girdi> iptal(int id) {
     _parmaklar.remove(id);
+    if (_parmaklar.isEmpty) {
+      _ikiParmakOldu = false;
+      _yakinlastiriyor = false;
+      _kaydirmaY = null;
+      _kaydirmaBirikim = 0;
+    } else if (_ikiParmakOldu) {
+      _ikiParmakHareket = true;
+    }
     if (_surukleniyor) {
       _surukleniyor = false;
       return [const Girdi('fare', ad: 'sol', basili: false)];

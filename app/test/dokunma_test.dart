@@ -12,6 +12,31 @@ String ozet(List<Girdi> g) => g
     .join(' ');
 
 void main() {
+  test('zoom kaydırma ve sağ tık göndermez, sonraki dokunma çalışır', () {
+    final d = DokunmaCevirici();
+    d.bas(1, 0.3, 0.4, 0);
+    d.bas(2, 0.6, 0.4, 10);
+    d.yakinlastirmaBasladi();
+    expect(d.hareket(1, 0.1, 0.9, 20), isEmpty);
+    expect(d.hareket(2, 0.8, 0.9, 30), isEmpty);
+    expect(d.birak(1, 40), isEmpty);
+    expect(d.hareket(2, 0.9, 0.9, 50), isEmpty);
+    expect(d.birak(2, 60), isEmpty);
+    d.bas(3, 0.5, 0.5, 70);
+    expect(ozet(d.birak(3, 100)), 'konum(0.50,0.50) sol:bas sol:birak');
+  });
+  test('zoom iptalinde sağ tık yok, sonraki kaydırma çalışır', () {
+    final d = DokunmaCevirici();
+    d.bas(1, 0.3, 0.4, 0);
+    d.bas(2, 0.6, 0.4, 10);
+    d.yakinlastirmaBasladi();
+    expect(d.iptal(1), isEmpty);
+    expect(d.birak(2, 20), isEmpty);
+    d.bas(3, 0.3, 0.4, 30);
+    d.bas(4, 0.6, 0.4, 40);
+    expect(d.hareket(3, 0.3, 0.6, 50).where((g) => g.tur == 'kaydir'), isNotEmpty);
+  });
+
   test('dokunma = o noktaya git + sol tık', () {
     final d = DokunmaCevirici();
     expect(d.bas(1, 0.3, 0.4, 0), isEmpty);

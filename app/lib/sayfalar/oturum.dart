@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../dokunma.dart';
+import '../yakinlastirma.dart';
 import '../bilesenler/oyun_kolu_katmani.dart';
 import '../klavye.dart';
 import '../motor.dart';
@@ -46,6 +47,8 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   final _odak = FocusNode();
   // Dokunmatik kip
   final _dokunma = DokunmaCevirici();
+  final _zoom = Yakinlastirma();
+  final _zoomParmaklar = <int, Offset>{};
   Timer? _dokunmaSaat;
   final _saat = Stopwatch()..start();
   late final _yaziOdak = FocusNode(onKeyEvent: _klavye);
@@ -61,6 +64,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   Timer? _kolGonderimBekle;
   static const _kolKanal = MethodChannel('afudesk/kol');
   static bool _kolIpucuGosterildi = false;
+  static bool _zoomIpucuGosterildi = false;
   static const _gozcu = '\u200b';
 
   @override
@@ -146,6 +150,16 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
           // Uzun basışı zamanında yakalamak için düzenli yokla.
           _dokunmaSaat?.cancel();
           _dokunmaSaat = Timer.periodic(const Duration(milliseconds: 100), (_) => _gonder(_dokunma.zaman(_ms)));
+        }
+        if (widget.motor.dokunmatik && !_zoomIpucuGosterildi) {
+          _zoomIpucuGosterildi = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('İki parmakla yakınlaştır.')),
+              );
+            }
+          });
         }
         if (widget.motor.dokunmatik && o.oyunKolu && !_kolIpucuGosterildi) {
           _kolIpucuGosterildi = true;
@@ -467,35 +481,64 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
               child: LayoutBuilder(
                 builder: (context, c) {
                   final alan = Size(c.maxWidth, c.maxHeight);
+                  final goruntuOlcek = k == null ? 1.0 : (alan.width / k.width).clamp(0.0, alan.height / k.height);
+                  final goruntu = k == null ? (Offset.zero & alan) : Rect.fromCenter(
+                    center: Offset(alan.width / 2, alan.height / 2),
+                    width: k.width * goruntuOlcek, height: k.height * goruntuOlcek,
+                  );
                   final imlec = _imlecKonumu(alan);
-                  return Listener(
+                  return Stack(children: [
+                    Positioned.fill(child: Listener(
                     key: const Key('oturum_ekran'),
                     onPointerDown: (e) {
                       if (_kolAcik) return;
+                      if (k == null) return;
+                      _zoomParmaklar[e.pointer] = e.localPosition;
+                      if (_zoomParmaklar.length == 2) {
+                        final p = _zoomParmaklar.values.toList();
+                        _zoom.basla(p[0], p[1]);
+                      }
                       if (!_kontrol) return;
-                      final n = _normalizeKirp(e.localPosition, alan);
+                      final n = _normalizeKirp(_zoom.tersine(e.localPosition), alan);
                       if (n != null) _gonder(_dokunma.bas(e.pointer, n.dx, n.dy, _ms));
+                      if (_zoom.yakinlastiriyor) _dokunma.yakinlastirmaBasladi();
                     },
                     onPointerMove: (e) {
                       if (_kolAcik) return;
+                      if (!_zoomParmaklar.containsKey(e.pointer)) return;
+                      _zoomParmaklar[e.pointer] = e.localPosition;
+                      if (_zoomParmaklar.length == 2) {
+                        final p = _zoomParmaklar.values.toList();
+                        _zoom.guncelle(p[0], p[1], alan, goruntu: goruntu);
+                        if (_zoom.yakinlastiriyor) {
+                          _dokunma.yakinlastirmaBasladi();
+                          setState(() {});
+                        }
+                      }
                       if (!_kontrol) return;
-                      final n = _normalizeKirp(e.localPosition, alan);
+                      final n = _normalizeKirp(_zoom.tersine(e.localPosition), alan);
                       if (n != null) _gonder(_dokunma.hareket(e.pointer, n.dx, n.dy, _ms));
                     },
                     onPointerUp: (e) {
                       if (_kolAcik) return;
                       if (_kontrol) _gonder(_dokunma.birak(e.pointer, _ms));
+                      _zoomBirak(e.pointer);
                     },
                     onPointerCancel: (e) {
                       if (_kolAcik) return;
                       if (_kontrol) _gonder(_dokunma.iptal(e.pointer));
+                      _zoomBirak(e.pointer);
                     },
-                    child: Stack(
+                    child: ClipRect(child: Stack(
                       children: [
                         Positioned.fill(
                           child: k == null
                               ? const Center(child: CircularProgressIndicator())
-                              : RawImage(key: const Key('oturum_kare'), image: k, fit: BoxFit.contain, filterQuality: FilterQuality.medium),
+                              : Transform(
+                                  transform: _zoom.matris,
+                                  transformHitTests: false,
+                                  child: RawImage(key: const Key('oturum_kare'), image: k, fit: BoxFit.contain, filterQuality: FilterQuality.medium),
+                                ),
                         ),
                         if (imlec != null)
                           Positioned(
@@ -519,8 +562,15 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
                             child: OyunKoluKatmani(key: const Key('dokunmatik_oyun_kolu_katmani'), onChanged: _kolDurumuDegisti),
                           ),
                       ],
-                    ),
-                  );
+                    )),
+                  )),
+                    if (_zoom.olcek > 1)
+                      Positioned(top: 8, right: 8, child: FilledButton(
+                        key: const Key('oturum_zoom_sifirla'),
+                        onPressed: () => setState(_zoom.sifirla),
+                        child: const Text('1x'),
+                      )),
+                  ]);
                 },
               ),
             ),
@@ -536,7 +586,13 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     if (k == null || x == null || y == null) return null;
     final olcek = (alan.width / k.width).clamp(0.0, alan.height / k.height);
     final g = k.width * olcek, yy = k.height * olcek;
-    return Offset((alan.width - g) / 2 + x * g, (alan.height - yy) / 2 + y * yy);
+    return _zoom.uygula(Offset((alan.width - g) / 2 + x * g, (alan.height - yy) / 2 + y * yy));
+  }
+
+  void _zoomBirak(int id) {
+    final onceki = _zoomParmaklar.length;
+    _zoomParmaklar.remove(id);
+    if (onceki == 2) setState(_zoom.bitir);
   }
 
   int _sonDugme = 0;
