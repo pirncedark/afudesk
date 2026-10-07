@@ -15,6 +15,7 @@ Son guncelleme: 2026-09-29 (koordinator oturumu)
 - DAVRANIS DEGISIKLIGI: pkarr kalktigi icin internet adresi degisen kayitli cihaz artik yalniz ayni agda (mDNS) kendiliginden bulunur;
   internetten bir kez kodla baglaninca kayit yenilenir (izleyici.rs ~632). 1.4.0 notu "internette adres aramasiyla bulunur" diyordu.
 - Yayin oncesi: rust/Cargo.toml ve app/pubspec.yaml hala 1.4.0 -> 1.5.0'a artir; notu docs/SURUM_NOTLARI_1.5.0.md hazir.
+- v1.7.0 yayin notu: `docs/SURUM_NOTLARI_1.7.0.md` (EN + TR); telefonda yakinlastirma ve otomatik guncelleme, v1.6.0 ile baglanti uyumlu.
 - v1.6.0 yayin notu: `docs/SURUM_NOTLARI_1.6.0.md` (EN + TR); iki taraf da v1.6.0 kullanmali, kayitli cihazlar korunur.
 
 ## Dogrulama (koordinator, sandbox disinda gercekten calistirildi)
