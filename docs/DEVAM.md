@@ -15,6 +15,7 @@ Son guncelleme: 2026-09-29 (koordinator oturumu)
 - DAVRANIS DEGISIKLIGI: pkarr kalktigi icin internet adresi degisen kayitli cihaz artik yalniz ayni agda (mDNS) kendiliginden bulunur;
   internetten bir kez kodla baglaninca kayit yenilenir (izleyici.rs ~632). 1.4.0 notu "internette adres aramasiyla bulunur" diyordu.
 - Yayin oncesi: rust/Cargo.toml ve app/pubspec.yaml hala 1.4.0 -> 1.5.0'a artir; notu docs/SURUM_NOTLARI_1.5.0.md hazir.
+- v1.6.0 yayin notu: `docs/SURUM_NOTLARI_1.6.0.md` (EN + TR); iki taraf da v1.6.0 kullanmali, kayitli cihazlar korunur.
 
 ## Dogrulama (koordinator, sandbox disinda gercekten calistirildi)
 - `cd rust && cargo test --release` -> 102-103/102-103 gecti (koordinator 102, AfuDesk terminali 103) (codex sandbox'inda 3 ekran/mDNS testi ortam yuzunden kalmisti). Cikti: `reports/cargo-test-release.txt`.
