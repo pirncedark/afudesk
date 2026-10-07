@@ -7,6 +7,7 @@ import 'package:file_selector/file_selector.dart' as fs;
 
 import 'src/rust/api/afudesk.dart' as rust;
 import 'oyun_kolu.dart';
+import 'guncelleme.dart';
 
 /// Host tarafı olayı.
 class HostOlay {
@@ -323,7 +324,13 @@ class RustMotor implements Motor {
   Future<Set<String>> cevrimiciKimlikler() async =>
       (await rust.cevrimiciKimlikler()).toSet();
 
-  static IzleyiciOlay _izleyiciOlayi(rust.IzleyiciOlayi o) => IzleyiciOlay(
+  static IzleyiciOlay _izleyiciOlayi(rust.IzleyiciOlayi o) {
+    if (o.tur == 'hata' &&
+        (o.metin.contains('sürümleri uyuşmuyor') ||
+         o.metin.contains("versions don't match"))) {
+      guncellemeKontrolIstegi.value += 1;
+    }
+    return IzleyiciOlay(
     o.tur,
     ad: o.ad,
     metin: o.metin,
@@ -344,6 +351,7 @@ class RustMotor implements Motor {
     kucuk: o.kucuk,
     rgba: o.rgba,
   );
+  }
 
   @override
   void kareCizildi() => rust.kareCizildi();

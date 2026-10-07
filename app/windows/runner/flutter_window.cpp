@@ -1,6 +1,8 @@
 #include "flutter_window.h"
 
 #include <optional>
+#include <flutter/method_channel.h>
+#include <flutter/standard_method_codec.h>
 
 #include "flutter/generated_plugin_registrant.h"
 
@@ -25,6 +27,16 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  flutter::MethodChannel<flutter::EncodableValue> update_channel(
+      flutter_controller_->engine()->messenger(), "afudesk/guncelle",
+      &flutter::StandardMethodCodec::GetInstance());
+  update_channel.SetMethodCallHandler([](const auto& call, auto result) {
+    if (call.method_name() == "surum") {
+      result->Success(flutter::EncodableValue(FLUTTER_VERSION));
+    } else {
+      result->NotImplemented();
+    }
+  });
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {

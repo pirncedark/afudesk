@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../bilesenler/afu_uygulamalar.dart';
+import '../bilesenler/guncelle_karti.dart';
 import '../motor.dart';
 import '../tema.dart';
 import 'baglan.dart';
@@ -189,6 +190,7 @@ class _AnaSayfaDurum extends State<AnaSayfa> {
             child: ListView(
               padding: const EdgeInsets.all(24),
               children: [
+                const GuncelleKarti(),
                 Row(
                   children: [
                     const Icon(
