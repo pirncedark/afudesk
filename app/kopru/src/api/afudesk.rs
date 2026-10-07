@@ -44,7 +44,10 @@ pub fn veri_klasoru_ayarla(yol: String) {
 }
 
 fn veri() -> Option<PathBuf> {
-    VERI.lock().unwrap().clone().or_else(guvenilen::varsayilan_klasor)
+    VERI.lock()
+        .unwrap()
+        .clone()
+        .or_else(guvenilen::varsayilan_klasor)
 }
 
 /// Kayıtlı/güvenilen cihaz (listede yalnız ad ve son görülme gösterilir).
@@ -53,9 +56,13 @@ pub struct KayitliCihaz {
     /// İç kimlik: yalnız Bağlan/Unut/Kaldır çağrılarında kullanılır, gösterilmez.
     pub kimlik: String,
     pub ad: String,
+    pub asil_ad: String,
+    pub acik: bool,
     /// Unix saniye.
     pub son_gorulme: i64,
 }
+
+static ACIK_KIMLIKLER: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 fn kayitlar() -> guvenilen::Kayitlar {
     veri()
@@ -69,7 +76,13 @@ pub fn kayitli_cihazlar() -> Vec<KayitliCihaz> {
     let mut v: Vec<_> = kayitlar()
         .izleyiciler
         .into_iter()
-        .map(|k| KayitliCihaz { kimlik: k.host_kimlik, ad: k.ad, son_gorulme: k.son_gorulme })
+        .map(|k| KayitliCihaz {
+            acik: ACIK_KIMLIKLER.lock().unwrap().contains(&k.host_kimlik),
+            kimlik: k.host_kimlik,
+            ad: k.etiket.unwrap_or_else(|| k.ad.clone()),
+            asil_ad: k.ad,
+            son_gorulme: k.son_gorulme,
+        })
         .collect();
     v.sort_by_key(|k| std::cmp::Reverse(k.son_gorulme));
     v
@@ -79,7 +92,9 @@ pub fn kayitli_cihazlar() -> Vec<KayitliCihaz> {
 #[flutter_rust_bridge::frb(sync)]
 pub fn kayitli_unut(kimlik: String) {
     if let Some(v) = veri() {
-        let _ = guvenilen::guncelle(&guvenilen::kayit_yolu(&v), |k| guvenilen::hostu_unut(k, &kimlik));
+        let _ = guvenilen::guncelle(&guvenilen::kayit_yolu(&v), |k| {
+            guvenilen::hostu_unut(k, &kimlik)
+        });
     }
 }
 
@@ -89,7 +104,13 @@ pub fn guvenilen_cihazlar() -> Vec<KayitliCihaz> {
     let mut v: Vec<_> = kayitlar()
         .hostlar
         .into_iter()
-        .map(|k| KayitliCihaz { kimlik: k.izleyici_kimlik, ad: k.ad, son_gorulme: k.son_gorulme })
+        .map(|k| KayitliCihaz {
+            acik: ACIK_KIMLIKLER.lock().unwrap().contains(&k.izleyici_kimlik),
+            kimlik: k.izleyici_kimlik,
+            ad: k.etiket.unwrap_or_else(|| k.ad.clone()),
+            asil_ad: k.ad,
+            son_gorulme: k.son_gorulme,
+        })
         .collect();
     v.sort_by_key(|k| std::cmp::Reverse(k.son_gorulme));
     v
@@ -99,7 +120,9 @@ pub fn guvenilen_cihazlar() -> Vec<KayitliCihaz> {
 #[flutter_rust_bridge::frb(sync)]
 pub fn guvenilen_kaldir(kimlik: String) {
     if let Some(v) = veri() {
-        let _ = guvenilen::guncelle(&guvenilen::kayit_yolu(&v), |k| guvenilen::hosttan_kaldir(k, &kimlik));
+        let _ = guvenilen::guncelle(&guvenilen::kayit_yolu(&v), |k| {
+            guvenilen::hosttan_kaldir(k, &kimlik)
+        });
     }
 }
 
@@ -168,19 +191,62 @@ pub struct GirdiOlayi {
 
 fn host_dto(o: HostOlay) -> HostOlayi {
     match o {
-        HostOlay::Hazir { kod, parola, adresler, erisim } => {
-            HostOlayi { tur: "hazir".into(), kod, parola, adresler, erisim, ..Default::default() }
-        }
-        HostOlay::Istek { ad, kayitli } => HostOlayi { tur: "istek".into(), ad, kayitli, ..Default::default() },
-        HostOlay::Baglandi { ad, izinler } => HostOlayi {
-            tur: "baglandi".into(), ad, kontrol: izinler.kontrol, pano: izinler.pano, dosya: izinler.dosya, oyun_kolu: izinler.oyun_kolu, ..Default::default()
+        HostOlay::Hazir {
+            kod,
+            parola,
+            adresler,
+            erisim,
+        } => HostOlayi {
+            tur: "hazir".into(),
+            kod,
+            parola,
+            adresler,
+            erisim,
+            ..Default::default()
         },
-        HostOlay::Koptu { sebep } => HostOlayi { tur: "koptu".into(), metin: sebep, ..Default::default() },
-        HostOlay::Hata(m) => HostOlayi { tur: "hata".into(), metin: m, ..Default::default() },
-        HostOlay::DosyaAlindi { ad, yol } => HostOlayi { tur: "dosya".into(), ad, yol, ..Default::default() },
-        HostOlay::Uyari(m) => HostOlayi { tur: "uyari".into(), metin: m, ..Default::default() },
+        HostOlay::Istek { ad, kayitli } => HostOlayi {
+            tur: "istek".into(),
+            ad,
+            kayitli,
+            ..Default::default()
+        },
+        HostOlay::Baglandi { ad, izinler } => HostOlayi {
+            tur: "baglandi".into(),
+            ad,
+            kontrol: izinler.kontrol,
+            pano: izinler.pano,
+            dosya: izinler.dosya,
+            oyun_kolu: izinler.oyun_kolu,
+            ..Default::default()
+        },
+        HostOlay::Koptu { sebep } => HostOlayi {
+            tur: "koptu".into(),
+            metin: sebep,
+            ..Default::default()
+        },
+        HostOlay::Hata(m) => HostOlayi {
+            tur: "hata".into(),
+            metin: m,
+            ..Default::default()
+        },
+        HostOlay::DosyaAlindi { ad, yol } => HostOlayi {
+            tur: "dosya".into(),
+            ad,
+            yol,
+            ..Default::default()
+        },
+        HostOlay::Uyari(m) => HostOlayi {
+            tur: "uyari".into(),
+            metin: m,
+            ..Default::default()
+        },
         // Yol değişimi (doğrudan/relay): arayüz şimdilik göstermiyor.
-        HostOlay::Yol { yol, adres } => HostOlayi { tur: "yol".into(), metin: yol, yol: adres, ..Default::default() },
+        HostOlay::Yol { yol, adres } => HostOlayi {
+            tur: "yol".into(),
+            metin: yol,
+            yol: adres,
+            ..Default::default()
+        },
         HostOlay::YenidenBekleniyor => HostOlayi {
             tur: "yeniden".into(),
             metin: "Bağlantı koptu; karşı taraf yeniden bağlanıyor…".into(),
@@ -207,33 +273,49 @@ pub fn surum() -> String {
 pub fn host_baslat(ad: String, parola: String, upnp: bool, olaylar: StreamSink<HostOlayi>) {
     host_durdur();
     let hata = |olaylar: &StreamSink<HostOlayi>, m: String| {
-        let _ = olaylar.add(HostOlayi { tur: "hata".into(), metin: m, ..Default::default() });
+        let _ = olaylar.add(HostOlayi {
+            tur: "hata".into(),
+            metin: m,
+            ..Default::default()
+        });
     };
     #[cfg(target_os = "android")]
     {
         let _ = (ad, parola, upnp);
-        hata(&olaylar, "Bu cihazdan bağlantı verme henüz desteklenmiyor; yalnız bağlanabilirsin.".into());
+        hata(
+            &olaylar,
+            "Bu cihazdan bağlantı verme henüz desteklenmiyor; yalnız bağlanabilirsin.".into(),
+        );
         return;
     }
     #[cfg(not(target_os = "android"))]
-    let fab: Arc<dyn afudesk_core::platform::Fabrika> = Arc::new(afudesk_core::platform::masaustu::Gercek);
+    let fab: Arc<dyn afudesk_core::platform::Fabrika> =
+        Arc::new(afudesk_core::platform::masaustu::Gercek);
     #[cfg(not(target_os = "android"))]
     {
-    let ayar = HostAyar { ad, upnp, parola, yalniz_yerel: false, dosya_klasoru: None, veri_klasoru: veri(), kod_acik: false };
-    let mut h = match rt().block_on(host::baslat(ayar, fab)) {
-        Ok(h) => h,
-        Err(e) => return hata(&olaylar, format!("Bağlantı açılamadı: {e}")),
-    };
-    let mut alici = std::mem::replace(&mut h.olaylar, tokio::sync::mpsc::channel(1).1);
-    let tx = h.komut_gonderici();
-    *HOST.lock().unwrap() = Some((h, tx));
-    rt().spawn(async move {
-        while let Some(o) = alici.recv().await {
-            if olaylar.add(host_dto(o)).is_err() {
-                break;
+        let ayar = HostAyar {
+            ad,
+            upnp,
+            parola,
+            yalniz_yerel: false,
+            dosya_klasoru: None,
+            veri_klasoru: veri(),
+            kod_acik: false,
+        };
+        let mut h = match rt().block_on(host::baslat(ayar, fab)) {
+            Ok(h) => h,
+            Err(e) => return hata(&olaylar, format!("Bağlantı açılamadı: {e}")),
+        };
+        let mut alici = std::mem::replace(&mut h.olaylar, tokio::sync::mpsc::channel(1).1);
+        let tx = h.komut_gonderici();
+        *HOST.lock().unwrap() = Some((h, tx));
+        rt().spawn(async move {
+            while let Some(o) = alici.recv().await {
+                if olaylar.add(host_dto(o)).is_err() {
+                    break;
+                }
             }
-        }
-    });
+        });
     }
 }
 
@@ -247,7 +329,12 @@ fn host_komut(k: HostKomut) {
 }
 
 pub fn host_kabul(kontrol: bool, pano: bool, dosya: bool, oyun_kolu: bool) {
-    host_komut(HostKomut::Kabul(Izinler { kontrol, pano, dosya, oyun_kolu }));
+    host_komut(HostKomut::Kabul(Izinler {
+        kontrol,
+        pano,
+        dosya,
+        oyun_kolu,
+    }));
 }
 
 pub fn host_red() {
@@ -276,7 +363,12 @@ pub fn host_durdur() {
 /// Koda bağlan. Her şey (hatalar dahil: `tur = "hata"`) `olaylar` akışından gelir.
 /// Not: FRB akış fonksiyonunun Err dönüşü akışa değil yakalanmamış istisnaya gider;
 /// bu yüzden hata olay olarak yazılır.
-pub fn izleyici_baglan(kod: String, parola: String, ad: String, olaylar: StreamSink<IzleyiciOlayi>) {
+pub fn izleyici_baglan(
+    kod: String,
+    parola: String,
+    ad: String,
+    olaylar: StreamSink<IzleyiciOlayi>,
+) {
     izleyici_kapat();
     IZLEYICI_KOL_IZNI.store(false, Ordering::SeqCst);
     IZLEYICI_KOL_SIRASI.store(0, Ordering::SeqCst);
@@ -288,7 +380,13 @@ pub fn izleyici_baglan(kod: String, parola: String, ad: String, olaylar: StreamS
     #[cfg(target_os = "android")]
     let pano: Option<Box<dyn afudesk_core::pano::Pano>> = None;
     let v = veri();
-    let sonuc = rt().block_on(izleyici::baglan_ayarli(&kod, &parola, &ad, pano, v.as_deref()));
+    let sonuc = rt().block_on(izleyici::baglan_ayarli(
+        &kod,
+        &parola,
+        &ad,
+        pano,
+        v.as_deref(),
+    ));
     izleyici_pompala(sonuc, olaylar);
 }
 
@@ -298,7 +396,11 @@ pub fn izleyici_kayitli_baglan(kimlik: String, ad: String, olaylar: StreamSink<I
     IZLEYICI_KOL_IZNI.store(false, Ordering::SeqCst);
     IZLEYICI_KOL_SIRASI.store(0, Ordering::SeqCst);
     let Some(v) = veri() else {
-        let _ = olaylar.add(IzleyiciOlayi { tur: "hata".into(), metin: "Kayıtlı cihazlar okunamadı.".into(), ..Default::default() });
+        let _ = olaylar.add(IzleyiciOlayi {
+            tur: "hata".into(),
+            metin: "Kayıtlı cihazlar okunamadı.".into(),
+            ..Default::default()
+        });
         return;
     };
     #[cfg(not(target_os = "android"))]
@@ -315,7 +417,11 @@ fn izleyici_pompala(sonuc: anyhow::Result<izleyici::Izleyici>, olaylar: StreamSi
     let mut iz = match sonuc {
         Ok(i) => i,
         Err(e) => {
-            let _ = olaylar.add(IzleyiciOlayi { tur: "hata".into(), metin: e.to_string(), ..Default::default() });
+            let _ = olaylar.add(IzleyiciOlayi {
+                tur: "hata".into(),
+                metin: e.to_string(),
+                ..Default::default()
+            });
             return;
         }
     };
@@ -326,35 +432,105 @@ fn izleyici_pompala(sonuc: anyhow::Result<izleyici::Izleyici>, olaylar: StreamSi
     rt().spawn(async move {
         while let Some(o) = alici.recv().await {
             let dto = match o {
-                IzleyiciOlay::OnayBekleniyor { karsi_ad } => IzleyiciOlayi { tur: "bekliyor".into(), ad: karsi_ad, ..Default::default() },
-                IzleyiciOlay::Kabul { izinler, genislik, yukseklik } => {
-                    IZLEYICI_KOL_IZNI.store(izinler.oyun_kolu, Ordering::SeqCst);
-                    IzleyiciOlayi { tur: "kabul".into(), kontrol: izinler.kontrol, pano: izinler.pano, dosya: izinler.dosya, oyun_kolu: izinler.oyun_kolu, genislik, yukseklik, ..Default::default() }
+                IzleyiciOlay::OnayBekleniyor { karsi_ad } => IzleyiciOlayi {
+                    tur: "bekliyor".into(),
+                    ad: karsi_ad,
+                    ..Default::default()
                 },
-                IzleyiciOlay::Kare { genislik, yukseklik, rgba } => {
+                IzleyiciOlay::Kabul {
+                    izinler,
+                    genislik,
+                    yukseklik,
+                } => {
+                    IZLEYICI_KOL_IZNI.store(izinler.oyun_kolu, Ordering::SeqCst);
+                    IzleyiciOlayi {
+                        tur: "kabul".into(),
+                        kontrol: izinler.kontrol,
+                        pano: izinler.pano,
+                        dosya: izinler.dosya,
+                        oyun_kolu: izinler.oyun_kolu,
+                        genislik,
+                        yukseklik,
+                        ..Default::default()
+                    }
+                }
+                IzleyiciOlay::Kare {
+                    genislik,
+                    yukseklik,
+                    rgba,
+                } => {
                     // Dart önceki kareyi çizmediyse bunu atla; sıradaki daha yeni olacak.
                     if !KARE_SERBEST.swap(false, Ordering::SeqCst) {
                         continue;
                     }
-                    IzleyiciOlayi { tur: "kare".into(), genislik, yukseklik, rgba, ..Default::default() }
+                    IzleyiciOlayi {
+                        tur: "kare".into(),
+                        genislik,
+                        yukseklik,
+                        rgba,
+                        ..Default::default()
+                    }
                 }
                 // metin: kullanılan yol ("doğrudan" | "relay").
-                IzleyiciOlay::Istatistik { rtt_ms, fps, gecikme_ms, yol } => {
-                    IzleyiciOlayi { tur: "istatistik".into(), rtt_ms, fps, gecikme_ms, metin: yol, ..Default::default() }
-                }
+                IzleyiciOlay::Istatistik {
+                    rtt_ms,
+                    fps,
+                    gecikme_ms,
+                    yol,
+                } => IzleyiciOlayi {
+                    tur: "istatistik".into(),
+                    rtt_ms,
+                    fps,
+                    gecikme_ms,
+                    metin: yol,
+                    ..Default::default()
+                },
                 IzleyiciOlay::YenidenBaglaniyor { deneme } => IzleyiciOlayi {
                     tur: "yeniden".into(),
                     metin: format!("Bağlantı koptu, yeniden bağlanılıyor… ({deneme})"),
                     ..Default::default()
                 },
-                IzleyiciOlay::Kaydedildi { ad } => IzleyiciOlayi { tur: "kaydedildi".into(), ad, ..Default::default() },
-                IzleyiciOlay::Koptu { sebep } => IzleyiciOlayi { tur: "koptu".into(), metin: sebep, ..Default::default() },
-                IzleyiciOlay::Pano(metin) => IzleyiciOlayi { tur: "pano".into(), metin, ..Default::default() },
-                IzleyiciOlay::Dosya { ad, gonderilen, toplam, bitti, hata } => IzleyiciOlayi {
-                    tur: "dosya".into(), ad, gonderilen, toplam, bitti, metin: hata, ..Default::default()
+                IzleyiciOlay::Kaydedildi { ad } => IzleyiciOlayi {
+                    tur: "kaydedildi".into(),
+                    ad,
+                    ..Default::default()
                 },
-                IzleyiciOlay::KolAlgilandi => IzleyiciOlayi { tur: "kol".into(), ..Default::default() },
-                IzleyiciOlay::Titresim { slot, buyuk, kucuk } => IzleyiciOlayi { tur: "titresim".into(), slot, buyuk, kucuk, ..Default::default() },
+                IzleyiciOlay::Koptu { sebep } => IzleyiciOlayi {
+                    tur: "koptu".into(),
+                    metin: sebep,
+                    ..Default::default()
+                },
+                IzleyiciOlay::Pano(metin) => IzleyiciOlayi {
+                    tur: "pano".into(),
+                    metin,
+                    ..Default::default()
+                },
+                IzleyiciOlay::Dosya {
+                    ad,
+                    gonderilen,
+                    toplam,
+                    bitti,
+                    hata,
+                } => IzleyiciOlayi {
+                    tur: "dosya".into(),
+                    ad,
+                    gonderilen,
+                    toplam,
+                    bitti,
+                    metin: hata,
+                    ..Default::default()
+                },
+                IzleyiciOlay::KolAlgilandi => IzleyiciOlayi {
+                    tur: "kol".into(),
+                    ..Default::default()
+                },
+                IzleyiciOlay::Titresim { slot, buyuk, kucuk } => IzleyiciOlayi {
+                    tur: "titresim".into(),
+                    slot,
+                    buyuk,
+                    kucuk,
+                    ..Default::default()
+                },
             };
             if olaylar.add(dto).is_err() {
                 break;
@@ -370,9 +546,14 @@ pub fn kare_cizildi() {
 }
 
 pub fn izleyici_girdi(g: GirdiOlayi) {
-    let Some(iz) = IZLEYICI.lock().unwrap().clone() else { return };
+    let Some(iz) = IZLEYICI.lock().unwrap().clone() else {
+        return;
+    };
     let girdi = match g.tur.as_str() {
-        "konum" => Girdi::FareKonum { x: g.x as f32, y: g.y as f32 },
+        "konum" => Girdi::FareKonum {
+            x: g.x as f32,
+            y: g.y as f32,
+        },
         "fare" => Girdi::FareTus {
             tus: match g.ad.as_str() {
                 "sag" => FareTusu::Sag,
@@ -382,7 +563,11 @@ pub fn izleyici_girdi(g: GirdiOlayi) {
             basili: g.basili,
         },
         "kaydir" => Girdi::Kaydir { dx: g.dx, dy: g.dy },
-        "tus" => Girdi::Tus { hid: g.hid, ad: g.ad, basili: g.basili },
+        "tus" => Girdi::Tus {
+            hid: g.hid,
+            ad: g.ad,
+            basili: g.basili,
+        },
         "metin" => Girdi::Metin(g.metin),
         _ => return,
     };
@@ -390,20 +575,44 @@ pub fn izleyici_girdi(g: GirdiOlayi) {
 }
 
 /// Dart'tan gelen oyun kolu durumunu mevcut datagram yoluna verir; sıra numarasını Rust atar.
-pub fn izleyici_kol(slot: u8, dugmeler: u16, sol_x: i16, sol_y: i16, sag_x: i16, sag_y: i16, sol_tetik: u8, sag_tetik: u8) {
-    if !IZLEYICI_KOL_IZNI.load(Ordering::SeqCst) { return; }
-    let Some(iz) = IZLEYICI.lock().unwrap().clone() else { return };
+pub fn izleyici_kol(
+    slot: u8,
+    dugmeler: u16,
+    sol_x: i16,
+    sol_y: i16,
+    sag_x: i16,
+    sag_y: i16,
+    sol_tetik: u8,
+    sag_tetik: u8,
+) {
+    if !IZLEYICI_KOL_IZNI.load(Ordering::SeqCst) {
+        return;
+    }
+    let Some(iz) = IZLEYICI.lock().unwrap().clone() else {
+        return;
+    };
     let sira = IZLEYICI_KOL_SIRASI.fetch_add(1, Ordering::SeqCst);
     rt().spawn(async move {
         iz.gonder(Girdi::Kol(afudesk_core::protokol::KolDurumu {
-            slot, sira, dugmeler, sol_x, sol_y, sag_x, sag_y, sol_tetik, sag_tetik,
-        })).await;
+            slot,
+            sira,
+            dugmeler,
+            sol_x,
+            sol_y,
+            sag_x,
+            sag_y,
+            sol_tetik,
+            sag_tetik,
+        }))
+        .await;
     });
 }
 
 /// Dosyayı karşı tarafa gönderir; ilerleme/sonuç izleyici akışına `tur = "dosya"` olarak gelir.
 pub fn izleyici_dosya_gonder(yol: String) {
-    let Some(iz) = IZLEYICI.lock().unwrap().clone() else { return };
+    let Some(iz) = IZLEYICI.lock().unwrap().clone() else {
+        return;
+    };
     let _g = rt().enter();
     // Görev arka planda sürer; sonuç olay olarak gelir.
     drop(iz.dosya_gonder(yol));
@@ -418,4 +627,27 @@ pub fn izleyici_kapat() {
 #[flutter_rust_bridge::frb(init)]
 pub fn init_app() {
     flutter_rust_bridge::setup_default_user_utils();
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn kayitli_yeniden_adla(kimlik: String, ad: String) {
+    if let Some(v) = veri() {
+        let _ = guvenilen::guncelle(&guvenilen::kayit_yolu(&v), |k| {
+            guvenilen::etiketle(k, &kimlik, Some(ad), false)
+        });
+    }
+}
+#[flutter_rust_bridge::frb(sync)]
+pub fn guvenilen_yeniden_adla(kimlik: String, ad: String) {
+    if let Some(v) = veri() {
+        let _ = guvenilen::guncelle(&guvenilen::kayit_yolu(&v), |k| {
+            guvenilen::etiketle(k, &kimlik, Some(ad), true)
+        });
+    }
+}
+pub async fn cevrimici_kimlikler() -> Vec<String> {
+    let kimlik = HOST.lock().unwrap().as_ref().map(|(h, _)| h.kimlik());
+    let kimlikler = afudesk_core::ag::cevrimici_kimlikler(kimlik).await;
+    *ACIK_KIMLIKLER.lock().unwrap() = kimlikler.clone();
+    kimlikler
 }

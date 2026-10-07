@@ -25,6 +25,8 @@ pub struct HostKaydi {
     /// İzleyicinin uç kimliği (açık anahtar, hex).
     pub izleyici_kimlik: String,
     pub ad: String,
+    #[serde(default)]
+    pub etiket: Option<String>,
     pub jeton_sha256: String,
     pub eklenme: i64,
     pub son_gorulme: i64,
@@ -36,6 +38,8 @@ pub struct IzleyiciKaydi {
     /// Host'un uç kimliği (açık anahtar, hex); bağlantıda el sıkışmada doğrulanır.
     pub host_kimlik: String,
     pub ad: String,
+    #[serde(default)]
+    pub etiket: Option<String>,
     pub son_adresler: Vec<String>,
     #[serde(default)]
     pub relaylar: Vec<String>,
@@ -73,8 +77,16 @@ pub fn yeni_jeton() -> String {
 }
 
 /// Host: izleyiciyi ekler (varsa üzerine yazar).
-pub fn hosta_ekle(k: &mut Kayitlar, kayit: HostKaydi) {
-    k.hostlar.retain(|e| e.izleyici_kimlik != kayit.izleyici_kimlik);
+pub fn hosta_ekle(k: &mut Kayitlar, mut kayit: HostKaydi) {
+    if kayit.etiket.is_none() {
+        kayit.etiket = k
+            .hostlar
+            .iter()
+            .find(|e| e.izleyici_kimlik == kayit.izleyici_kimlik)
+            .and_then(|e| e.etiket.clone());
+    }
+    k.hostlar
+        .retain(|e| e.izleyici_kimlik != kayit.izleyici_kimlik);
     k.hostlar.push(kayit);
 }
 
@@ -86,7 +98,14 @@ pub fn hosttan_kaldir(k: &mut Kayitlar, izleyici_kimlik: &str) -> bool {
 }
 
 /// İzleyici: host kaydını ekler (varsa üzerine yazar).
-pub fn izleyiciye_ekle(k: &mut Kayitlar, kayit: IzleyiciKaydi) {
+pub fn izleyiciye_ekle(k: &mut Kayitlar, mut kayit: IzleyiciKaydi) {
+    if kayit.etiket.is_none() {
+        kayit.etiket = k
+            .izleyiciler
+            .iter()
+            .find(|e| e.host_kimlik == kayit.host_kimlik)
+            .and_then(|e| e.etiket.clone());
+    }
     k.izleyiciler.retain(|e| e.host_kimlik != kayit.host_kimlik);
     k.izleyiciler.push(kayit);
 }
@@ -96,6 +115,29 @@ pub fn hostu_unut(k: &mut Kayitlar, host_kimlik: &str) -> bool {
     let once = k.izleyiciler.len();
     k.izleyiciler.retain(|e| e.host_kimlik != host_kimlik);
     once != k.izleyiciler.len()
+}
+
+pub fn etiketle(k: &mut Kayitlar, kimlik: &str, etiket: Option<String>, host: bool) -> bool {
+    let etiket = etiket
+        .map(|s| s.trim().chars().take(40).collect::<String>())
+        .filter(|s| !s.is_empty());
+    let hedef = if host {
+        k.hostlar
+            .iter_mut()
+            .find(|e| e.izleyici_kimlik == kimlik)
+            .map(|e| &mut e.etiket)
+    } else {
+        k.izleyiciler
+            .iter_mut()
+            .find(|e| e.host_kimlik == kimlik)
+            .map(|e| &mut e.etiket)
+    };
+    if let Some(e) = hedef {
+        *e = etiket;
+        true
+    } else {
+        false
+    }
 }
 
 fn hex(b: &[u8]) -> String {
@@ -121,7 +163,10 @@ pub fn atomik_yaz(yol: &Path, veri: &[u8]) -> std::io::Result<()> {
 }
 
 pub fn yaz(yol: &Path, k: &Kayitlar) -> std::io::Result<()> {
-    atomik_yaz(yol, &serde_json::to_vec_pretty(k).map_err(std::io::Error::other)?)
+    atomik_yaz(
+        yol,
+        &serde_json::to_vec_pretty(k).map_err(std::io::Error::other)?,
+    )
 }
 
 /// Aynı süreçte host ve izleyici aynı dosyayı değiştirebilir: oku-değiştir-yaz tek kilitle.
@@ -168,6 +213,7 @@ pub mod testler {
     fn ornek() -> Kayitlar {
         Kayitlar {
             hostlar: vec![HostKaydi {
+                etiket: None,
                 izleyici_kimlik: "aa".into(),
                 ad: "Telefon".into(),
                 jeton_sha256: jeton_ozeti("gizli"),
@@ -175,6 +221,7 @@ pub mod testler {
                 son_gorulme: 2,
             }],
             izleyiciler: vec![IzleyiciKaydi {
+                etiket: None,
                 host_kimlik: "bb".into(),
                 ad: "Laptop".into(),
                 son_adresler: vec!["127.0.0.1:1".into()],
@@ -183,6 +230,42 @@ pub mod testler {
                 son_gorulme: 3,
             }],
         }
+    }
+
+    #[test]
+    fn eski_json_etiketsiz_okunur() {
+        let mut json = serde_json::to_value(ornek()).unwrap();
+        json["hostlar"][0].as_object_mut().unwrap().remove("etiket");
+        json["izleyiciler"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("etiket");
+        assert_eq!(serde_json::from_value::<Kayitlar>(json).unwrap(), ornek());
+    }
+
+    #[test]
+    fn etiket_kaydedilir_silinir_ve_yeniden_baglaninca_korunur() {
+        let mut k = ornek();
+        assert!(etiketle(&mut k, "aa", Some(" Telefonum ".into()), true));
+        assert!(etiketle(&mut k, "bb", Some("Bilgisayarım".into()), false));
+        hosta_ekle(&mut k, ornek().hostlar.remove(0));
+        izleyiciye_ekle(&mut k, ornek().izleyiciler.remove(0));
+        assert_eq!(k.hostlar[0].etiket.as_deref(), Some("Telefonum"));
+        assert_eq!(k.izleyiciler[0].etiket.as_deref(), Some("Bilgisayarım"));
+        let p = gecici_yol("etiket").join(KAYIT_DOSYASI);
+        yaz(&p, &k).unwrap();
+        assert_eq!(oku(&p), k);
+        assert!(etiketle(&mut k, "aa", Some(" ".into()), true));
+        assert!(etiketle(&mut k, "bb", None, false));
+        assert_eq!(k.hostlar[0].etiket, None);
+        assert_eq!(k.izleyiciler[0].etiket, None);
+        assert!(!etiketle(&mut k, "yok", None, false));
+        etiketle(&mut k, "bb", Some("ü".repeat(45)), false);
+        assert_eq!(
+            k.izleyiciler[0].etiket.as_ref().unwrap().chars().count(),
+            40
+        );
+        let _ = fs::remove_dir_all(p.parent().unwrap());
     }
 
     #[test]
@@ -230,6 +313,7 @@ pub mod testler {
                         hosta_ekle(
                             k,
                             HostKaydi {
+                                etiket: None,
                                 izleyici_kimlik: format!("iz{i}"),
                                 ad: String::new(),
                                 jeton_sha256: String::new(),
