@@ -1,6 +1,11 @@
 package com.afu.afudesk
 
 import android.os.Build
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import androidx.core.content.FileProvider
+import java.io.File
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.view.InputDevice
@@ -15,9 +20,28 @@ class MainActivity : FlutterActivity() {
     private val pressed = mutableSetOf<String>()
     private var axes = floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f)
     private var kolVibrator: Vibrator? = null
+    private var pendingApk: File? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "afudesk/guncelle").setMethodCallHandler { call, result ->
+            try {
+                when (call.method) {
+                    "surum" -> result.success(packageManager.getPackageInfo(packageName, 0).versionName)
+                    "klasor" -> result.success(File(cacheDir, "updates").apply { mkdirs() }.absolutePath)
+                    "kur" -> {
+                        val apk = File(call.arguments as String).canonicalFile
+                        require(apk.parentFile == File(cacheDir, "updates").canonicalFile && apk.name == "AfuDesk.apk" && apk.exists())
+                        pendingApk = apk
+                        if (Build.VERSION.SDK_INT >= 26 && !packageManager.canRequestPackageInstalls()) {
+                            startActivityForResult(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")), 804)
+                        } else installUpdate(apk)
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            } catch (_: Exception) { result.error("update", "Güncelleme kurulamadı. Yeniden dene.", null) }
+        }
         channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "afudesk/kol")
         channel.setMethodCallHandler { call, result ->
             if (call.method == "vibrate") {
@@ -32,6 +56,26 @@ class MainActivity : FlutterActivity() {
                 // Kalıcı cihaz kimliği ve kayıtlı cihazlar (uygulamaya özel klasör).
                 result.success(filesDir.absolutePath)
             } else result.notImplemented()
+        }
+    }
+
+    private fun installUpdate(apk: File) {
+        val uri = FileProvider.getUriForFile(this, "$packageName.updates", apk)
+        startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+        pendingApk = null
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 804) {
+            val apk = pendingApk
+            pendingApk = null
+            if (apk != null && Build.VERSION.SDK_INT >= 26 && packageManager.canRequestPackageInstalls()) {
+                try { installUpdate(apk) } catch (_: Exception) {
+                    android.widget.Toast.makeText(this, "Güncelleme kurulamadı. Yeniden dene.", android.widget.Toast.LENGTH_LONG).show()
+                }
+            } else android.widget.Toast.makeText(this, "Kurulum izni verilmedi. Güncelle düğmesine yeniden dokun.", android.widget.Toast.LENGTH_LONG).show()
         }
     }
 
