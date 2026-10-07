@@ -70,6 +70,7 @@ dependencies = [
  "chacha20poly1305",
  "dirs",
  "enigo",
+ "futures-lite",
  "gilrs",
  "image",
  "iroh",

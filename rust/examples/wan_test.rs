@@ -81,7 +81,7 @@ impl Enjektor for KayitliEnjektor {
                        "beklenen": [beklenen.0, beklenen.1], "gercek": [gercek.0, gercek.1],
                        "uygulandi": r.is_ok()})
             }
-            Girdi::Tus { ad, basili } => {
+            Girdi::Tus { ad, basili, .. } => {
                 json!({"t": simdi_ms(), "tur": "tus", "ad": ad, "basili": basili,
                        "os_shift_basili": os::shift_basili(), "uygulandi": r.is_ok()})
             }
@@ -262,10 +262,10 @@ async fn izle_kipi(klasor: PathBuf, sure: Duration) -> Result<()> {
                 i.gonder(Girdi::FareKonum { x: 0.62, y: 0.55 }).await;
                 adim = 2;
             } else if adim == 2 && gecen > Duration::from_secs(6) {
-                i.gonder(Girdi::Tus { ad: "Shift".into(), basili: true }).await;
+                i.gonder(Girdi::Tus { hid: 0x000700e1, ad: "Shift".into(), basili: true }).await;
                 adim = 3;
             } else if adim == 3 && gecen > Duration::from_millis(6_400) {
-                i.gonder(Girdi::Tus { ad: "Shift".into(), basili: false }).await;
+                i.gonder(Girdi::Tus { hid: 0x000700e1, ad: "Shift".into(), basili: false }).await;
                 adim = 4;
             } else if adim == 4 && gecen > Duration::from_secs(10) {
                 olaylar.push(json!({"t": simdi_ms(), "tur": "yeniden_baglan_istendi"}));

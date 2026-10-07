@@ -627,6 +627,7 @@ impl Gozetmen {
                     Some(Kontrol::KayitJetonu { host_ad, adresler, relaylar, jeton: eslesme }) => {
                         if let Some(v) = &self.veri {
                             let kayit = guvenilen::IzleyiciKaydi {
+                                etiket: None,
                                 host_kimlik: ag::kimlik_metni(c.remote_id()),
                                 ad: host_ad.chars().filter(|c| !c.is_control()).take(40).collect(),
                                 son_adresler: adresler,

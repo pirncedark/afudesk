@@ -14,7 +14,9 @@ use iroh::{
 };
 use std::{net::SocketAddr, time::Duration};
 
-pub use iroh::endpoint::{Connection as Baglanti, RecvStream as AlAkisi, SendStream as GonderAkisi};
+pub use iroh::endpoint::{
+    Connection as Baglanti, RecvStream as AlAkisi, SendStream as GonderAkisi,
+};
 
 /// Doğrudan yolu bilerek kapatır (yalnız relay): TEST-2 ve sorun ayıklama için.
 pub const SADECE_RELAY_ORTAM: &str = "AFUDESK_SADECE_RELAY";
@@ -102,17 +104,14 @@ pub async fn uc_nokta_kimlikli(
     if let Some(g) = gizli {
         b = b.secret_key(g);
     }
-    if mdns_acik(kurulum) {
-        b = b.address_lookup(
-            iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVISI),
-        );
-    }
+    let kesif_acik = mdns_acik(kurulum);
     if !portmapper || kurulum != Kurulum::Internet {
         b = b.portmapper_config(iroh::endpoint::PortmapperConfig::Disabled);
     }
     if kurulum != Kurulum::YalnizYerel {
         if kurulum == Kurulum::Internet {
-            if let Some(ip) = ortam(BAGLA_IP_ORTAM).and_then(|v| v.parse::<std::net::IpAddr>().ok()) {
+            if let Some(ip) = ortam(BAGLA_IP_ORTAM).and_then(|v| v.parse::<std::net::IpAddr>().ok())
+            {
                 b = b.clear_ip_transports().bind_addr(SocketAddr::new(ip, 0))?;
             }
         }
@@ -124,7 +123,41 @@ pub async fn uc_nokta_kimlikli(
             b = b.path_selector(std::sync::Arc::new(test_secici::GenelYolSecici));
         }
     }
-    b.bind().await.context("Ağ başlatılamadı.")
+    let endpoint = b.bind().await.context("Ağ başlatılamadı.")?;
+    if kesif_acik {
+        use futures_lite::StreamExt;
+        let mdns = std::sync::Arc::new(
+            iroh_mdns_address_lookup::MdnsAddressLookup::builder()
+                .service_name(MDNS_SERVISI)
+                .build(endpoint.id())?,
+        );
+        let mut olaylar = mdns.subscribe().await;
+        let kimlikler =
+            std::sync::Arc::new(std::sync::Mutex::new(std::collections::BTreeSet::new()));
+        kesifler().lock().unwrap().insert(
+            kimlik_metni(endpoint.id()),
+            (std::sync::Arc::downgrade(&mdns), kimlikler.clone()),
+        );
+        endpoint.address_lookup()?.add(mdns);
+        tokio::spawn(async move {
+            while let Some(olay) = olaylar.next().await {
+                use iroh_mdns_address_lookup::DiscoveryEvent;
+                match olay {
+                    DiscoveryEvent::Discovered { endpoint_info, .. } => {
+                        kimlikler
+                            .lock()
+                            .unwrap()
+                            .insert(kimlik_metni(endpoint_info.endpoint_id));
+                    }
+                    DiscoveryEvent::Expired { endpoint_id } => {
+                        kimlikler.lock().unwrap().remove(&kimlik_metni(endpoint_id));
+                    }
+                    _ => {}
+                }
+            }
+        });
+    }
+    Ok(endpoint)
 }
 
 /// `None`: varsayılan relay (yalnız yedek yol). `Some(boş)`: relay kapalı. `Some(liste)`: özel relay'ler.
@@ -168,7 +201,10 @@ fn mdns_acik(kurulum: Kurulum) -> bool {
 }
 
 fn ortam(ad: &str) -> Option<String> {
-    std::env::var(ad).ok().map(|v| v.trim().to_owned()).filter(|v| !v.is_empty())
+    std::env::var(ad)
+        .ok()
+        .map(|v| v.trim().to_owned())
+        .filter(|v| !v.is_empty())
 }
 
 /// Adres genel internette mi (özel ağ, döngü, bağlantı-yerel, CGNAT değil)?
@@ -276,7 +312,9 @@ pub const SURUM_FARKLI: &str = "AfuDesk sürümleri uyuşmuyor; iki taraf da gü
 /// TLS "no_application_protocol" (alert 120): karşı taraf başka protokol sürümünde.
 fn alpn_uyusmadi(hata: &str) -> bool {
     let h = hata.to_lowercase();
-    h.contains("error 120") || h.contains("no_application_protocol") || h.contains("no application protocol")
+    h.contains("error 120")
+        || h.contains("no_application_protocol")
+        || h.contains("no application protocol")
 }
 
 /// Kullanıcıya gösterilen bağlantı hatası: teknik ayrıntı (adres, iç hata) içermez;
@@ -328,7 +366,11 @@ impl Yol {
 pub fn secili_yol(c: &Baglanti) -> (Yol, Duration) {
     for p in c.paths().iter() {
         if p.is_selected() {
-            let y = if p.is_relay() { Yol::Relay } else { Yol::Dogrudan };
+            let y = if p.is_relay() {
+                Yol::Relay
+            } else {
+                Yol::Dogrudan
+            };
             return (y, p.rtt());
         }
     }
@@ -410,7 +452,9 @@ mod testler {
         drop(h);
         let ep = uc_nokta(Kurulum::YalnizYerel, false).await.unwrap();
         let hedef = hedef_adres(&kimlik, &["127.0.0.1:9".into()], &[]).unwrap();
-        let e = baglan(&ep, hedef, Duration::from_secs(2)).await.unwrap_err();
+        let e = baglan(&ep, hedef, Duration::from_secs(2))
+            .await
+            .unwrap_err();
         assert_eq!(e.to_string(), ULASILAMADI);
         assert!(hedef_adres("bozuk", &[], &[]).is_err());
     }
@@ -435,7 +479,9 @@ mod testler {
         let adres: Vec<String> = eski.bound_sockets().iter().map(|a| a.to_string()).collect();
         let hedef = hedef_adres(&kimlik_metni(eski.id()), &adres, &[]).unwrap();
         let ep = uc_nokta(Kurulum::YalnizYerel, false).await.unwrap();
-        let hata = baglan(&ep, hedef, Duration::from_secs(5)).await.unwrap_err();
+        let hata = baglan(&ep, hedef, Duration::from_secs(5))
+            .await
+            .unwrap_err();
         assert_eq!(hata.to_string(), SURUM_FARKLI);
     }
 
@@ -470,11 +516,37 @@ mod testler {
         });
         let v = uc().await;
         let yalniz_kimlik = EndpointAddr::from_parts(h.id(), std::iter::empty());
-        let c = baglan(&v, yalniz_kimlik, Duration::from_secs(20)).await.unwrap();
+        let c = baglan(&v, yalniz_kimlik, Duration::from_secs(20))
+            .await
+            .unwrap();
         let (mut w, mut r) = c.open_bi().await.unwrap();
         w.write_all(b"yerel").await.unwrap();
         w.finish().unwrap();
         assert_eq!(r.read_to_end(64).await.unwrap(), b"yerel");
+    }
+
+    #[tokio::test]
+    async fn cevrimici_sorgu_calisan_ucun_kesfini_kullanir() {
+        let endpoint = uc_nokta(Kurulum::Internet, false).await.unwrap();
+        let kimlik = kimlik_metni(endpoint.id());
+        {
+            let kesif = kesifler().lock().unwrap();
+            let (_, kimlikler) = kesif.get(&kimlik).unwrap();
+            kimlikler
+                .lock()
+                .unwrap()
+                .extend(["bb".to_owned(), "aa".to_owned()]);
+        }
+        assert_eq!(
+            cevrimici_kimlikler(Some(kimlik.clone())).await,
+            vec!["aa", "bb"]
+        );
+        {
+            let kesif = kesifler().lock().unwrap();
+            kesif.get(&kimlik).unwrap().1.lock().unwrap().remove("aa");
+        }
+        assert_eq!(cevrimici_kimlikler(Some(kimlik)).await, vec!["bb"]);
+        endpoint.close().await;
     }
 
     #[test]
@@ -487,7 +559,16 @@ mod testler {
 
     #[test]
     fn genel_adres_ayrimi() {
-        for a in ["192.168.0.110", "10.1.2.3", "172.28.96.1", "127.0.0.1", "169.254.1.1", "100.100.1.1", "::1", "fe80::1"] {
+        for a in [
+            "192.168.0.110",
+            "10.1.2.3",
+            "172.28.96.1",
+            "127.0.0.1",
+            "169.254.1.1",
+            "100.100.1.1",
+            "::1",
+            "fe80::1",
+        ] {
             assert!(!genel_mi(a.parse().unwrap()), "{a}");
         }
         for a in ["31.223.3.218", "8.8.8.8", "100.128.0.1", "2a02:e0::1"] {
@@ -505,7 +586,8 @@ mod testler {
 
     #[test]
     fn relay_listesi_ayristirilir_ve_bos_liste_merkeze_dusmez() {
-        let relays = relay_url_listesi(" https://relay.example./,https://relay2.example./ ").unwrap();
+        let relays =
+            relay_url_listesi(" https://relay.example./,https://relay2.example./ ").unwrap();
         assert_eq!(relays.len(), 2);
         assert!(relay_url_listesi("").unwrap().is_empty());
         assert!(relay_url_listesi("bozuk").is_err());
@@ -514,7 +596,13 @@ mod testler {
         assert_eq!(relay_modu(Some(&relays)), RelayMode::custom(relays.clone()));
         assert_eq!(relay_secimi(None).unwrap(), None);
         assert_eq!(relay_secimi(Some("KAPALI")).unwrap(), Some(vec![]));
-        assert_eq!(relay_secimi(Some("https://relay.example./")).unwrap().unwrap().len(), 1);
+        assert_eq!(
+            relay_secimi(Some("https://relay.example./"))
+                .unwrap()
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     #[tokio::test]
@@ -541,4 +629,55 @@ mod testler {
         let (_, relaylar) = yayinlanacak(&ep, &ek);
         assert_eq!(relaylar, vec!["https://relay.example./"]);
     }
+}
+
+/// Çalışan uçların keşif durumu; zayıf referans kapanan uçları yaşatmaz.
+type Kesif = (
+    std::sync::Weak<iroh_mdns_address_lookup::MdnsAddressLookup>,
+    std::sync::Arc<std::sync::Mutex<std::collections::BTreeSet<String>>>,
+);
+fn kesifler() -> &'static std::sync::Mutex<std::collections::HashMap<String, Kesif>> {
+    static KESIF: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, Kesif>>> =
+        std::sync::OnceLock::new();
+    KESIF.get_or_init(Default::default)
+}
+pub async fn cevrimici_kimlikler(host: Option<String>) -> Vec<String> {
+    {
+        let mut kesif = kesifler().lock().unwrap();
+        kesif.retain(|_, (mdns, _)| mdns.strong_count() > 0);
+        if let Some((_, kimlikler)) = host.as_ref().and_then(|h| kesif.get(h)) {
+            return kimlikler.lock().unwrap().iter().cloned().collect();
+        }
+    }
+    use futures_lite::StreamExt;
+    use iroh_mdns_address_lookup::{DiscoveryEvent, MdnsAddressLookup};
+    let Ok(endpoint) = Endpoint::builder(presets::Minimal)
+        .relay_mode(RelayMode::Disabled)
+        .bind()
+        .await
+    else {
+        return vec![];
+    };
+    let sonuc = async {
+        let mdns = MdnsAddressLookup::builder().service_name(MDNS_SERVISI).advertise(false).build(endpoint.id()).ok()?;
+        let mut olaylar = mdns.subscribe().await;
+        endpoint.address_lookup().ok()?.add(mdns.clone());
+        let mut kimlikler = std::collections::BTreeSet::new();
+        let sure = tokio::time::sleep(Duration::from_secs(2));
+        tokio::pin!(sure);
+        loop {
+            tokio::select! {
+                _ = &mut sure => break,
+                olay = olaylar.next() => match olay {
+                    Some(DiscoveryEvent::Discovered { endpoint_info, .. }) => { kimlikler.insert(kimlik_metni(endpoint_info.endpoint_id)); }
+                    Some(DiscoveryEvent::Expired { endpoint_id }) => { kimlikler.remove(&kimlik_metni(endpoint_id)); }
+                    None => break,
+                    _ => {}
+                }
+            }
+        }
+        Some(kimlikler.into_iter().collect())
+    }.await.unwrap_or_default();
+    endpoint.close().await;
+    sonuc
 }

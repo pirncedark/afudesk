@@ -8,7 +8,7 @@ Son guncelleme: 2026-09-29 (koordinator oturumu)
   E3 relay/genel adres yoksa uyari, E4 mDNS YalnizYerel disinda acik, E5 10 haneli parola + 3 hatali denemede yeni kod,
   E6 kod ekrani kapaninca YALNIZ eski kod gecersiz (ayri `kod_kapandi` sinyali; acik oturum/bekleyen onay kesilmez),
   E7 devam jetonu 120 sn, E8 akis tavani 64 (3 dosya aktarimi + goruntu cakisinca kare dusururdu),
-  E9 SABIT protokol surumu ALPN `afudesk/5` (uygulama surumune bagli degil); surum uyusmazsa acik "iki taraf da guncellemeli" mesaji.
+  E9 SABIT protokol surumu ALPN `afudesk/6` (uygulama surumune bagli degil); surum uyusmazsa acik "iki taraf da guncellemeli" mesaji.
 - Codex'in 3 hatasini (relay kapali, E6 oturumu kesiyordu, E8/E9) AfuDesk terminali duzeltti; hepsi 868334e icinde.
 - DIKKAT: eski surumlerle baglanti artik kurulmaz -> surum notunda "iki cihaz da guncellenmeli" yaz.
 

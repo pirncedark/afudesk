@@ -34,13 +34,18 @@ class SahteMotor implements Motor {
     cagrilar.add('arkaPlan');
     _durumuIzle();
   }
+
   @override
   Stream<HostOlay> get hostOlaylari => host.stream;
   @override
-  Stream<IzleyiciOlay> kayitliBaglan({required String kimlik, required String ad}) {
+  Stream<IzleyiciOlay> kayitliBaglan({
+    required String kimlik,
+    required String ad,
+  }) {
     cagrilar.add('kayitliBaglan:$kimlik');
     return izleyici.stream;
   }
+
   @override
   List<KayitliCihaz> kayitliCihazlar() => List.of(kayitli);
   @override
@@ -48,6 +53,7 @@ class SahteMotor implements Motor {
     cagrilar.add('unut:$kimlik');
     kayitli.removeWhere((k) => k.kimlik == kimlik);
   }
+
   @override
   List<KayitliCihaz> guvenilenCihazlar() => List.of(guvenilen);
   @override
@@ -55,6 +61,33 @@ class SahteMotor implements Motor {
     cagrilar.add('kaldir:$kimlik');
     guvenilen.removeWhere((k) => k.kimlik == kimlik);
   }
+
+  final acikKimlikler = <String>{};
+  @override
+  Future<Set<String>> cevrimiciKimlikler() async => {
+    ...acikKimlikler,
+    ...kayitli.where((c) => c.acik).map((c) => c.kimlik),
+    ...guvenilen.where((c) => c.acik).map((c) => c.kimlik),
+  };
+  void _adla(List<KayitliCihaz> liste, String kimlik, String ad) {
+    final i = liste.indexWhere((c) => c.kimlik == kimlik);
+    if (i < 0) return;
+    final c = liste[i];
+    liste[i] = KayitliCihaz(
+      c.kimlik,
+      ad.trim().isEmpty ? c.asilAd : ad.trim(),
+      c.sonGorulme,
+      asilAd: c.asilAd,
+      acik: c.acik,
+    );
+  }
+
+  @override
+  void kayitliYenidenAdla(String kimlik, String ad) =>
+      _adla(kayitli, kimlik, ad);
+  @override
+  void guvenilenYenidenAdla(String kimlik, String ad) =>
+      _adla(guvenilen, kimlik, ad);
 
   HostOlay? _sonHazir, _bagli;
   bool _izleniyor = false;
@@ -71,7 +104,11 @@ class SahteMotor implements Motor {
   }
 
   @override
-  Stream<HostOlay> hostBaslat({required String ad, String parola = '', bool upnp = true}) async* {
+  Stream<HostOlay> hostBaslat({
+    required String ad,
+    String parola = '',
+    bool upnp = true,
+  }) async* {
     cagrilar.add('hostBaslat:$ad');
     final son = _bagli ?? _sonHazir;
     if (son != null) yield son;
@@ -79,12 +116,18 @@ class SahteMotor implements Motor {
   }
 
   @override
-Future<void> hostKabul({required bool kontrol, bool pano = false, bool dosya = false, bool oyunKolu = false}) async {
+  Future<void> hostKabul({
+    required bool kontrol,
+    bool pano = false,
+    bool dosya = false,
+    bool oyunKolu = false,
+  }) async {
     sonPano = pano;
     sonDosyaIzni = dosya;
     sonOyunKolu = oyunKolu;
     cagrilar.add('kabul:$kontrol:$oyunKolu');
   }
+
   @override
   Future<void> hostRed() async => cagrilar.add('red');
   @override
@@ -93,12 +136,20 @@ Future<void> hostKabul({required bool kontrol, bool pano = false, bool dosya = f
   Future<void> hostDurdur() async => cagrilar.add('durdur');
 
   @override
-  Stream<IzleyiciOlay> baglan({required String kod, required String parola, required String ad}) {
+  Stream<IzleyiciOlay> baglan({
+    required String kod,
+    required String parola,
+    required String ad,
+  }) {
     sonKod = kod;
     sonParola = parola;
     cagrilar.add('baglan');
     // Gerçek motor gibi: hata akışa 'hata' olayı olarak gelir.
-    if (baglanHatasi != null) return Stream.value(IzleyiciOlay('hata', metin: hataMetni(baglanHatasi!)));
+    if (baglanHatasi != null) {
+      return Stream.value(
+        IzleyiciOlay('hata', metin: hataMetni(baglanHatasi!)),
+      );
+    }
     return izleyici.stream;
   }
 

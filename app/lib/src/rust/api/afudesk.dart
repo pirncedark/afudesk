@@ -124,6 +124,20 @@ Future<void> izleyiciDosyaGonder({required String yol}) =>
 Future<void> izleyiciKapat() =>
     RustLib.instance.api.crateApiAfudeskIzleyiciKapat();
 
+void kayitliYenidenAdla({required String kimlik, required String ad}) => RustLib
+    .instance
+    .api
+    .crateApiAfudeskKayitliYenidenAdla(kimlik: kimlik, ad: ad);
+
+void guvenilenYenidenAdla({required String kimlik, required String ad}) =>
+    RustLib.instance.api.crateApiAfudeskGuvenilenYenidenAdla(
+      kimlik: kimlik,
+      ad: ad,
+    );
+
+Future<List<String>> cevrimiciKimlikler() =>
+    RustLib.instance.api.crateApiAfudeskCevrimiciKimlikler();
+
 /// Girdi. `tur`: konum | fare | kaydir | tus | metin.
 class GirdiOlayi {
   final String tur;
@@ -132,6 +146,7 @@ class GirdiOlayi {
 
   /// fare: sol | sag | orta; tus: tuş adı.
   final String ad;
+  final int hid;
   final bool basili;
   final int dx;
   final int dy;
@@ -142,6 +157,7 @@ class GirdiOlayi {
     required this.x,
     required this.y,
     required this.ad,
+    required this.hid,
     required this.basili,
     required this.dx,
     required this.dy,
@@ -157,6 +173,7 @@ class GirdiOlayi {
       x.hashCode ^
       y.hashCode ^
       ad.hashCode ^
+      hid.hashCode ^
       basili.hashCode ^
       dx.hashCode ^
       dy.hashCode ^
@@ -171,6 +188,7 @@ class GirdiOlayi {
           x == other.x &&
           y == other.y &&
           ad == other.ad &&
+          hid == other.hid &&
           basili == other.basili &&
           dx == other.dx &&
           dy == other.dy &&
@@ -359,6 +377,8 @@ class KayitliCihaz {
   /// İç kimlik: yalnız Bağlan/Unut/Kaldır çağrılarında kullanılır, gösterilmez.
   final String kimlik;
   final String ad;
+  final String asilAd;
+  final bool acik;
 
   /// Unix saniye.
   final PlatformInt64 sonGorulme;
@@ -366,6 +386,8 @@ class KayitliCihaz {
   const KayitliCihaz({
     required this.kimlik,
     required this.ad,
+    required this.asilAd,
+    required this.acik,
     required this.sonGorulme,
   });
 
@@ -373,7 +395,12 @@ class KayitliCihaz {
       RustLib.instance.api.crateApiAfudeskKayitliCihazDefault();
 
   @override
-  int get hashCode => kimlik.hashCode ^ ad.hashCode ^ sonGorulme.hashCode;
+  int get hashCode =>
+      kimlik.hashCode ^
+      ad.hashCode ^
+      asilAd.hashCode ^
+      acik.hashCode ^
+      sonGorulme.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -382,5 +409,7 @@ class KayitliCihaz {
           runtimeType == other.runtimeType &&
           kimlik == other.kimlik &&
           ad == other.ad &&
+          asilAd == other.asilAd &&
+          acik == other.acik &&
           sonGorulme == other.sonGorulme;
 }

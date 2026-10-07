@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../bilesenler/afu_uygulamalar.dart';
@@ -17,6 +18,7 @@ class AnaSayfa extends StatefulWidget {
 }
 
 class _AnaSayfaDurum extends State<AnaSayfa> {
+  Timer? _tazeleme;
   Motor get motor => widget.motor;
   List<KayitliCihaz> _kayitli = const [];
 
@@ -24,6 +26,14 @@ class _AnaSayfaDurum extends State<AnaSayfa> {
   void initState() {
     super.initState();
     _kayitli = motor.kayitliCihazlar();
+    _tazele();
+    _tazeleme = Timer.periodic(const Duration(seconds: 15), (_) => _tazele());
+  }
+
+  @override
+  void dispose() {
+    _tazeleme?.cancel();
+    super.dispose();
   }
 
   /// Başka ekrandan dönünce liste yenilenir (yeni kayıt / kaldırılan cihaz).
@@ -37,35 +47,136 @@ class _AnaSayfaDurum extends State<AnaSayfa> {
     setState(() => _kayitli = motor.kayitliCihazlar());
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('${c.ad} unutuldu. Yeniden bağlanmak için kod gerekecek.')));
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            '${c.ad} unutuldu. Yeniden bağlanmak için kod gerekecek.',
+          ),
+        ),
+      );
+  }
+
+  bool _sorgulaniyor = false;
+  Set<String> _acik = {};
+  Future<void> _tazele() async {
+    if (_sorgulaniyor) return;
+    _sorgulaniyor = true;
+    try {
+      final acik = await motor.cevrimiciKimlikler();
+      if (mounted) {
+        setState(() {
+          _acik = acik;
+          _kayitli = motor.kayitliCihazlar();
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _acik = {};
+          _kayitli = motor.kayitliCihazlar();
+        });
+      }
+    } finally {
+      _sorgulaniyor = false;
+    }
+  }
+
+  Future<void> _adla(KayitliCihaz c) async {
+    final kontrol = TextEditingController(text: c.ad);
+    final ad = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Adını değiştir'),
+        content: TextField(controller: kontrol, maxLength: 40, autofocus: true),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('İptal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, kontrol.text),
+            child: const Text('Kaydet'),
+          ),
+        ],
+      ),
+    );
+    Future<void>.delayed(const Duration(milliseconds: 350), kontrol.dispose);
+    if (ad == null || !mounted) return;
+    motor.kayitliYenidenAdla(c.kimlik, ad);
+    setState(() => _kayitli = motor.kayitliCihazlar());
   }
 
   Widget _kayitliCihazlar() {
     if (_kayitli.isEmpty) return const SizedBox.shrink();
-    return Column(key: const Key('kayitli_liste'), crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      const SizedBox(height: 24),
-      const Text('Kayıtlı cihazlar', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-      const SizedBox(height: 4),
-      const Text('Kod ve parola olmadan bağlan. Karşı taraf yine onay verir.',
-          style: TextStyle(color: Renk.soluk, fontSize: 13)),
-      const SizedBox(height: 8),
-      for (final (i, c) in _kayitli.indexed)
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.computer_rounded, color: Renk.vurgu),
-            title: Text(c.ad, key: Key('kayitli_ad_$i')),
-            subtitle: Text('Son görülme: ${goreliZaman(c.sonGorulme)}'),
-            trailing: Wrap(spacing: 6, children: [
-              TextButton(key: Key('kayitli_unut_$i'), onPressed: () => _unut(c), child: const Text('Unut')),
-              FilledButton(
-                key: Key('kayitli_baglan_$i'),
-                onPressed: () => _git(OturumSayfasi(motor: motor, kayitliKimlik: c.kimlik)),
-                child: const Text('Bağlan'),
-              ),
-            ]),
-          ),
+    return Column(
+      key: const Key('kayitli_liste'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 24),
+        const Text(
+          'Kayıtlı cihazlar',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
         ),
-    ]);
+        const SizedBox(height: 4),
+        const Text(
+          'Kod ve parola olmadan bağlan. Karşı taraf yine onay verir.',
+          style: TextStyle(color: Renk.soluk, fontSize: 13),
+        ),
+        const SizedBox(height: 8),
+        for (final (i, c) in _kayitli.indexed)
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.computer_rounded, color: Renk.vurgu),
+              title: Wrap(
+                spacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(c.ad, key: Key('kayitli_ad_$i')),
+                  if (_acik.contains(c.kimlik))
+                    Row(
+                      key: Key('kayitli_acik_$i'),
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.circle, color: Colors.green, size: 8),
+                        SizedBox(width: 4),
+                        Text(
+                          'Açık',
+                          style: TextStyle(color: Colors.green, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+              subtitle: Text(
+                'Son bağlanma: ${goreliZaman(c.sonGorulme)}${c.ad != c.asilAd ? ' · ${c.asilAd}' : ''}',
+              ),
+              trailing: Wrap(
+                spacing: 6,
+                children: [
+                  IconButton(
+                    key: Key('kayitli_adla_$i'),
+                    tooltip: 'Adını değiştir',
+                    onPressed: () => _adla(c),
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
+                  TextButton(
+                    key: Key('kayitli_unut_$i'),
+                    onPressed: () => _unut(c),
+                    child: const Text('Unut'),
+                  ),
+                  FilledButton(
+                    key: Key('kayitli_baglan_$i'),
+                    onPressed: () => _git(
+                      OturumSayfasi(motor: motor, kayitliKimlik: c.kimlik),
+                    ),
+                    child: const Text('Bağlan'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   @override
@@ -78,47 +189,75 @@ class _AnaSayfaDurum extends State<AnaSayfa> {
             child: ListView(
               padding: const EdgeInsets.all(24),
               children: [
-                Row(children: [
-                  const Icon(Icons.desktop_windows_rounded, color: Renk.vurgu, size: 30),
-                  const SizedBox(width: 10),
-                  Text('AfuDesk', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
-                ]),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.desktop_windows_rounded,
+                      color: Renk.vurgu,
+                      size: 30,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'AfuDesk',
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 6),
-                const Text('Tek kodla uzak masaüstü — hesap ve modem ayarı gerekmez.',
-                    style: TextStyle(color: Renk.soluk)),
+                const Text(
+                  'Tek kodla uzak masaüstü — hesap ve modem ayarı gerekmez.',
+                  style: TextStyle(color: Renk.soluk),
+                ),
                 const SizedBox(height: 24),
-                LayoutBuilder(builder: (context, c) {
-                  final dar = c.maxWidth < 560;
-                  final kartlar = [
-                    _SecenekKarti(
-                      anahtar: const Key('secenek_ver'),
-                      simge: Icons.screen_share_rounded,
-                      baslik: 'Bağlantı ver',
-                      aciklama: motor.baglantiVerilebilir
-                          ? 'Ekranını paylaş. Sana bir kod ve parola verilir, bunları karşı tarafa gönder.'
-                          : 'Bu cihazdan ekran paylaşımı yakında. Şimdilik bir bilgisayara bağlanabilirsin.',
-                      onTap: motor.baglantiVerilebilir ? () => _git(BaglantiVerSayfasi(motor: motor)) : null,
-                    ),
-                    _SecenekKarti(
-                      anahtar: const Key('secenek_baglan'),
-                      simge: Icons.cast_connected_rounded,
-                      baslik: 'Bağlan',
-                      aciklama: 'Sana gönderilen kodu ve parolayı gir, karşı tarafın ekranına bağlan.',
-                      onTap: () => _git(BaglanSayfasi(motor: motor)),
-                    ),
-                  ];
-                  if (!motor.baglantiVerilebilir) kartlar.setAll(0, [kartlar[1], kartlar[0]]);
-                  return dar
-                      ? Column(children: [kartlar[0], const SizedBox(height: 14), kartlar[1]])
-                      // Yan yana kartlar aynı yükseklikte.
-                      : IntrinsicHeight(
-                          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                            Expanded(child: kartlar[0]),
-                            const SizedBox(width: 14),
-                            Expanded(child: kartlar[1]),
-                          ]),
-                        );
-                }),
+                LayoutBuilder(
+                  builder: (context, c) {
+                    final dar = c.maxWidth < 560;
+                    final kartlar = [
+                      _SecenekKarti(
+                        anahtar: const Key('secenek_ver'),
+                        simge: Icons.screen_share_rounded,
+                        baslik: 'Bağlantı ver',
+                        aciklama: motor.baglantiVerilebilir
+                            ? 'Ekranını paylaş. Sana bir kod ve parola verilir, bunları karşı tarafa gönder.'
+                            : 'Bu cihazdan ekran paylaşımı yakında. Şimdilik bir bilgisayara bağlanabilirsin.',
+                        onTap: motor.baglantiVerilebilir
+                            ? () => _git(BaglantiVerSayfasi(motor: motor))
+                            : null,
+                      ),
+                      _SecenekKarti(
+                        anahtar: const Key('secenek_baglan'),
+                        simge: Icons.cast_connected_rounded,
+                        baslik: 'Bağlan',
+                        aciklama:
+                            'Sana gönderilen kodu ve parolayı gir, karşı tarafın ekranına bağlan.',
+                        onTap: () => _git(BaglanSayfasi(motor: motor)),
+                      ),
+                    ];
+                    if (!motor.baglantiVerilebilir) {
+                      kartlar.setAll(0, [kartlar[1], kartlar[0]]);
+                    }
+                    return dar
+                        ? Column(
+                            children: [
+                              kartlar[0],
+                              const SizedBox(height: 14),
+                              kartlar[1],
+                            ],
+                          )
+                        // Yan yana kartlar aynı yükseklikte.
+                        : IntrinsicHeight(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Expanded(child: kartlar[0]),
+                                const SizedBox(width: 14),
+                                Expanded(child: kartlar[1]),
+                              ],
+                            ),
+                          );
+                  },
+                ),
                 _kayitliCihazlar(),
                 const SizedBox(height: 28),
                 const AfuUygulamalar(),
@@ -136,34 +275,58 @@ class _SecenekKarti extends StatelessWidget {
   final IconData simge;
   final String baslik;
   final String aciklama;
+
   /// null: devre dışı (ör. telefonda ekran paylaşımı henüz yok).
   final VoidCallback? onTap;
-  const _SecenekKarti(
-      {required this.anahtar, required this.simge, required this.baslik, required this.aciklama, required this.onTap});
+  const _SecenekKarti({
+    required this.anahtar,
+    required this.simge,
+    required this.baslik,
+    required this.aciklama,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     final kapali = onTap == null;
-    return Opacity(opacity: kapali ? 0.55 : 1, child: Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        key: anahtar,
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: Renk.vurgu.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(12)),
-              child: Icon(simge, color: Renk.vurgu, size: 28),
+    return Opacity(
+      opacity: kapali ? 0.55 : 1,
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          key: anahtar,
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Renk.vurgu.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(simge, color: Renk.vurgu, size: 28),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  baslik,
+                  style: const TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  aciklama,
+                  style: const TextStyle(color: Renk.soluk, height: 1.35),
+                ),
+              ],
             ),
-            const SizedBox(height: 14),
-            Text(baslik, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 6),
-            Text(aciklama, style: const TextStyle(color: Renk.soluk, height: 1.35)),
-          ]),
+          ),
         ),
       ),
-    ));
+    );
   }
 }

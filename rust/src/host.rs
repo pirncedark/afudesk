@@ -777,6 +777,7 @@ async fn oturum(
                 let jeton = guvenilen::yeni_jeton();
                 let simdi = guvenilen::simdi();
                 let kayit = guvenilen::HostKaydi {
+                etiket: None,
                     izleyici_kimlik: izleyici,
                     ad: ad.clone(),
                     jeton_sha256: guvenilen::jeton_ozeti(&jeton),

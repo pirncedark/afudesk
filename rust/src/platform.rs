@@ -193,19 +193,141 @@ pub mod masaustu {
     pub struct EnigoEnjektor {
         e: Enigo,
         boyut: (i32, i32),
+        #[cfg(windows)]
+        numpad_enter_basili: bool,
     }
 
     impl EnigoEnjektor {
         pub fn new() -> Result<Self> {
             let e = Enigo::new(&Settings::default())?;
             let boyut = e.main_display()?;
-            Ok(Self { e, boyut })
+            Ok(Self { e, boyut, #[cfg(windows)] numpad_enter_basili: false })
+        }
+    }
+
+    /// USB HID usage -> Windows VK; ad yalnız yedektir.
+    pub fn hid_vk(hid: u32) -> Option<u16> {
+        let usage = hid & 0xffff;
+        if hid >> 16 == 0x0c {
+            return Some(match usage {
+                0xb5 => 0xb0, 0xb6 => 0xb1, 0xb7 => 0xb2, 0xcd => 0xb3,
+                0xe2 => 0xad, 0xe9 => 0xaf, 0xea => 0xae,
+                _ => return None,
+            });
+        }
+        if hid >> 16 != 0x07 { return None; }
+        Some(match usage {
+            0x04..=0x1d => (0x41 + usage - 0x04) as u16,
+            0x1e..=0x26 => (0x31 + usage - 0x1e) as u16,
+            0x3a..=0x45 => (0x70 + usage - 0x3a) as u16,
+            0x59..=0x61 => (0x61 + usage - 0x59) as u16,
+            0x68..=0x73 => (0x7c + usage - 0x68) as u16,
+            0x27 => 0x30,
+            0x28 => 0x0d,
+            0x29 => 0x1b,
+            0x2a => 0x08,
+            0x2b => 0x09,
+            0x2c => 0x20,
+            0x2d => 0xbd,
+            0x2e => 0xbb,
+            0x2f => 0xdb,
+            0x30 => 0xdd,
+            0x31 => 0xdc,
+            0x32 => 0xdc,
+            0x33 => 0xba,
+            0x34 => 0xde,
+            0x35 => 0xc0,
+            0x36 => 0xbc,
+            0x37 => 0xbe,
+            0x38 => 0xbf,
+            0x39 => 0x14,
+            0x46 => 0x2c,
+            0x47 => 0x91,
+            0x48 => 0x13,
+            0x49 => 0x2d,
+            0x4a => 0x24,
+            0x4b => 0x21,
+            0x4c => 0x2e,
+            0x4d => 0x23,
+            0x4e => 0x22,
+            0x4f => 0x27,
+            0x50 => 0x25,
+            0x51 => 0x28,
+            0x52 => 0x26,
+            0x53 => 0x90,
+            0x54 => 0x6f,
+            0x55 => 0x6a,
+            0x56 => 0x6d,
+            0x57 => 0x6b,
+            0x58 => 0x0d,
+            0x62 => 0x60,
+            0x63 => 0x6e,
+            0x64 => 0xe2,
+            0x65 => 0x5d,
+            0x7f => 0xad,
+            0x80 => 0xaf,
+            0x81 => 0xae,
+            0x85 => 0x6c,
+            0xe0 => 0xa2,
+            0xe1 => 0xa0,
+            0xe2 => 0xa4,
+            0xe3 => 0x5b,
+            0xe4 => 0xa3,
+            0xe5 => 0xa1,
+            0xe6 => 0xa5,
+            0xe7 => 0x5c,
+            _ => return None,
+        })
+    }
+
+    // Enigo 0.6.1 numpad Enter için EXTENDEDKEY koymuyor; VK_RETURN
+    // ana Enter ile aynı olduğundan bu kullanım ayrı SendInput yolundan geçer.
+    #[cfg(windows)]
+    mod numpad_enter {
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        struct KeyboardInput { vk: u16, scan: u16, flags: u32, time: u32, extra: usize }
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        struct MouseInput { x: i32, y: i32, data: u32, flags: u32, time: u32, extra: usize }
+        #[repr(C)]
+        union InputData { keyboard: KeyboardInput, mouse: MouseInput }
+        #[repr(C)]
+        struct Input { kind: u32, data: InputData }
+        #[link(name = "user32")]
+        extern "system" { fn SendInput(count: u32, inputs: *const Input, size: i32) -> u32; }
+
+        pub fn send(pressed: bool) -> anyhow::Result<()> {
+            // Sıfırla: INPUT union padding baytları da başlatılır.
+            let mut input: Input = unsafe { std::mem::zeroed() };
+            input.kind = 1;
+            input.data.keyboard = KeyboardInput {
+                vk: 0x0d, scan: 0x1c,
+                flags: 0x0001 | if pressed { 0 } else { 0x0002 },
+                time: 0, extra: 0,
+            };
+            // repr(C) Win32 INPUT ABI ile aynı; input çağrı boyunca yaşar.
+            let sent = unsafe { SendInput(1, &input, std::mem::size_of::<Input>() as i32) };
+            anyhow::ensure!(sent == 1, "Numpad Enter gönderilemedi: {}", std::io::Error::last_os_error());
+            Ok(())
+        }
+        #[cfg(test)]
+        #[test]
+        fn input_abi_boyutu() {
+            assert_eq!(std::mem::size_of::<Input>(), if cfg!(target_pointer_width = "64") { 40 } else { 28 });
+        }
+    }
+
+    #[cfg(windows)]
+    impl Drop for EnigoEnjektor {
+        fn drop(&mut self) {
+            if self.numpad_enter_basili { let _ = numpad_enter::send(false); }
         }
     }
 
     pub fn tus_coz(ad: &str) -> Option<Key> {
         Some(match ad {
-            "Enter" => Key::Return,
+            "Enter" | "NumpadEnter" => Key::Return,
             "Backspace" => Key::Backspace,
             "Tab" => Key::Tab,
             "Escape" => Key::Escape,
@@ -236,13 +358,43 @@ pub mod masaustu {
             "F10" => Key::F10,
             "F11" => Key::F11,
             "F12" => Key::F12,
+            "Insert" => Key::Insert,
+            #[cfg(not(target_os = "macos"))]
+            "PrintScreen" => Key::PrintScr,
+            #[cfg(windows)]
+            "ScrollLock" => Key::Scroll,
+            #[cfg(all(unix, not(target_os = "macos")))]
+            "ScrollLock" => Key::ScrollLock,
+            #[cfg(not(target_os = "macos"))]
+            "Pause" => Key::Pause,
+            "VolumeMute" => Key::VolumeMute,
+            "VolumeDown" => Key::VolumeDown,
+            "VolumeUp" => Key::VolumeUp,
+            "MediaPlayPause" => Key::MediaPlayPause,
+            "MediaNextTrack" => Key::MediaNextTrack,
+            "MediaPrevTrack" => Key::MediaPrevTrack,
+            #[cfg(not(target_os = "macos"))]
+            "MediaStop" => Key::MediaStop,
+            "F13" => Key::F13,
+            "F14" => Key::F14,
+            "F15" => Key::F15,
+            "F16" => Key::F16,
+            "F17" => Key::F17,
+            "F18" => Key::F18,
+            "F19" => Key::F19,
+            "F20" => Key::F20,
+            "F21" => Key::F21,
+            "F22" => Key::F22,
+            "F23" => Key::F23,
+            "F24" => Key::F24,
+
             _ => {
                 let mut c = ad.chars();
                 let ilk = c.next()?;
                 if c.next().is_some() {
                     return None;
                 }
-                Key::Unicode(ilk)
+                Key::Unicode(ilk.to_lowercase().next()?)
             }
         })
     }
@@ -278,8 +430,18 @@ pub mod masaustu {
                         self.e.scroll(*dx, Axis::Horizontal)?;
                     }
                 }
-                Girdi::Tus { ad, basili } => {
-                    if let Some(k) = tus_coz(ad) {
+                Girdi::Tus { hid, ad, basili } => {
+                    #[cfg(windows)]
+                    if *hid == 0x00070058 || (*hid == 0 && ad == "NumpadEnter") {
+                        numpad_enter::send(*basili)?;
+                        self.numpad_enter_basili = *basili;
+                        return Ok(());
+                    }
+                    #[cfg(windows)]
+                    let key = hid_vk(*hid).map(|vk| Key::Other(vk as u32)).or_else(|| tus_coz(ad));
+                    #[cfg(not(windows))]
+                    let key = { let _ = hid; tus_coz(ad) };
+                    if let Some(k) = key {
                         self.e.key(
                             k,
                             if *basili {
@@ -309,9 +471,31 @@ pub mod masaustu {
         fn tus_adlari() {
             assert_eq!(tus_coz("Enter"), Some(Key::Return));
             assert_eq!(tus_coz("ş"), Some(Key::Unicode('ş')));
+            assert_eq!(tus_coz("A"), Some(Key::Unicode('a')));
+            assert_eq!(tus_coz("Ş"), Some(Key::Unicode('ş')));
+            assert_eq!(tus_coz("F24"), Some(Key::F24));
+            #[cfg(not(target_os = "macos"))]
+            assert_eq!(tus_coz("PrintScreen"), Some(Key::PrintScr));
             assert_eq!(tus_coz("ArrowLeft"), Some(Key::LeftArrow));
             assert_eq!(tus_coz("BilinmeyenTus"), None);
             assert_eq!(tus_coz(""), None);
+        }
+
+        #[test]
+        fn fiziksel_hid_vk() {
+            for (hid, vk) in [
+                (0x70004, 0x41), (0x7001e, 0x31), (0x70027, 0x30),
+                (0x70062, 0x60), (0x70057, 0x6b), (0x70068, 0x7c),
+                (0x70073, 0x87), (0x70046, 0x2c), (0x700e4, 0xa3),
+                (0x700e6, 0xa5), (0x70058, 0x0d), (0x70054, 0x6f),
+                // Türkçe Q: ş, ğ, ü, ö, ç OEM; ı fiziksel I konumunda.
+                (0x70033, 0xba), (0x7002f, 0xdb), (0x70030, 0xdd),
+                (0x70036, 0xbc), (0x70037, 0xbe), (0x7000c, 0x49),
+                (0xc00cd, 0xb3), (0xc00e9, 0xaf),
+            ] { assert_eq!(hid_vk(hid), Some(vk), "HID {hid:x}"); }
+            assert_eq!(hid_vk(0), None);
+            assert_eq!(hid_vk(0x80004), None);
+            assert_eq!(hid_vk(0x7ffff), None);
         }
 
         /// Gerçek donanım: bu makinenin birincil ekranı yakalanabilmeli ve
