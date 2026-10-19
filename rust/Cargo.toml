@@ -24,6 +24,7 @@ futures-lite = "2.6.1"
 iroh = "1.2"
 iroh-mdns-address-lookup = "0.5"
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
+openh264 = "0.9"
 log = "0.4"
 rayon = "1"
 dirs = "6"
