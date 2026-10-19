@@ -33,3 +33,18 @@ mod testler {
         assert_eq!(gecikme_ms(u64::MAX, i64::MIN, 0), u32::MAX);
     }
 }
+
+#[cfg(test)]
+mod kirilim_testleri {
+    #[test]
+    fn ag_suresi_kodlama_ve_cozmeyi_cikarir() {
+        assert_eq!(super::ag_ms(20.0, 3.5, 2.0), 14.5);
+        assert_eq!(super::ag_ms(1.0, 3.5, 2.0), 0.0);
+    }
+}
+
+/// Saat eşitlendikten sonra toplam gecikmeden kodlama ve çözmeyi çıkarır.
+/// Yakalama/kuyruk/taşıma süreleri ayrı tel damgaları olmadığı için bu kalanda yer alır.
+pub fn ag_ms(toplam_ms: f64, kodla_ms: f64, coz_ms: f64) -> f64 {
+    (toplam_ms - kodla_ms - coz_ms).max(0.0)
+}

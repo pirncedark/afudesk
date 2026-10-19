@@ -31,6 +31,50 @@ pub const BAGLANMA_SURESI: Duration = Duration::from_secs(20);
 /// (20 sn) fark edip `host::DEVAM_SURESI` (60 sn) bekler; bu ikisini kapsar.
 pub const YENIDEN_SURESI: Duration = Duration::from_secs(90);
 
+#[cfg(test)]
+mod datagram_testleri {
+    use super::kol_datagram_sonucu;
+    use iroh::endpoint::SendDatagramError;
+
+    #[test]
+    fn destek_yoksa_oturum_boyu_akista_kalir() {
+        for hata in [
+            SendDatagramError::UnsupportedByPeer,
+            SendDatagramError::Disabled,
+        ] {
+            let mut acik = true;
+            assert!(!kol_datagram_sonucu(&mut acik, Err(hata)).unwrap());
+            assert!(!acik);
+        }
+    }
+
+    #[test]
+    fn buyuk_datagram_yalniz_bu_girdiyi_akisa_dusurur() {
+        let mut acik = true;
+        assert!(!kol_datagram_sonucu(&mut acik, Err(SendDatagramError::TooLarge)).unwrap());
+        assert!(acik);
+        assert!(kol_datagram_sonucu(&mut acik, Ok(())).unwrap());
+    }
+}
+
+/// Başarısız girdiyi çağıran bir kez akıştan yollar; kalıcı destek eksikliği
+/// sonraki girdilerde datagram denemesini kapatır.
+fn kol_datagram_sonucu(
+    acik: &mut bool,
+    sonuc: Result<(), iroh::endpoint::SendDatagramError>,
+) -> Result<bool, iroh::endpoint::SendDatagramError> {
+    use iroh::endpoint::SendDatagramError;
+    match sonuc {
+        Ok(()) => Ok(true),
+        Err(SendDatagramError::UnsupportedByPeer | SendDatagramError::Disabled) => {
+            *acik = false;
+            Ok(false)
+        }
+        Err(SendDatagramError::TooLarge) => Ok(false),
+        Err(e) => Err(e),
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum IzleyiciOlay {
     /// Bağlandı, karşı tarafın onayı bekleniyor.
@@ -54,6 +98,15 @@ pub enum IzleyiciOlay {
         rtt_ms: u32,
         fps: u32,
         gecikme_ms: u32,
+        kodla_ms: f64,
+        ag_ms: f64,
+        coz_ms: f64,
+        /// Olay için RGBA kopyalama ve kuyruğa verme; fiziksel ekran sunumu değil.
+        goster_ms: f64,
+        oku_ms: f64,
+        kare_kb: f64,
+        kb_s: f64,
+        mbit_s: f64,
         yol: String,
     },
     /// Bağlantı koptu, yeniden deneniyor (`deneme` 1'den başlar).
@@ -511,7 +564,7 @@ impl Gozetmen {
         let fark2 = self.saat_farki.clone();
         let esit2 = self.saat_esitlendi.clone();
         let mut goruntu = tokio::spawn(async move {
-            let (kare_tx, mut kare_rx) = mpsc::channel::<Kare>(8);
+            let (kare_tx, mut kare_rx) = mpsc::channel::<(Kare, f64, usize)>(8);
             let c3 = c2.clone();
             let kabul = tokio::spawn(async move {
                 let akis_sayaci = Arc::new(tokio::sync::Semaphore::new(protokol::AZAMI_ESZAMANLI_AKIS));
@@ -523,8 +576,11 @@ impl Gozetmen {
                     let tx = kare_tx.clone();
                     tokio::spawn(async move {
                         let _izin = izin;
+                        let bas = std::time::Instant::now();
                         if let Ok(Some(k)) = protokol::oku::<_, Kare>(&mut akis).await {
-                            let _ = tx.send(k).await;
+                            let oku_ms = bas.elapsed().as_secs_f64() * 1000.0;
+                            let bayt = bincode::serialized_size(&k).unwrap_or(0) as usize + 4;
+                            let _ = tx.send((k, oku_ms, bayt)).await;
                         }
                     });
                 }
@@ -534,10 +590,23 @@ impl Gozetmen {
             let mut sayac = 0u32;
             let mut son = std::time::Instant::now();
             let mut gecikmeler = VecDeque::<(std::time::Instant, u32)>::new();
-            while let Some(k) = kare_rx.recv().await {
+            let mut olcum = [0.0f64; 5]; // kodla, ağ kalanı, çöz, göster, oku
+            let mut baytlar = 0usize;
+            let olcum_logu = std::env::var("AFUDESK_OLCUM").is_ok_and(|v| v == "1");
+            while let Some((k, oku_ms, bayt)) = kare_rx.recv().await {
+                let coz_bas = std::time::Instant::now();
                 b.uygula(&k)?;
+                let coz_ms = coz_bas.elapsed().as_secs_f64() * 1000.0;
+                let kodla_ms = k.kodlama_us as f64 / 1000.0;
+                olcum[0] += kodla_ms;
+                olcum[2] += coz_ms;
+                olcum[4] += oku_ms;
+                baytlar += bayt;
                 let simdi = std::time::Instant::now();
                 if esit2.load(Ordering::Relaxed) {
+                    olcum[1] += zaman::ag_ms(
+                        zaman::gecikme_ms(unix_ms(), fark2.load(Ordering::Relaxed), k.yakalama_ms) as f64,
+                        kodla_ms, coz_ms);
                     gecikmeler.push_back((
                         simdi,
                         zaman::gecikme_ms(unix_ms(), fark2.load(Ordering::Relaxed), k.yakalama_ms),
@@ -550,11 +619,13 @@ impl Gozetmen {
                     gecikmeler.pop_front();
                 }
                 sayac += 1;
+                let goster_bas = std::time::Instant::now();
                 let _ = olay2.try_send(IzleyiciOlay::Kare {
                     genislik: b.goruntu.genislik,
                     yukseklik: b.goruntu.yukseklik,
                     rgba: b.goruntu.rgba.clone(),
                 });
+                olcum[3] += goster_bas.elapsed().as_secs_f64() * 1000.0;
                 if son.elapsed() >= Duration::from_secs(1) {
                     let fps = (sayac as f64 / son.elapsed().as_secs_f64()).round() as u32;
                     let (yol, rtt) = ag::secili_yol(&c2);
@@ -562,14 +633,39 @@ impl Gozetmen {
                     let mut ms: Vec<u32> = gecikmeler.iter().map(|(_, v)| *v).collect();
                     ms.sort_unstable();
                     let gecikme_ms = if ms.is_empty() { 0 } else { ms[ms.len() / 2] };
+                    if olcum_logu {
+                        let kip = match &k.kip {
+                            protokol::KareKipi::Doseme => "JPEG",
+                            protokol::KareKipi::H264(_) => "H264",
+                        };
+                        eprintln!(
+                            "olcum kip={kip} kodla={:.3} ag={:.3} coz={:.3} goster={:.3} KB/kare={:.3} Mbit/s={:.3} fps={fps}",
+                            olcum[0] / sayac as f64,
+                            olcum[1] / sayac as f64,
+                            olcum[2] / sayac as f64,
+                            olcum[3] / sayac as f64,
+                            baytlar as f64 / 1000.0 / sayac as f64,
+                            baytlar as f64 * 8.0 / 1_000_000.0 / son.elapsed().as_secs_f64(),
+                        );
+                    }
                     let _ = olay2
                         .send(IzleyiciOlay::Istatistik {
                             rtt_ms,
                             fps,
                             gecikme_ms,
+                            kodla_ms: olcum[0] / sayac as f64,
+                            ag_ms: olcum[1] / sayac as f64,
+                            coz_ms: olcum[2] / sayac as f64,
+                            goster_ms: olcum[3] / sayac as f64,
+                            oku_ms: olcum[4] / sayac as f64,
+                            kare_kb: baytlar as f64 / 1000.0 / sayac as f64,
+                            kb_s: baytlar as f64 / 1000.0 / son.elapsed().as_secs_f64(),
+                            mbit_s: baytlar as f64 * 8.0 / 1_000_000.0 / son.elapsed().as_secs_f64(),
                             yol: yol.ad().into(),
                         })
                         .await;
+                    olcum = [0.0; 5];
+                    baytlar = 0;
                     sayac = 0;
                     son = std::time::Instant::now();
                 }
@@ -585,7 +681,10 @@ impl Gozetmen {
         pano_saat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         let mut saat_olcum = tokio::time::interval(Duration::from_secs(2));
         saat_olcum.tick().await;
-        let mut son_kol: Option<Girdi> = None;
+        let mut datagram_acik = c.max_datagram_size().is_some();
+        // Datagram kaybolabilir (ör. bırakılan düğme): son kol durumu aynı sırayla
+        // 100 ms'de bir datagramla yinelenir; host aynı sırayı ikinci kez uygulamaz.
+        let mut son_kol: Option<Vec<u8>> = None;
         let mut kol_yenile = tokio::time::interval(Duration::from_millis(100));
         kol_yenile.tick().await;
         const KOPTU: &str = "Bağlantı koptu.";
@@ -599,10 +698,22 @@ impl Gozetmen {
                     Some(g) => {
                         if let Girdi::Kol(k) = &g {
                             if !izinler.oyun_kolu { continue; }
-                            son_kol = Some(g.clone());
-                            if let Ok(payload) = bincode::serialize(k) {
-                                if c.send_datagram(payload.into()).is_ok() { continue; }
+                            if datagram_acik {
+                                if let Ok(payload) = bincode::serialize(k) {
+                                    match c.max_datagram_size() {
+                                        None => datagram_acik = false,
+                                        Some(azami) if payload.len() <= azami => {
+                                                                                        match kol_datagram_sonucu(&mut datagram_acik, c.send_datagram(payload.clone().into())) {
+                                                Ok(true) => { son_kol = Some(payload); continue }
+                                                Ok(false) => {},
+                                                Err(_) => break KOPTU.into(),
+                                            }
+                                        }
+                                        Some(_) => {}, // Bu girdi büyük; yalnız bir kez akıştan gönder.
+                                    }
+                                }
                             }
+                            son_kol = None;
                             if protokol::yaz(w, &Kontrol::Girdi(g)).await.is_err() { break KOPTU.into(); }
                             continue;
                         }
@@ -612,10 +723,8 @@ impl Gozetmen {
                     None => break KAPANDI.into(),
                 },
                 Some(()) = self.kol_olay.recv() => { let _ = olay.send(IzleyiciOlay::KolAlgilandi).await; }
-                _ = kol_yenile.tick(), if izinler.oyun_kolu => {
-                    if let Some(g) = son_kol.clone() {
-                        if protokol::yaz(w, &Kontrol::Girdi(g)).await.is_err() { break KOPTU.into(); }
-                    }
+                _ = kol_yenile.tick(), if datagram_acik && son_kol.is_some() => {
+                    if let Some(p) = son_kol.clone() { let _ = c.send_datagram(p.into()); }
                 }
                 _ = saat_olcum.tick() => {
                     let izleyici_ms = unix_ms();

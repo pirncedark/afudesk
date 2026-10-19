@@ -9,8 +9,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// Protokol sürümü ALPN'nin içindedir: tel biçimi değişince ikisi birlikte artar.
 /// Uyuşmayan sürümler el sıkışmada ayrılır (paket sürümüne bağlı değildir).
-pub const SURUM: u32 = 6;
-pub const ALPN: &[u8] = b"afudesk/6";
+pub const SURUM: u32 = 7;
+pub const ALPN: &[u8] = b"afudesk/7";
 /// Tek mesaj için üst sınır (kötü niyetli uzunluk alanına karşı).
 pub const AZAMI_MESAJ: usize = 32 * 1024 * 1024;
 /// İzleyicide aynı anda işlenen tek yönlü akış tavanı (kareler + dosyalar).
@@ -157,6 +157,12 @@ pub struct Doseme {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum KareKipi {
+    Doseme,
+    H264(Vec<u8>),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Kare {
     pub sira: u64,
     pub genislik: u32,
@@ -164,8 +170,11 @@ pub struct Kare {
     /// true: tüm ekran döşemeleri var (anahtar kare).
     pub tam: bool,
     pub dosemeler: Vec<Doseme>,
+    pub kip: KareKipi,
     /// Host saatine göre Unix milisaniye cinsinden ekranın yakalandığı an.
     pub yakalama_ms: u64,
+    /// RGBA görüntünün kodlanma süresi (mikrosaniye).
+    pub kodlama_us: u32,
 }
 
 pub async fn yaz<W: AsyncWriteExt + Unpin, T: Serialize>(w: &mut W, m: &T) -> anyhow::Result<()> {

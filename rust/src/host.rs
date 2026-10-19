@@ -40,6 +40,8 @@ pub const KOPUS_KODU: u32 = 2;
 struct YayinAyari {
     kalite: std::sync::atomic::AtomicU8,
     fps: std::sync::atomic::AtomicU32,
+    bitrate: std::sync::atomic::AtomicU32,
+    h264: AtomicBool,
 }
 
 /// Ağ durumuna göre kalite/FPS kararı (saf fonksiyon, test edilir).
@@ -55,6 +57,13 @@ pub fn uyarla(kalite: u8, fps: u32, rtt_ms: u32, iptal: u32) -> (u8, u32) {
     } else {
         (kalite, fps)
     }
+}
+
+/// H.264 ağ uyarlaması: JPEG kalitesi yerine hedef bit hızını değiştirir.
+pub fn uyarla_bitrate(bitrate: u32, rtt_ms: u32, iptal: u32) -> u32 {
+    if iptal > 0 || rtt_ms > 200 { (bitrate.saturating_mul(3) / 4).max(500_000) }
+    else if rtt_ms < 80 { bitrate.saturating_add(500_000).min(12_000_000) }
+    else { bitrate }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -687,6 +696,8 @@ async fn oturum(
     let ayar = Arc::new(YayinAyari {
         kalite: std::sync::atomic::AtomicU8::new(70),
         fps: std::sync::atomic::AtomicU32::new(HEDEF_FPS as u32),
+        bitrate: std::sync::atomic::AtomicU32::new(8_000_000),
+        h264: AtomicBool::new(false),
     });
     let ayar2 = ayar.clone();
     let (iptal_tx, iptal_rx) = std::sync::mpsc::channel::<Vec<(u32, u32)>>();
@@ -707,13 +718,14 @@ async fn oturum(
             }
         };
         let _ = boyut_tx.send(Ok((ilk.genislik, ilk.yukseklik)));
-        let mut kodlayici = Kodlayici::new(70);
+        let mut kodlayici = Kodlayici::otomatik(70);
         let mut g = Some((ilk, ilk_yakalama_ms));
         while !dur2.load(std::sync::atomic::Ordering::Relaxed) {
             let t0 = std::time::Instant::now();
             let fps = ayar2.fps.load(std::sync::atomic::Ordering::Relaxed).max(1) as u64;
             let aralik = Duration::from_millis(1000 / fps);
             kodlayici.kalite_ayarla(ayar2.kalite.load(std::sync::atomic::Ordering::Relaxed));
+            kodlayici.yayin_ayarla(fps as u32, ayar2.bitrate.load(Ordering::Relaxed));
             while let Ok(konumlar) = iptal_rx.try_recv() {
                 kodlayici.yeniden_gonder(konumlar);
             }
@@ -727,7 +739,10 @@ async fn oturum(
                     }
                 },
             };
+            let kodlama_bas = std::time::Instant::now();
             if let Ok(Some(mut k)) = kodlayici.kodla(&goruntu) {
+                k.kodlama_us = kodlama_bas.elapsed().as_micros().min(u32::MAX as u128) as u32;
+                ayar2.h264.store(kodlayici.h264_etkin(), Ordering::Relaxed);
                 k.yakalama_ms = yakalama_ms;
                 if kare_tx.blocking_send(k).is_err() {
                     break;
@@ -843,9 +858,11 @@ async fn oturum(
                     let konumlar = k.dosemeler.iter().map(|d| (d.x, d.y)).collect();
                     let mut akis = c2.open_uni().await?;
                     let (iptal, mut iptal_al) = oneshot::channel::<()>();
+                    let hata_tx = iptal_tx.clone();
+                    let hata_konumlar = k.dosemeler.iter().map(|d| (d.x, d.y)).collect();
                     let gorev = tokio::spawn(async move {
                         tokio::select! {
-                            r = async { protokol::yaz(&mut akis, &k).await?; akis.finish()?; Ok::<_, anyhow::Error>(()) } => { let _ = r; }
+                            r = async { protokol::yaz(&mut akis, &k).await?; akis.finish()?; Ok::<_, anyhow::Error>(()) } => { if r.is_err() { let _ = hata_tx.send(hata_konumlar); } }
                             _ = &mut iptal_al => { let _ = akis.reset(0u32.into()); }
                         }
                     });
@@ -859,7 +876,12 @@ async fn oturum(
                         rtt,
                         iptal_sayisi,
                     );
-                    ayar.kalite.store(k, std::sync::atomic::Ordering::Relaxed);
+                    if ayar.h264.load(Ordering::Relaxed) {
+                        let once = ayar.bitrate.load(Ordering::Relaxed);
+                        ayar.bitrate.store(uyarla_bitrate(once, rtt, iptal_sayisi), Ordering::Relaxed);
+                    } else {
+                        ayar.kalite.store(k, Ordering::Relaxed);
+                    }
                     ayar.fps.store(f, std::sync::atomic::Ordering::Relaxed);
                     iptal_sayisi = 0;
                 }
@@ -938,6 +960,8 @@ async fn oturum(
     titresim_araligi.tick().await;
     let mut yol_olcum = tokio::time::interval(Duration::from_secs(1));
     let mut son_yol = (String::new(), String::new());
+    // El sıkışma tamamlandı: datagram desteği yoksa bu dalı hiç seçme.
+    let datagram_acik = c.max_datagram_size().is_some();
     let sonuc = loop {
         tokio::select! {
             _ = &mut *durdur => { c.close(0u32.into(), b"durdu"); break Oturum::Durdur; }
@@ -984,7 +1008,7 @@ async fn oturum(
                     }
                 }
             },
-            d = c.read_datagram() => match d {
+            d = c.read_datagram(), if datagram_acik => match d {
                 Ok(b) => if let Ok(k) = bincode::deserialize::<protokol::KolDurumu>(&b) {
                     if sanal_kol.is_some() && sira_yeni(kol_siralari.get(&k.slot).copied(), k.sira) {
                         kol_siralari.insert(k.slot, k.sira);
@@ -995,7 +1019,9 @@ async fn oturum(
                         }
                     }
                 },
-                Err(_) => {}
+                // read_datagram hatası bağlantının kapandığını bildirir; yeniden
+                // aynı hazır future'ı seçmek yerine oturumun kopuş yolunu kullan.
+                Err(_) => break kopus("Bağlantı koptu.")
             },
             _ = yol_olcum.tick() => {
                 let yeni = (ag::secili_yol(c).0.ad().to_owned(), ag::secili_yol_adresi(c));

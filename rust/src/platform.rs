@@ -99,13 +99,18 @@ pub mod masaustu {
             let yakalama_ms = unix_ms();
             let tampon = frame.buffer()?;
             let mut duz = Vec::new();
-            let piksel = tampon.as_nopadding_buffer(&mut duz).to_vec();
+            // Dolgulu kaynakta API doğrudan duz'a kopyalar; ikinci tam ekran kopyası yok.
+            if tampon.has_padding() {
+                let _ = tampon.as_nopadding_buffer(&mut duz);
+            } else {
+                duz.extend_from_slice(tampon.as_nopadding_buffer(&mut Vec::new()));
+            }
             let (kilit, kosul) = &*self.kare;
             *kilit.lock().unwrap() = Some((
                 Goruntu {
                     genislik,
                     yukseklik,
-                    rgba: piksel,
+                    rgba: duz,
                 },
                 yakalama_ms,
             ));
