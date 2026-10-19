@@ -41,6 +41,7 @@ gilrs = "0.11"
 [target.'cfg(windows)'.dependencies]
 gilrs = { version = "0.11", default-features = false, features = ["xinput"] }
 windows-capture = "2.0.1"
+windows = { version = "0.62.2", features = ["Win32_Media_MediaFoundation", "Win32_System_Com", "Win32_System_Variant", "Win32_System_Ole"] }
 vigem-client = { version = "0.1", features = ["unstable_xtarget_notification"] }
 
 

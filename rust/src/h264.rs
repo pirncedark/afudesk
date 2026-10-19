@@ -119,6 +119,54 @@ impl H264Kodlayici {
     }
 }
 
+/// Tek seçim noktası; donanım hatasından sonra bu kodlayıcı yazılımda kalır.
+pub enum Kodlayici264 {
+    #[cfg(windows)]
+    Donanim(crate::h264_mf::MfKodlayici),
+    Yazilim(H264Kodlayici),
+}
+
+impl Kodlayici264 {
+    pub fn yeni(gen: u32, yuk: u32, fps: u32, bitrate: u32) -> anyhow::Result<Self> {
+        #[cfg(windows)]
+        match crate::h264_mf::MfKodlayici::yeni(gen, yuk, fps, bitrate) {
+            Ok(k) => return Ok(Self::Donanim(k)),
+            Err(e) => log::info!("H.264 yazılım yedeği: {e:#}"),
+        }
+        Self::yazilim(gen, yuk, fps, bitrate)
+    }
+
+    pub fn yazilim(gen: u32, yuk: u32, fps: u32, bitrate: u32) -> anyhow::Result<Self> {
+        Ok(Self::Yazilim(H264Kodlayici::yeni(gen, yuk, fps, bitrate)?))
+    }
+
+    pub fn yazilimda(&self) -> bool { matches!(self, Self::Yazilim(_)) }
+
+    pub fn kodla(&mut self, g: &Goruntu, anahtar: bool) -> anyhow::Result<Vec<u8>> {
+        match self {
+            Self::Yazilim(k) => k.kodla(g, anahtar),
+            #[cfg(windows)]
+            Self::Donanim(k) => match k.kodla(g, anahtar) {
+                Ok(v) => Ok(v),
+                Err(e) => {
+                    log::warn!("MF kodlama hatası, oturum yazılımda devam ediyor: {e:#}");
+                    let y = H264Kodlayici::yeni(k.gen, k.yuk, k.fps, k.bitrate)?;
+                    *self = Self::Yazilim(y);
+                    self.kodla(g, true) // Yeni referans zinciri IDR ile başlar.
+                }
+            }
+        }
+    }
+
+    pub fn bitrate_ayarla(&mut self, bitrate: u32) -> anyhow::Result<()> {
+        match self {
+            Self::Yazilim(k) => k.bitrate_ayarla(bitrate),
+            #[cfg(windows)]
+            Self::Donanim(k) => k.bitrate_ayarla(bitrate),
+        }
+    }
+}
+
 pub struct H264Cozucu {
     cozucu: Decoder,
 }
@@ -227,6 +275,13 @@ mod olcum {
         let mut h264 = H264Kodlayici::yeni(1920, 1080, 15, 8_000_000).unwrap();
         let mut toplam = [(0.0, 0usize, 0u32); 2];
         let mut asamalar = [0.0; 2];
+        #[cfg(windows)]
+        let mut mf = match crate::h264_mf::MfKodlayici::yeni(1920, 1080, 15, 8_000_000) {
+            Ok(k) => { eprintln!("MF MFT: {}", k.ad); Some(k) }
+            Err(e) => { eprintln!("1080p MF kullanılamıyor: {e:#}"); None }
+        };
+        #[cfg(windows)]
+        let mut mf_toplam = (0.0, 0usize, 0u32);
         // İki yol da aynı, her pikseli değişen 60 tohumlu sahneyi kodlar.
         for n in 0..N + 5 {
             let g = deneme_goruntu(1920, 1080, (n * 3) as u8);
@@ -249,6 +304,17 @@ mod olcum {
                 toplam[1].1 += h.len();
                 toplam[1].2 += u32::from(!h.is_empty());
             }
+            #[cfg(windows)]
+            if let Some(k) = mf.as_mut() {
+                let bas = std::time::Instant::now();
+                let veri = k.kodla(&g, false).expect("MF ölçüm sırasında başarısız");
+                let ms = bas.elapsed().as_secs_f64() * 1000.0;
+                if n >= 5 {
+                    mf_toplam.0 += ms;
+                    mf_toplam.1 += veri.len();
+                    mf_toplam.2 += u32::from(!veri.is_empty());
+                }
+            }
         }
         eprintln!(
             "1080p H264 asamalar: RGBA_YUV_ms={:.3}, encoder_ms={:.3}",
@@ -261,6 +327,11 @@ mod olcum {
                 ms / N as f64,
                 bayt as f64 / 1000.0 / N as f64
             );
+        }
+        #[cfg(windows)]
+        if mf.is_some() {
+            eprintln!("1080p MF_8Mbit_15fps: kodla_ms={:.3}, KB/kare={:.3}, uretilen={}/{N} (KB=1000 bayt)",
+                mf_toplam.0 / N as f64, mf_toplam.1 as f64 / 1000.0 / N as f64, mf_toplam.2);
         }
     }
 }

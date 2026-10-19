@@ -1,7 +1,9 @@
 //! Görüntü: ekranı 64×64 döşemelere böl, yalnız değişenleri JPEG olarak gönder.
 //! İzleyici tarafı döşemeleri RGBA tampona yerleştirir.
 use crate::protokol::{Doseme, Kare, KareKipi};
-use crate::h264::{H264Kodlayici, H264Cozucu};
+use crate::h264::{Kodlayici264, H264Cozucu};
+#[cfg(test)]
+use crate::h264::H264Kodlayici;
 use image::{codecs::jpeg::JpegEncoder, ExtendedColorType, ImageDecoder};
 use rayon::prelude::*;
 use std::time::{Duration, Instant};
@@ -64,7 +66,8 @@ pub struct Kodlayici {
     tam_aralik: u64,
     otomatik: bool,
     oranlar: std::collections::VecDeque<f64>,
-    h264: Option<H264Kodlayici>,
+    h264: Option<Kodlayici264>,
+    h264_yazilim: bool,
     h264_etkin: bool,
     anahtar: bool,
     fps: u32,
@@ -83,7 +86,7 @@ impl Kodlayici {
             kalite,
             sira: 0,
             tam_aralik: 150,
-            otomatik: false, oranlar: Default::default(), h264: None,
+            otomatik: false, oranlar: Default::default(), h264: None, h264_yazilim: false,
             h264_etkin: false, anahtar: true, fps: 15, bitrate: 8_000_000,
             h264_sureleri: Default::default(), h264_kilit: None,
             #[cfg(test)]
@@ -197,9 +200,16 @@ impl Kodlayici {
                 let bas = Instant::now();
                 let sonuc = (|| -> anyhow::Result<Vec<u8>> {
                     if self.h264.is_none() {
-                        self.h264 = Some(H264Kodlayici::yeni(g.genislik, g.yukseklik, self.fps, self.bitrate)?);
+                        self.h264 = Some(if self.h264_yazilim {
+                            Kodlayici264::yazilim(g.genislik, g.yukseklik, self.fps, self.bitrate)?
+                        } else {
+                            Kodlayici264::yeni(g.genislik, g.yukseklik, self.fps, self.bitrate)?
+                        });
                     }
-                    self.h264.as_mut().unwrap().kodla(g, self.anahtar)
+                    let h = self.h264.as_mut().unwrap();
+                    let sonuc = h.kodla(g, self.anahtar);
+                    self.h264_yazilim |= h.yazilimda();
+                    sonuc
                 })();
                 match sonuc {
                     Ok(veri) => {
