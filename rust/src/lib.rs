@@ -6,6 +6,7 @@ pub mod dosya;
 pub mod goruntu;
 pub mod guvenilen;
 pub mod host;
+pub mod h264;
 pub mod izleyici;
 pub mod kimlik;
 pub mod kod;

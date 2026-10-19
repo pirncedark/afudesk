@@ -126,6 +126,12 @@ async fn tam_akis_goruntu_ve_girdi() {
         }
     }
 
+    if let IzleyiciOlay::Istatistik { kodla_ms, coz_ms, kb_s, kare_kb, oku_ms, .. } =
+        iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Istatistik { .. })).await
+    {
+        assert!(kodla_ms > 0.0 && coz_ms > 0.0 && kb_s > 0.0 && kare_kb > 0.0 && oku_ms > 0.0);
+    }
+
     i.gonder(Girdi::FareKonum { x: 0.5, y: 0.25 }).await;
     i.gonder(Girdi::FareTus {
         tus: FareTusu::Sol,

@@ -477,6 +477,7 @@ fn izleyici_pompala(sonuc: anyhow::Result<izleyici::Izleyici>, olaylar: StreamSi
                     fps,
                     gecikme_ms,
                     yol,
+                    ..
                 } => IzleyiciOlayi {
                     tur: "istatistik".into(),
                     rtt_ms,

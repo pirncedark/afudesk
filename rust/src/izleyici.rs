@@ -98,6 +98,15 @@ pub enum IzleyiciOlay {
         rtt_ms: u32,
         fps: u32,
         gecikme_ms: u32,
+        kodla_ms: f64,
+        ag_ms: f64,
+        coz_ms: f64,
+        /// Olay için RGBA kopyalama ve kuyruğa verme; fiziksel ekran sunumu değil.
+        goster_ms: f64,
+        oku_ms: f64,
+        kare_kb: f64,
+        kb_s: f64,
+        mbit_s: f64,
         yol: String,
     },
     /// Bağlantı koptu, yeniden deneniyor (`deneme` 1'den başlar).
@@ -555,7 +564,7 @@ impl Gozetmen {
         let fark2 = self.saat_farki.clone();
         let esit2 = self.saat_esitlendi.clone();
         let mut goruntu = tokio::spawn(async move {
-            let (kare_tx, mut kare_rx) = mpsc::channel::<Kare>(8);
+            let (kare_tx, mut kare_rx) = mpsc::channel::<(Kare, f64, usize)>(8);
             let c3 = c2.clone();
             let kabul = tokio::spawn(async move {
                 let akis_sayaci = Arc::new(tokio::sync::Semaphore::new(protokol::AZAMI_ESZAMANLI_AKIS));
@@ -567,8 +576,11 @@ impl Gozetmen {
                     let tx = kare_tx.clone();
                     tokio::spawn(async move {
                         let _izin = izin;
+                        let bas = std::time::Instant::now();
                         if let Ok(Some(k)) = protokol::oku::<_, Kare>(&mut akis).await {
-                            let _ = tx.send(k).await;
+                            let oku_ms = bas.elapsed().as_secs_f64() * 1000.0;
+                            let bayt = bincode::serialized_size(&k).unwrap_or(0) as usize + 4;
+                            let _ = tx.send((k, oku_ms, bayt)).await;
                         }
                     });
                 }
@@ -578,10 +590,22 @@ impl Gozetmen {
             let mut sayac = 0u32;
             let mut son = std::time::Instant::now();
             let mut gecikmeler = VecDeque::<(std::time::Instant, u32)>::new();
-            while let Some(k) = kare_rx.recv().await {
+            let mut olcum = [0.0f64; 5]; // kodla, ağ kalanı, çöz, göster, oku
+            let mut baytlar = 0usize;
+            while let Some((k, oku_ms, bayt)) = kare_rx.recv().await {
+                let coz_bas = std::time::Instant::now();
                 b.uygula(&k)?;
+                let coz_ms = coz_bas.elapsed().as_secs_f64() * 1000.0;
+                let kodla_ms = k.kodlama_us as f64 / 1000.0;
+                olcum[0] += kodla_ms;
+                olcum[2] += coz_ms;
+                olcum[4] += oku_ms;
+                baytlar += bayt;
                 let simdi = std::time::Instant::now();
                 if esit2.load(Ordering::Relaxed) {
+                    olcum[1] += zaman::ag_ms(
+                        zaman::gecikme_ms(unix_ms(), fark2.load(Ordering::Relaxed), k.yakalama_ms) as f64,
+                        kodla_ms, coz_ms);
                     gecikmeler.push_back((
                         simdi,
                         zaman::gecikme_ms(unix_ms(), fark2.load(Ordering::Relaxed), k.yakalama_ms),
@@ -594,11 +618,13 @@ impl Gozetmen {
                     gecikmeler.pop_front();
                 }
                 sayac += 1;
+                let goster_bas = std::time::Instant::now();
                 let _ = olay2.try_send(IzleyiciOlay::Kare {
                     genislik: b.goruntu.genislik,
                     yukseklik: b.goruntu.yukseklik,
                     rgba: b.goruntu.rgba.clone(),
                 });
+                olcum[3] += goster_bas.elapsed().as_secs_f64() * 1000.0;
                 if son.elapsed() >= Duration::from_secs(1) {
                     let fps = (sayac as f64 / son.elapsed().as_secs_f64()).round() as u32;
                     let (yol, rtt) = ag::secili_yol(&c2);
@@ -611,9 +637,19 @@ impl Gozetmen {
                             rtt_ms,
                             fps,
                             gecikme_ms,
+                            kodla_ms: olcum[0] / sayac as f64,
+                            ag_ms: olcum[1] / sayac as f64,
+                            coz_ms: olcum[2] / sayac as f64,
+                            goster_ms: olcum[3] / sayac as f64,
+                            oku_ms: olcum[4] / sayac as f64,
+                            kare_kb: baytlar as f64 / 1000.0 / sayac as f64,
+                            kb_s: baytlar as f64 / 1000.0 / son.elapsed().as_secs_f64(),
+                            mbit_s: baytlar as f64 * 8.0 / 1_000_000.0 / son.elapsed().as_secs_f64(),
                             yol: yol.ad().into(),
                         })
                         .await;
+                    olcum = [0.0; 5];
+                    baytlar = 0;
                     sayac = 0;
                     son = std::time::Instant::now();
                 }

@@ -292,9 +292,9 @@ async fn izle_kipi(klasor: PathBuf, sure: Duration) -> Result<()> {
                         }
                         son_kare = Some((genislik, yukseklik, rgba));
                     }
-                    IzleyiciOlay::Istatistik { rtt_ms, fps, gecikme_ms, yol } => {
+                    IzleyiciOlay::Istatistik { rtt_ms, fps, gecikme_ms, yol, kodla_ms, ag_ms, coz_ms, goster_ms, oku_ms, kare_kb, kb_s, mbit_s } => {
                         let v = json!({"t": simdi_ms(), "rtt_ms": rtt_ms, "fps": fps,
-                                       "gecikme_ms": gecikme_ms, "yol": yol, "adres": i.yol_adresi(),
+                                       "kodla_ms": kodla_ms, "ag_ms": ag_ms, "coz_ms": coz_ms, "goster_ms": goster_ms, "oku_ms": oku_ms, "kare_kb": kare_kb, "kb_s": kb_s, "mbit_s": mbit_s, "gecikme_ms": gecikme_ms, "yol": yol, "adres": i.yol_adresi(),
                                        "donus_sonrasi": adim >= 6});
                         println!("IZLE {v}");
                         istatistik.push(v);
