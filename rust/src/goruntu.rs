@@ -275,7 +275,11 @@ mod duzelt_testleri {
             let kare = k.kodla(&deneme_goruntu(128, 128, n)).unwrap().unwrap();
             assert_eq!(matches!(kare.kip, KareKipi::H264(_)), n >= 29);
         }
+        let kilit_bas = Instant::now();
         let kare = k.kodla(&deneme_goruntu(128, 128, 59)).unwrap().unwrap();
+        let kilit_son = k.h264_kilit.expect("CPU koruması kilit başlatmalı");
+        assert!(kilit_son >= kilit_bas + Duration::from_secs(10));
+        assert!(kilit_son <= Instant::now() + Duration::from_secs(10));
         assert!(matches!(kare.kip, KareKipi::Doseme));
         assert!(kare.tam, "JPEG geçişi bütün döşemeleri göndermeli");
         assert_eq!(kare.dosemeler.len(), 4);
@@ -283,10 +287,13 @@ mod duzelt_testleri {
             let kare = k.kodla(&deneme_goruntu(128, 128, n)).unwrap().unwrap();
             assert!(matches!(kare.kip, KareKipi::Doseme), "CPU kilidi korunmalı");
         }
-        // Duvar saatinde 10 saniye beklemek yerine yalnız kilit sonunu geçmişe taşı.
-        k.h264_kilit = Some(Instant::now() - Duration::from_millis(1));
+        // Gerçek kilidi değiştirmeden, bitmesine bir saniye kala JPEG'i doğrula.
         k.test_h264_suresi = Some(Duration::from_millis(1));
+        std::thread::sleep((kilit_son - Duration::from_secs(1)).saturating_duration_since(Instant::now()));
         let kare = k.kodla(&deneme_goruntu(128, 128, 100)).unwrap().unwrap();
+        assert!(matches!(kare.kip, KareKipi::Doseme), "10 saniye dolmadan H264 açılmamalı");
+        std::thread::sleep(kilit_son.saturating_duration_since(Instant::now()));
+        let kare = k.kodla(&deneme_goruntu(128, 128, 101)).unwrap().unwrap();
         assert!(matches!(kare.kip, KareKipi::H264(_)));
         assert!(kare.tam, "kilit sonrası H264 yeni IDR ile başlamalı");
     }

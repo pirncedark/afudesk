@@ -11,6 +11,30 @@ pub fn tetik(v: f32) -> u8 {
     ((v.clamp(0.0, 1.0) * 255.0).round()) as u8
 }
 
+/// Kol kaybolduğunda bir kez nötr paket üret; `son` son fiziksel durumdur.
+#[cfg(any(test, not(target_os = "android")))]
+fn gonderilecek_durum(
+    durum: &Option<KolDurumu>,
+    son: &Option<KolDurumu>,
+    sira: u32,
+) -> Option<KolDurumu> {
+    match (durum, son) {
+        (None, Some(onceki)) => Some(KolDurumu {
+            slot: onceki.slot,
+            sira,
+            dugmeler: 0,
+            sol_x: 0,
+            sol_y: 0,
+            sag_x: 0,
+            sag_y: 0,
+            sol_tetik: 0,
+            sag_tetik: 0,
+        }),
+        _ if durum != son => durum.clone(),
+        _ => None,
+    }
+}
+
 /// Gilrs omuz düğmeleri LB/RB, Mode ise Guide bitine eşlenir.
 #[cfg(not(target_os = "android"))]
 fn dugme_maskesi(basili: impl Fn(gilrs::Button) -> bool) -> u16 {
@@ -89,7 +113,7 @@ pub fn oku(
         }
         let mut degisti = false;
         while let Some(e) = gs.next_event() {
-            if matches!(e.event, EventType::Connected)
+            if matches!(e.event, EventType::Connected | EventType::Disconnected)
                 || matches!(
                     e.event,
                     EventType::ButtonChanged(..) | EventType::AxisChanged(..)
@@ -123,14 +147,12 @@ pub fn oku(
                     sag_tetik: tetik(sag_tetik),
                 });
             }
-            if durum != son {
+            if let Some(k) = gonderilecek_durum(&durum, &son, sira) {
                 if durum.is_some() {
                     let _ = olay.send(());
                 }
-                if let Some(k) = durum.clone() {
-                    if tx.blocking_send(Girdi::Kol(k)).is_err() {
-                        return;
-                    }
+                if tx.blocking_send(Girdi::Kol(k)).is_err() {
+                    return;
                 }
                 son = durum;
                 sira = sira.wrapping_add(1);
@@ -144,6 +166,37 @@ pub fn oku(
 #[cfg(test)]
 mod testler {
     use super::*;
+    #[test]
+    fn kol_kaybolunca_bir_kez_notr_durum_gonderilir() {
+        let son = Some(KolDurumu {
+            slot: 0,
+            sira: 41,
+            dugmeler: 0xffff,
+            sol_x: i16::MIN,
+            sol_y: i16::MAX,
+            sag_x: -100,
+            sag_y: 100,
+            sol_tetik: 255,
+            sag_tetik: 255,
+        });
+        assert_eq!(
+            gonderilecek_durum(&None, &son, 42),
+            Some(KolDurumu {
+                slot: 0,
+                sira: 42,
+                dugmeler: 0,
+                sol_x: 0,
+                sol_y: 0,
+                sag_x: 0,
+                sag_y: 0,
+                sol_tetik: 0,
+                sag_tetik: 0,
+            })
+        );
+        assert!(gonderilecek_durum(&None, &None, 43).is_none());
+        assert_eq!(gonderilecek_durum(&son, &None, 41), son);
+        assert!(gonderilecek_durum(&son, &son, 42).is_none());
+    }
     #[test]
     fn eksen_ve_tetik_sinir_eslemesi() {
         assert_eq!(eksen(-1.0), i16::MIN);

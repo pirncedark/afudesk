@@ -180,6 +180,7 @@ mod testler {
             };
             assert_eq!(sonuc, 0);
             assert_eq!(bilgi.bitrate, bitrate as i32);
+            eprintln!("native bitrate: istenen={bitrate}, okunan={}", bilgi.bitrate);
             let veri = k
                 .kodla(&deneme_goruntu(128, 128, n as u8 + 1), false)
                 .unwrap();
