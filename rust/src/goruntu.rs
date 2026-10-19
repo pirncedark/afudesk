@@ -4,6 +4,7 @@ use crate::protokol::{Doseme, Kare, KareKipi};
 use crate::h264::{H264Kodlayici, H264Cozucu};
 use image::{codecs::jpeg::JpegEncoder, ExtendedColorType, ImageDecoder};
 use rayon::prelude::*;
+use std::time::{Duration, Instant};
 
 /// Bu genişliği aşan ekranlar yayından önce yarıya küçültülür.
 pub const AZAMI_GENISLIK: u32 = 2560;
@@ -68,6 +69,10 @@ pub struct Kodlayici {
     anahtar: bool,
     fps: u32,
     bitrate: u32,
+    h264_sureleri: std::collections::VecDeque<Duration>,
+    h264_kilit: Option<Instant>,
+    #[cfg(test)]
+    test_h264_suresi: Option<std::time::Duration>,
 }
 
 impl Kodlayici {
@@ -80,6 +85,9 @@ impl Kodlayici {
             tam_aralik: 150,
             otomatik: false, oranlar: Default::default(), h264: None,
             h264_etkin: false, anahtar: true, fps: 15, bitrate: 8_000_000,
+            h264_sureleri: Default::default(), h264_kilit: None,
+            #[cfg(test)]
+            test_h264_suresi: None,
         }
     }
 
@@ -90,12 +98,20 @@ impl Kodlayici {
     pub fn h264_etkin(&self) -> bool { self.h264_etkin }
 
     pub fn yayin_ayarla(&mut self, fps: u32, bitrate: u32) {
-        if self.fps != fps || self.bitrate != bitrate {
+        let fps = fps.clamp(1, 60);
+        let bitrate = bitrate.clamp(250_000, 20_000_000);
+        if self.fps != fps {
             self.fps = fps;
-            self.bitrate = bitrate;
-            // Güvenli API yapılandırmayı yalnız kurulumda alıyor: yeni GOP ile başla.
             self.h264 = None;
+            self.h264_sureleri.clear();
             self.anahtar = true;
+        }
+        if self.bitrate != bitrate {
+            if let Some(h) = &mut self.h264 {
+                // Hata halinde eski ayar korunur; sonraki çağrı tekrar dener.
+                if h.bitrate_ayarla(bitrate).is_err() { return; }
+            }
+            self.bitrate = bitrate;
         }
     }
 
@@ -131,6 +147,7 @@ impl Kodlayici {
             .unwrap_or(true);
         if boyut_degisti {
             self.oranlar.clear(); self.h264 = None; self.h264_etkin = false; self.anahtar = true;
+            self.h264_sureleri.clear();
         }
         let mut tam = boyut_degisti || self.sira % self.tam_aralik == 0
             || (self.otomatik && self.anahtar);
@@ -161,13 +178,23 @@ impl Kodlayici {
             if self.oranlar.len() > 30 { self.oranlar.pop_front(); }
             if self.oranlar.len() == 30 {
                 let oran = self.oranlar.iter().sum::<f64>() / 30.0;
-                let etkin = if self.h264_etkin { oran >= 0.10 } else { oran > 0.40 };
+                // Kare bütçesinin %80'ini aşan 30 örnek CPU korumasını tetikler.
+                let yavas = self.h264_sureleri.len() == 30
+                    && self.h264_sureleri.iter().map(Duration::as_secs_f64).sum::<f64>() / 30.0
+                        > 0.8 / self.fps as f64;
+                if self.h264_etkin && yavas {
+                    self.h264_kilit = Some(Instant::now() + Duration::from_secs(10));
+                }
+                let kilitli = self.h264_kilit.is_some_and(|t| Instant::now() < t);
+                let etkin = !kilitli && if self.h264_etkin { oran >= 0.10 } else { oran > 0.40 };
                 if etkin != self.h264_etkin {
                     self.h264_etkin = etkin; self.anahtar = true;
+                    self.h264_sureleri.clear();
                     if !etkin { tam = true; }
                 }
             }
             if self.h264_etkin {
+                let bas = Instant::now();
                 let sonuc = (|| -> anyhow::Result<Vec<u8>> {
                     if self.h264.is_none() {
                         self.h264 = Some(H264Kodlayici::yeni(g.genislik, g.yukseklik, self.fps, self.bitrate)?);
@@ -176,6 +203,11 @@ impl Kodlayici {
                 })();
                 match sonuc {
                     Ok(veri) => {
+                        let sure = bas.elapsed();
+                        #[cfg(test)]
+                        let sure = self.test_h264_suresi.unwrap_or(sure);
+                        self.h264_sureleri.push_back(sure);
+                        if self.h264_sureleri.len() > 30 { self.h264_sureleri.pop_front(); }
                         if veri.is_empty() { self.onceki = Some(g.clone()); return Ok(None); }
                         let tam = crate::h264::anahtar_mi(&veri);
                         self.anahtar = false;
@@ -227,6 +259,68 @@ impl Kodlayici {
             yakalama_ms: 0,
             kodlama_us: 0,
         }))
+    }
+}
+
+#[cfg(test)]
+mod duzelt_testleri {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn yavas_h264_otuz_ornekten_sonra_jpege_doner_ve_kilitlenir() {
+        let mut k = Kodlayici::otomatik(80);
+        k.test_h264_suresi = Some(Duration::from_millis(150));
+        for n in 0..59 {
+            let kare = k.kodla(&deneme_goruntu(128, 128, n)).unwrap().unwrap();
+            assert_eq!(matches!(kare.kip, KareKipi::H264(_)), n >= 29);
+        }
+        let kare = k.kodla(&deneme_goruntu(128, 128, 59)).unwrap().unwrap();
+        assert!(matches!(kare.kip, KareKipi::Doseme));
+        assert!(kare.tam, "JPEG geçişi bütün döşemeleri göndermeli");
+        assert_eq!(kare.dosemeler.len(), 4);
+        for n in 60..100 {
+            let kare = k.kodla(&deneme_goruntu(128, 128, n)).unwrap().unwrap();
+            assert!(matches!(kare.kip, KareKipi::Doseme), "CPU kilidi korunmalı");
+        }
+        // Duvar saatinde 10 saniye beklemek yerine yalnız kilit sonunu geçmişe taşı.
+        k.h264_kilit = Some(Instant::now() - Duration::from_millis(1));
+        k.test_h264_suresi = Some(Duration::from_millis(1));
+        let kare = k.kodla(&deneme_goruntu(128, 128, 100)).unwrap().unwrap();
+        assert!(matches!(kare.kip, KareKipi::H264(_)));
+        assert!(kare.tam, "kilit sonrası H264 yeni IDR ile başlamalı");
+    }
+
+    #[test]
+    fn cpu_koruma_ortalama_ve_fps_butcesini_kullanir() {
+        let mut k = Kodlayici::otomatik(80);
+        // 15 FPS'te 20 ms bütçeye sığar, 60 FPS'te %80 bütçesini aşar.
+        k.test_h264_suresi = Some(Duration::from_millis(20));
+        for n in 0..65 { k.kodla(&deneme_goruntu(128, 128, n)).unwrap(); }
+        assert!(k.h264_etkin());
+        k.yayin_ayarla(60, 8_000_000);
+        for n in 65..95 { k.kodla(&deneme_goruntu(128, 128, n)).unwrap(); }
+        let kare = k.kodla(&deneme_goruntu(128, 128, 95)).unwrap().unwrap();
+        assert!(matches!(kare.kip, KareKipi::Doseme));
+    }
+
+    #[test]
+    fn kucuk_bitrate_adimlari_yeni_idr_uretmez() {
+        let mut k = Kodlayici::otomatik(80);
+        k.test_h264_suresi = Some(Duration::from_millis(1));
+        for n in 0..30 { k.kodla(&deneme_goruntu(128, 128, n)).unwrap(); }
+        assert!(k.h264_etkin());
+        for (n, bitrate) in [7_900_000, 7_800_000, 7_700_000].into_iter().enumerate() {
+            k.yayin_ayarla(15, bitrate);
+            let kare = k.kodla(&deneme_goruntu(128, 128, 30 + n as u8)).unwrap().unwrap();
+            let KareKipi::H264(veri) = kare.kip else { panic!("H264 bekleniyor") };
+            assert!(!veri.is_empty());
+            assert!(!crate::h264::anahtar_mi(&veri), "bitrate IDR üretmemeli");
+        }
+        k.yayin_ayarla(30, 7_700_000);
+        let kare = k.kodla(&deneme_goruntu(128, 128, 34)).unwrap().unwrap();
+        let KareKipi::H264(veri) = kare.kip else { panic!("H264 bekleniyor") };
+        assert!(crate::h264::anahtar_mi(&veri), "FPS değişimi IDR üretmeli");
     }
 }
 

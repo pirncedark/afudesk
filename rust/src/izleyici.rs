@@ -592,6 +592,7 @@ impl Gozetmen {
             let mut gecikmeler = VecDeque::<(std::time::Instant, u32)>::new();
             let mut olcum = [0.0f64; 5]; // kodla, ağ kalanı, çöz, göster, oku
             let mut baytlar = 0usize;
+            let olcum_logu = std::env::var("AFUDESK_OLCUM").is_ok_and(|v| v == "1");
             while let Some((k, oku_ms, bayt)) = kare_rx.recv().await {
                 let coz_bas = std::time::Instant::now();
                 b.uygula(&k)?;
@@ -632,6 +633,21 @@ impl Gozetmen {
                     let mut ms: Vec<u32> = gecikmeler.iter().map(|(_, v)| *v).collect();
                     ms.sort_unstable();
                     let gecikme_ms = if ms.is_empty() { 0 } else { ms[ms.len() / 2] };
+                    if olcum_logu {
+                        let kip = match &k.kip {
+                            protokol::KareKipi::Doseme => "JPEG",
+                            protokol::KareKipi::H264(_) => "H264",
+                        };
+                        eprintln!(
+                            "olcum kip={kip} kodla={:.3} ag={:.3} coz={:.3} goster={:.3} KB/kare={:.3} Mbit/s={:.3} fps={fps}",
+                            olcum[0] / sayac as f64,
+                            olcum[1] / sayac as f64,
+                            olcum[2] / sayac as f64,
+                            olcum[3] / sayac as f64,
+                            baytlar as f64 / 1000.0 / sayac as f64,
+                            baytlar as f64 * 8.0 / 1_000_000.0 / son.elapsed().as_secs_f64(),
+                        );
+                    }
                     let _ = olay2
                         .send(IzleyiciOlay::Istatistik {
                             rtt_ms,
