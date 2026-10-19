@@ -32,10 +32,13 @@ tempfile = "3"
 [target.'cfg(not(target_os = "android"))'.dependencies]
 xcap = "0.9"
 enigo = "0.6"
-gilrs = "0.11"
 arboard = { version = "3", default-features = false }
 
+[target.'cfg(all(not(windows), not(target_os = "android")))'.dependencies]
+gilrs = "0.11"
+
 [target.'cfg(windows)'.dependencies]
+gilrs = { version = "0.11", default-features = false, features = ["xinput"] }
 windows-capture = "2.0.1"
 vigem-client = { version = "0.1", features = ["unstable_xtarget_notification"] }
 

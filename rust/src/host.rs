@@ -938,6 +938,8 @@ async fn oturum(
     titresim_araligi.tick().await;
     let mut yol_olcum = tokio::time::interval(Duration::from_secs(1));
     let mut son_yol = (String::new(), String::new());
+    // El sıkışma tamamlandı: datagram desteği yoksa bu dalı hiç seçme.
+    let datagram_acik = c.max_datagram_size().is_some();
     let sonuc = loop {
         tokio::select! {
             _ = &mut *durdur => { c.close(0u32.into(), b"durdu"); break Oturum::Durdur; }
@@ -984,7 +986,7 @@ async fn oturum(
                     }
                 }
             },
-            d = c.read_datagram() => match d {
+            d = c.read_datagram(), if datagram_acik => match d {
                 Ok(b) => if let Ok(k) = bincode::deserialize::<protokol::KolDurumu>(&b) {
                     if sanal_kol.is_some() && sira_yeni(kol_siralari.get(&k.slot).copied(), k.sira) {
                         kol_siralari.insert(k.slot, k.sira);
@@ -995,7 +997,9 @@ async fn oturum(
                         }
                     }
                 },
-                Err(_) => {}
+                // read_datagram hatası bağlantının kapandığını bildirir; yeniden
+                // aynı hazır future'ı seçmek yerine oturumun kopuş yolunu kullan.
+                Err(_) => break kopus("Bağlantı koptu.")
             },
             _ = yol_olcum.tick() => {
                 let yeni = (ag::secili_yol(c).0.ad().to_owned(), ag::secili_yol_adresi(c));

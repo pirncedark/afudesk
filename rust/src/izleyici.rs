@@ -31,6 +31,50 @@ pub const BAGLANMA_SURESI: Duration = Duration::from_secs(20);
 /// (20 sn) fark edip `host::DEVAM_SURESI` (60 sn) bekler; bu ikisini kapsar.
 pub const YENIDEN_SURESI: Duration = Duration::from_secs(90);
 
+#[cfg(test)]
+mod datagram_testleri {
+    use super::kol_datagram_sonucu;
+    use iroh::endpoint::SendDatagramError;
+
+    #[test]
+    fn destek_yoksa_oturum_boyu_akista_kalir() {
+        for hata in [
+            SendDatagramError::UnsupportedByPeer,
+            SendDatagramError::Disabled,
+        ] {
+            let mut acik = true;
+            assert!(!kol_datagram_sonucu(&mut acik, Err(hata)).unwrap());
+            assert!(!acik);
+        }
+    }
+
+    #[test]
+    fn buyuk_datagram_yalniz_bu_girdiyi_akisa_dusurur() {
+        let mut acik = true;
+        assert!(!kol_datagram_sonucu(&mut acik, Err(SendDatagramError::TooLarge)).unwrap());
+        assert!(acik);
+        assert!(kol_datagram_sonucu(&mut acik, Ok(())).unwrap());
+    }
+}
+
+/// Başarısız girdiyi çağıran bir kez akıştan yollar; kalıcı destek eksikliği
+/// sonraki girdilerde datagram denemesini kapatır.
+fn kol_datagram_sonucu(
+    acik: &mut bool,
+    sonuc: Result<(), iroh::endpoint::SendDatagramError>,
+) -> Result<bool, iroh::endpoint::SendDatagramError> {
+    use iroh::endpoint::SendDatagramError;
+    match sonuc {
+        Ok(()) => Ok(true),
+        Err(SendDatagramError::UnsupportedByPeer | SendDatagramError::Disabled) => {
+            *acik = false;
+            Ok(false)
+        }
+        Err(SendDatagramError::TooLarge) => Ok(false),
+        Err(e) => Err(e),
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum IzleyiciOlay {
     /// Bağlandı, karşı tarafın onayı bekleniyor.
@@ -585,7 +629,10 @@ impl Gozetmen {
         pano_saat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         let mut saat_olcum = tokio::time::interval(Duration::from_secs(2));
         saat_olcum.tick().await;
-        let mut son_kol: Option<Girdi> = None;
+        let mut datagram_acik = c.max_datagram_size().is_some();
+        // Datagram kaybolabilir (ör. bırakılan düğme): son kol durumu aynı sırayla
+        // 100 ms'de bir datagramla yinelenir; host aynı sırayı ikinci kez uygulamaz.
+        let mut son_kol: Option<Vec<u8>> = None;
         let mut kol_yenile = tokio::time::interval(Duration::from_millis(100));
         kol_yenile.tick().await;
         const KOPTU: &str = "Bağlantı koptu.";
@@ -599,10 +646,22 @@ impl Gozetmen {
                     Some(g) => {
                         if let Girdi::Kol(k) = &g {
                             if !izinler.oyun_kolu { continue; }
-                            son_kol = Some(g.clone());
-                            if let Ok(payload) = bincode::serialize(k) {
-                                if c.send_datagram(payload.into()).is_ok() { continue; }
+                            if datagram_acik {
+                                if let Ok(payload) = bincode::serialize(k) {
+                                    match c.max_datagram_size() {
+                                        None => datagram_acik = false,
+                                        Some(azami) if payload.len() <= azami => {
+                                                                                        match kol_datagram_sonucu(&mut datagram_acik, c.send_datagram(payload.clone().into())) {
+                                                Ok(true) => { son_kol = Some(payload); continue }
+                                                Ok(false) => {},
+                                                Err(_) => break KOPTU.into(),
+                                            }
+                                        }
+                                        Some(_) => {}, // Bu girdi büyük; yalnız bir kez akıştan gönder.
+                                    }
+                                }
                             }
+                            son_kol = None;
                             if protokol::yaz(w, &Kontrol::Girdi(g)).await.is_err() { break KOPTU.into(); }
                             continue;
                         }
@@ -612,10 +671,8 @@ impl Gozetmen {
                     None => break KAPANDI.into(),
                 },
                 Some(()) = self.kol_olay.recv() => { let _ = olay.send(IzleyiciOlay::KolAlgilandi).await; }
-                _ = kol_yenile.tick(), if izinler.oyun_kolu => {
-                    if let Some(g) = son_kol.clone() {
-                        if protokol::yaz(w, &Kontrol::Girdi(g)).await.is_err() { break KOPTU.into(); }
-                    }
+                _ = kol_yenile.tick(), if datagram_acik && son_kol.is_some() => {
+                    if let Some(p) = son_kol.clone() { let _ = c.send_datagram(p.into()); }
                 }
                 _ = saat_olcum.tick() => {
                     let izleyici_ms = unix_ms();
