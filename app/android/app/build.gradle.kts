@@ -11,6 +11,7 @@ val anahtarDosyasi = rootProject.file("key.properties")
 val anahtar = Properties().apply { if (anahtarDosyasi.exists()) anahtarDosyasi.inputStream().use { load(it) } }
 
 android {
+    buildFeatures { buildConfig = true }
     namespace = "com.afu.afudesk"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
@@ -22,9 +23,14 @@ android {
 
     defaultConfig {
         applicationId = "com.afu.afudesk"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = maxOf(flutter.minSdkVersion, 23)
+        // Açık istemci kimliği derleme yapılandırmasıdır; gerçek değer repoya girmez.
+        val googleId = providers.gradleProperty("AFUDESK_GOOGLE_WEB_CLIENT_ID").orElse("").get()
+        require(googleId.isEmpty() || googleId.matches(Regex("[A-Za-z0-9._-]+\\.apps\\.googleusercontent\\.com")))
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleId\"")
         targetSdk = flutter.targetSdkVersion
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
@@ -61,4 +67,12 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    implementation("androidx.credentials:credentials:1.6.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.6.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
 }

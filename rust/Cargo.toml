@@ -28,6 +28,8 @@ log = "0.4"
 rayon = "1"
 dirs = "6"
 tempfile = "3"
+ring = "0.17"
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls-no-provider"] }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 xcap = "0.9"
@@ -38,6 +40,7 @@ arboard = { version = "3", default-features = false }
 [target.'cfg(windows)'.dependencies]
 windows-capture = "2.0.1"
 vigem-client = { version = "0.1", features = ["unstable_xtarget_notification"] }
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security_Cryptography", "Win32_System_Memory"] }
 
 
 [features]

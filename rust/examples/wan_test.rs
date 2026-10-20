@@ -262,10 +262,20 @@ async fn izle_kipi(klasor: PathBuf, sure: Duration) -> Result<()> {
                 i.gonder(Girdi::FareKonum { x: 0.62, y: 0.55 }).await;
                 adim = 2;
             } else if adim == 2 && gecen > Duration::from_secs(6) {
-                i.gonder(Girdi::Tus { hid: 0x000700e1, ad: "Shift".into(), basili: true }).await;
+                i.gonder(Girdi::Tus {
+                    hid: 0x000700e1,
+                    ad: "Shift".into(),
+                    basili: true,
+                })
+                .await;
                 adim = 3;
             } else if adim == 3 && gecen > Duration::from_millis(6_400) {
-                i.gonder(Girdi::Tus { hid: 0x000700e1, ad: "Shift".into(), basili: false }).await;
+                i.gonder(Girdi::Tus {
+                    hid: 0x000700e1,
+                    ad: "Shift".into(),
+                    basili: false,
+                })
+                .await;
                 adim = 4;
             } else if adim == 4 && gecen > Duration::from_secs(10) {
                 olaylar.push(json!({"t": simdi_ms(), "tur": "yeniden_baglan_istendi"}));
@@ -329,11 +339,17 @@ async fn izle_kipi(klasor: PathBuf, sure: Duration) -> Result<()> {
     if let Some((g, y, rgba)) = &son_kare {
         png_kaydet(&klasor.join("son_kare.png"), *g, *y, rgba);
     }
-    let sure_sn = kabul_zamani.map(|t| t.elapsed().as_secs_f64()).unwrap_or(0.0);
+    let sure_sn = kabul_zamani
+        .map(|t| t.elapsed().as_secs_f64())
+        .unwrap_or(0.0);
     rapor["kabul_sayisi"] = json!(kabul_sayisi);
     rapor["kare"] = json!(kare);
     rapor["kare_donus_sonrasi"] = json!(kare_sonra);
-    rapor["ort_fps"] = json!(if sure_sn > 0.0 { kare as f64 / sure_sn } else { 0.0 });
+    rapor["ort_fps"] = json!(if sure_sn > 0.0 {
+        kare as f64 / sure_sn
+    } else {
+        0.0
+    });
     rapor["ilk_kare_parlaklik_sapmasi"] = json!(ilk_kare_sapma);
     rapor["son_kare_boyut"] = json!(son_kare.as_ref().map(|(g, y, _)| [*g, *y]));
     rapor["yeniden_baglanma_ms"] = json!(yeniden_ms);
@@ -351,7 +367,10 @@ async fn izle_kipi(klasor: PathBuf, sure: Duration) -> Result<()> {
 async fn main() -> Result<()> {
     let a: Vec<String> = std::env::args().collect();
     let kip = a.get(1).map(String::as_str).unwrap_or("");
-    let klasor = PathBuf::from(a.get(2).context("kullanım: wan_test host|izle <klasor> [sn]")?);
+    let klasor = PathBuf::from(
+        a.get(2)
+            .context("kullanım: wan_test host|izle <klasor> [sn]")?,
+    );
     std::fs::create_dir_all(&klasor)?;
     match kip {
         "host" => host_kipi(klasor).await,

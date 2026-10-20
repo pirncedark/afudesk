@@ -3,6 +3,11 @@
 //! sonra NAT delme, olmazsa relay yedeği — kullanıcı IP/port/modem ayarı yapmaz.
 pub mod ag;
 pub mod dosya;
+pub mod google;
+pub mod google_depo;
+pub mod google_dizin;
+pub mod google_oauth;
+pub mod google_pin;
 pub mod goruntu;
 pub mod guvenilen;
 pub mod host;

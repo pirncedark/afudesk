@@ -21,9 +21,13 @@ class MainActivity : FlutterActivity() {
     private var axes = floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f)
     private var kolVibrator: Vibrator? = null
     private var pendingApk: File? = null
+    private var googleHesap: GoogleHesap? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        googleHesap = GoogleHesap(this)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "afudesk/google")
+            .setMethodCallHandler { call, result -> googleHesap!!.handle(call, result) }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "afudesk/guncelle").setMethodCallHandler { call, result ->
             try {
                 when (call.method) {
@@ -57,6 +61,11 @@ class MainActivity : FlutterActivity() {
                 result.success(filesDir.absolutePath)
             } else result.notImplemented()
         }
+    }
+
+    override fun onDestroy() {
+        googleHesap?.close()
+        super.onDestroy()
     }
 
     private fun installUpdate(apk: File) {

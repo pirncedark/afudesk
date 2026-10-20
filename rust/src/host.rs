@@ -4,8 +4,9 @@
 //! koparsa aynı izleyici `DEVAM_SURESI` içinde onay sorulmadan geri dönebilir.
 use crate::{
     ag::{self, Baglanti, GonderAkisi, Kurulum},
-    dosya, guvenilen, kimlik,
+    dosya,
     goruntu::Kodlayici,
+    guvenilen, kimlik,
     kod::{self, Davet},
     pano::{Esitleyici, PANO_ARALIGI},
     platform::Fabrika,
@@ -202,7 +203,11 @@ pub async fn baslat(ayar: HostAyar, fabrika: Arc<dyn Fabrika>) -> Result<Host> {
 }
 
 /// Koda yazılacak doğrudan adresler ve relay adresleri.
-fn adresleri_topla(ep: &Endpoint, kurulum: Kurulum, relaylar: &[iroh::RelayUrl]) -> (Vec<String>, Vec<String>) {
+fn adresleri_topla(
+    ep: &Endpoint,
+    kurulum: Kurulum,
+    relaylar: &[iroh::RelayUrl],
+) -> (Vec<String>, Vec<String>) {
     match kurulum {
         Kurulum::YalnizYerel => (
             ep.bound_sockets()
@@ -252,8 +257,14 @@ mod guvenlik_testleri {
     fn relay_ve_genel_adres_yoksa_erisim_uyarisi_gerekir() {
         assert!(yalniz_yerel_uyarisi_gerekir(&[], false));
         assert!(!yalniz_yerel_uyarisi_gerekir(&[], true));
-        assert!(!yalniz_yerel_uyarisi_gerekir(&["8.8.8.8:1234".into()], false));
-        assert!(yalniz_yerel_uyarisi_gerekir(&["192.168.1.3:1234".into()], false));
+        assert!(!yalniz_yerel_uyarisi_gerekir(
+            &["8.8.8.8:1234".into()],
+            false
+        ));
+        assert!(yalniz_yerel_uyarisi_gerekir(
+            &["192.168.1.3:1234".into()],
+            false
+        ));
     }
 
     #[test]
@@ -351,8 +362,8 @@ async fn calis(
     kod_acik: Arc<AtomicBool>,
     kod_kapandi: Arc<tokio::sync::Notify>,
 ) {
-    let relay_ulasildi = kurulum != Kurulum::YalnizYerel
-        && ag::cevrimici(&ep, CEVRIMICI_BEKLE).await;
+    let relay_ulasildi =
+        kurulum != Kurulum::YalnizYerel && ag::cevrimici(&ep, CEVRIMICI_BEKLE).await;
     let klasor = ayar
         .dosya_klasoru
         .clone()
@@ -589,10 +600,7 @@ async fn oturum(
             }
             (ad, None, Tur::Kod)
         }
-        (
-            Ok(Ok(Some(Kontrol::MerhabaKayitli { jeton, ad }))),
-            Giris::Yeni { kayit, .. },
-        ) => {
+        (Ok(Ok(Some(Kontrol::MerhabaKayitli { jeton, ad }))), Giris::Yeni { kayit, .. }) => {
             let Some(k) = kayit else {
                 reddet(&mut w, c, guvenilen::GECERSIZ).await;
                 return Oturum::Reddedildi;
@@ -600,7 +608,11 @@ async fn oturum(
             // Cihaz kimliği el sıkışmada doğrulandı; jeton bu kimliğe bağlı.
             let izleyici = ag::kimlik_metni(c.remote_id());
             let kayitlar = guvenilen::oku(&guvenilen::kayit_yolu(&k.veri));
-            match kayitlar.hostlar.iter().find(|h| h.izleyici_kimlik == izleyici) {
+            match kayitlar
+                .hostlar
+                .iter()
+                .find(|h| h.izleyici_kimlik == izleyici)
+            {
                 None => {
                     reddet(&mut w, c, guvenilen::KALDIRILDI).await;
                     return Oturum::Reddedildi;
@@ -777,7 +789,7 @@ async fn oturum(
                 let jeton = guvenilen::yeni_jeton();
                 let simdi = guvenilen::simdi();
                 let kayit = guvenilen::HostKaydi {
-                etiket: None,
+                    etiket: None,
                     izleyici_kimlik: izleyici,
                     ad: ad.clone(),
                     jeton_sha256: guvenilen::jeton_ozeti(&jeton),
@@ -799,7 +811,11 @@ async fn oturum(
             }
             Tur::Kayitli => {
                 let _ = guvenilen::guncelle(&yol, |kk| {
-                    if let Some(h) = kk.hostlar.iter_mut().find(|h| h.izleyici_kimlik == izleyici) {
+                    if let Some(h) = kk
+                        .hostlar
+                        .iter_mut()
+                        .find(|h| h.izleyici_kimlik == izleyici)
+                    {
                         h.son_gorulme = guvenilen::simdi();
                     }
                 });
