@@ -13,7 +13,8 @@ fn pkce_state_nonce_rastgele_ve_sirlar_url_disinda() {
     let p: std::collections::HashMap<_, _> = u.query_pairs().collect();
     assert_eq!(u.host_str(), Some("accounts.google.com"));
     assert_eq!(p["code_challenge_method"], "S256");
-    assert_eq!(p["scope"], "openid");
+    assert!(p["scope"].split_whitespace().any(|s| s == "openid"));
+    assert!(p["scope"].split_whitespace().any(|s| s == afudesk_core::google_drive::SCOPE));
     assert_eq!(p["redirect_uri"], "http://127.0.0.1:51342/oauth2/callback");
     assert!(!p.contains_key("code_verifier"));
     assert_ne!(a.nonce(), b.nonce());

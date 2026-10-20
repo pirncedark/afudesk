@@ -28,6 +28,7 @@ class MainActivity : FlutterActivity() {
         googleHesap = GoogleHesap(this)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "afudesk/google")
             .setMethodCallHandler { call, result -> googleHesap!!.handle(call, result) }
+        GoogleSecureStorage(this, flutterEngine.dartExecutor.binaryMessenger)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "afudesk/guncelle").setMethodCallHandler { call, result ->
             try {
                 when (call.method) {

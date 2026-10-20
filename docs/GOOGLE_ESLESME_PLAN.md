@@ -187,3 +187,11 @@ Kanıtlar `reports/google-tur4-*.txt`.
 iptal entegrasyonu; doğrulanmış kalıcı ağ dizini; Flutter köprü/ekranlar/gösterge;
 Android PIN adaptörü; servis/oturum ajanı kodu. PIN kasası gerçek host'a henüz
 bağlı değildir. Görev tamamlanmış değildir; çalışan Google uzak bağlantısı yoktur.
+
+## 21 Ekim — kesin karar ve bu devam turu
+Önceki PIN ve sunucu önerileri geçersizdir. Aynı doğrulanmış Google sub ve güncel Drive appDataFolder cihaz kaydı doğrudan bağlantı verir. Farklı hesap eski onay yolunu kullanır. Güncelleme başka dala aittir.
+1. Android çakışmaları: iki kanal, instrumentation runner ve iki istemci ID kaynağını koru.
+2. Drive REST adaptörü: sınırlı/sayfalı okuma, cihaz başına kayıt, gizli bilgi yayımlamama, güncel kayıt üzerinden karar testleri.
+3. Rust host/izleyici protokolü: Google kanıtını gerçek QUIC kimliğiyle denetle; eski onay yolunu koru.
+4. Hesap UI PIN akışını kaldır; gerçek köprü entegrasyonu için app/kopru kapsam izni bekleniyor.
+5. Cargo, Flutter ve işaret taraması çıktısını rapora yaz. Git işlemi/servis kurulumu yok.

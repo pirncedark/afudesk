@@ -4,6 +4,8 @@
 pub mod ag;
 pub mod dosya;
 pub mod google;
+pub mod google_drive;
+pub mod google_baglanti;
 pub mod google_depo;
 pub mod google_dizin;
 pub mod google_oauth;

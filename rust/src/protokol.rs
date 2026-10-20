@@ -9,8 +9,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// Protokol sürümü ALPN'nin içindedir: tel biçimi değişince ikisi birlikte artar.
 /// Uyuşmayan sürümler el sıkışmada ayrılır (paket sürümüne bağlı değildir).
-pub const SURUM: u32 = 6;
-pub const ALPN: &[u8] = b"afudesk/6";
+pub const SURUM: u32 = 7;
+pub const ALPN: &[u8] = b"afudesk/7";
 /// Tek mesaj için üst sınır (kötü niyetli uzunluk alanına karşı).
 pub const AZAMI_MESAJ: usize = 32 * 1024 * 1024;
 /// İzleyicide aynı anda işlenen tek yönlü akış tavanı (kareler + dosyalar).
@@ -144,6 +144,8 @@ pub enum Kontrol {
         relaylar: Vec<String>,
         jeton: String,
     },
+    /// Google kan?t? yaln?z ?ifreli, kimli?i do?rulanm?? QUIC ak???nda ta??n?r.
+    MerhabaGoogle { kanit: crate::google_baglanti::Kanit, ad: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

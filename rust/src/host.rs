@@ -346,6 +346,7 @@ enum Giris<'a> {
 enum Tur {
     Kod,
     Kayitli,
+    Google,
     Devam,
 }
 
@@ -392,6 +393,7 @@ async fn calis(
                     continue;
                 };
                 match oturum(
+                    &ag::kimlik_metni(ep.id()),
                     &baglanti,
                     Giris::Devam(&d),
                     &fabrika,
@@ -494,6 +496,7 @@ async fn calis(
                 continue;
             };
             match oturum(
+                &ag::kimlik_metni(ep.id()),
                 &baglanti,
                 Giris::Yeni {
                     bilet: &bilet,
@@ -567,6 +570,7 @@ async fn reddet(w: &mut GonderAkisi, c: &Baglanti, sebep: &str) {
 }
 
 async fn oturum(
+    yerel_kimlik: &str,
     c: &Baglanti,
     giris: Giris<'_>,
     fabrika: &Arc<dyn Fabrika>,
@@ -588,6 +592,7 @@ async fn oturum(
         "Karşı taraf şu an bağlantı vermiyor. AfuDesk'te \"Bağlantı ver\"i açmasını iste.";
     const MESGUL: &str = "Karşı taraf şu an başka bir bağlantıda. Biraz sonra yeniden dene.";
     // (ad, önceden verilmiş izinler, tür): devam eden oturumda onay yeniden sorulmaz.
+    let mut google_kanit = None;
     let (ad, onceki, tur) = match (ilk, &giris) {
         (Ok(Ok(Some(Kontrol::Merhaba { bilet: gelen, ad }))), Giris::Yeni { bilet, .. }) => {
             if !kod_acik.load(Ordering::SeqCst) {
@@ -599,6 +604,25 @@ async fn oturum(
                 return Oturum::HataliBilet;
             }
             (ad, None, Tur::Kod)
+        }
+        (Ok(Ok(Some(Kontrol::MerhabaGoogle { kanit, ad }))), Giris::Yeni { .. }) => {
+            let Some(g) = crate::google_baglanti::bul(yerel_kimlik) else {
+                reddet(&mut w,c,"Google hesabı kapalı, kodla bağlantıyı kullan.").await;
+                return Oturum::Reddedildi;
+            };
+            let yetki = tokio::time::timeout(Duration::from_secs(30),
+                g.yetki(&kanit,&ag::kimlik_metni(c.remote_id()))).await;
+            match yetki {
+                Ok(Ok((crate::google::Karar::Kabul, cihaz_adi))) => {
+                    google_kanit = Some(kanit);
+                    (cihaz_adi, Some(Izinler {kontrol:true,pano:true,dosya:true,oyun_kolu:false}), Tur::Google)
+                }
+                Ok(Ok((crate::google::Karar::OnaySor, _))) => (ad,None,Tur::Google),
+                _ => {
+                    reddet(&mut w,c,"Google bağlantısı doğrulanamadı, yeniden giriş yap.").await;
+                    return Oturum::Reddedildi;
+                }
+            }
         }
         (Ok(Ok(Some(Kontrol::MerhabaKayitli { jeton, ad }))), Giris::Yeni { kayit, .. }) => {
             let Some(k) = kayit else {
@@ -688,7 +712,7 @@ async fn oturum(
     };
     // Bağlantı istemeden koptuysa izleyici geri dönebilsin; kapatıldıysa oturum biter.
     let kopus = |sebep: &str| {
-        if istemsiz_kopus(c) {
+        if google_kanit.is_none() && istemsiz_kopus(c) {
             Oturum::Koptu(devam_bilgisi.clone())
         } else {
             Oturum::Bitti(sebep.to_owned())
@@ -820,7 +844,7 @@ async fn oturum(
                     }
                 });
             }
-            Tur::Devam => {}
+            Tur::Devam | Tur::Google => {}
         }
     }
     let _ = olay
@@ -954,9 +978,20 @@ async fn oturum(
     titresim_araligi.tick().await;
     let mut yol_olcum = tokio::time::interval(Duration::from_secs(1));
     let mut son_yol = (String::new(), String::new());
+    let mut google_denetim = tokio::time::interval(Duration::from_secs(30));
     let sonuc = loop {
         tokio::select! {
             _ = &mut *durdur => { c.close(0u32.into(), b"durdu"); break Oturum::Durdur; }
+            _ = google_denetim.tick(), if google_kanit.is_some() => {
+                let sonuc = match crate::google_baglanti::bul(yerel_kimlik) {
+                    Some(g) => tokio::time::timeout(Duration::from_secs(30),
+                        g.yetki(google_kanit.as_ref().expect("google proof"), &ag::kimlik_metni(c.remote_id()))).await,
+                    None => { c.close(0u32.into(),b"google signout"); break Oturum::Bitti("Hesaptan çıkıldı.".into()); }
+                };
+                if !matches!(sonuc,Ok(Ok((crate::google::Karar::Kabul,_)))) {
+                    c.close(0u32.into(),b"google revoked"); break Oturum::Bitti("Cihaz erişimi sona erdi, yeniden giriş yap.".into());
+                }
+            },
             k = komut.recv() => match k {
                 Some(HostKomut::Kes) | None => {
                     let _ = protokol::yaz(&mut w, &Kontrol::Kapat("Karşı taraf bağlantıyı kesti.".into())).await;

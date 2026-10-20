@@ -284,6 +284,22 @@ pub async fn kayitli_baglan(
     .await
 }
 
+/// Same-account connection. The target and all routing hints come from Drive;
+/// QUIC authenticates the selected host key before sending the ID token.
+pub async fn google_baglan(g: &crate::google_baglanti::Erisim, host: &str,
+    veri: &Path, ad: &str, pano: Option<Box<dyn Pano>>) -> Result<Izleyici> {
+    anyhow::ensure!(g.hesap.gecerlilik_sonu() > kod::simdi(), "Google girişi sona erdi, yeniden giriş yap.");
+    let liste = g.dizin.liste().await?;
+    let mut bulunan = liste.iter().filter(|k| k.host == host && k.erisim && k.guncel(g.hesap.sub(),kod::simdi()));
+    let k = bulunan.next().ok_or_else(|| anyhow::anyhow!("Bilgisayara ulaşılamadı, açık olduğunu kontrol et."))?;
+    anyhow::ensure!(bulunan.next().is_none(), "Cihaz kaydı doğrulanamadı, yeniden giriş yap.");
+    let kimlik = kimlik::yukle_veya_uret(&veri.join(kimlik::IZLEYICI_DOSYASI))?;
+    anyhow::ensure!(ag::kimlik_metni(kimlik.kimlik()) == g.cihaz.izleyici, "Cihaz kimliği değişti, yeniden giriş yap.");
+    let hedef = ag::hedef_adres(&k.host,&k.adresler,&k.relaylar)?;
+    oturum_ac(kurulum_sec(&k.adresler,&k.relaylar),hedef,
+        Kontrol::MerhabaGoogle {kanit:g.kanit(),ad:ad.into()},&k.ad,ad,pano,Some(veri),None).await
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn oturum_ac(
     kurulum: Kurulum,

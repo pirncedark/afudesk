@@ -77,7 +77,10 @@ impl Giris {
             ("client_id", client_id),
             ("redirect_uri", redirect.as_str()),
             ("response_type", "code"),
-            ("scope", "openid"),
+            (
+                "scope",
+                "openid email profile https://www.googleapis.com/auth/drive.appdata",
+            ),
             ("state", state.as_str()),
             ("nonce", nonce.as_str()),
             ("code_challenge", challenge.as_str()),
@@ -237,6 +240,12 @@ impl Kod {
     /// Token veya HTTP hata gövdesi hataya/loga eklenmez. İstemci metadata'sı
     /// dağıtımda sağlanır, repo içinde gerçek client_secret bulunmaz.
     pub async fn dogrula(self, client_secret: Option<&str>) -> Sonuc<Dogrulanmis> {
+        Ok(self.oturum(client_secret).await?.hesap)
+    }
+
+    /// Returns Drive credentials only after signature, audience and the exact
+    /// one-use OAuth nonce have all been checked. Never log this result.
+    pub async fn oturum(self, client_secret: Option<&str>) -> Sonuc<GoogleOturumu> {
         if self.giris.baslangic.elapsed() > OMUR {
             return Err(DogrulamaHatasi);
         }
@@ -277,8 +286,16 @@ impl Kod {
         #[derive(serde::Deserialize)]
         struct Token {
             id_token: String,
+            access_token: String,
+            token_type: String,
         }
         let token: Token = serde_json::from_slice(&bytes).map_err(|_| DogrulamaHatasi)?;
+        if token.access_token.is_empty()
+            || token.access_token.len() > 16 * 1024
+            || !token.token_type.eq_ignore_ascii_case("Bearer")
+        {
+            return Err(DogrulamaHatasi);
+        }
         let verifier = Dogrulayici::google_dan(vec![self.giris.client_id]).await?;
         let simdi = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -290,7 +307,22 @@ impl Kod {
         if hesap.nonce() != self.giris.nonce {
             return Err(DogrulamaHatasi);
         }
-        Ok(hesap)
+        Ok(GoogleOturumu {
+            hesap,
+            id_token: token.id_token,
+            access_token: token.access_token,
+        })
+    }
+}
+
+pub struct GoogleOturumu {
+    pub hesap: Dogrulanmis,
+    pub id_token: String,
+    pub access_token: String,
+}
+impl fmt::Debug for GoogleOturumu {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("GoogleOturumu([gizli])")
     }
 }
 

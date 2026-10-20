@@ -25,6 +25,25 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Arka plan betikleri söz dizimi (çalıştırılmaz)
+        shell: pwsh
+        run: |
+          foreach ($path in 'scripts/arka_plan_kur.ps1', 'scripts/arka_plan_kaldir.ps1') {
+            $tokens = $null
+            $parseErrors = $null
+            $null = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD $path), [ref]$tokens, [ref]$parseErrors)
+            if ($parseErrors.Count) { throw ($parseErrors | Out-String) }
+            Write-Output "PASS: $path"
+          }
+      - name: MSVC ortamı
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: Windows DPAPI testleri
+        shell: pwsh
+        run: |
+          cl /nologo /std:c++17 /EHsc /W4 /WX /DNOMINMAX app/windows/runner/google_secure_storage.cpp app/windows/tests/google_secure_storage_test.cpp /Fe:google_secure_storage_test.exe /link crypt32.lib shell32.lib ole32.lib
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./google_secure_storage_test.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: dtolnay/rust-toolchain@stable
       - uses: subosito/flutter-action@v2
         with:

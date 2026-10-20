@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
     paths: ["app/**", "rust/**", ".github/workflows/android.yml"]
+  pull_request:
+    paths: ["app/**", "rust/**", ".github/workflows/android.yml"]
   workflow_dispatch:
 
 jobs:
@@ -35,8 +37,13 @@ jobs:
           fi
       - name: APK derle
         working-directory: app
+        env:
+          # Optional for compile checks; real sign-in needs this public client ID.
+          AFUDESK_GOOGLE_WEB_CLIENT_ID: ${{ vars.AFUDESK_GOOGLE_WEB_CLIENT_ID }}
         run: |
           flutter pub get
+          flutter analyze
+          flutter test
           flutter build apk --release
           cp build/app/outputs/flutter-apk/app-release.apk AfuDesk-android.apk
           sha256sum AfuDesk-android.apk | sed 's|  .*|  AfuDesk-android.apk|' > AfuDesk-android.apk.sha256
