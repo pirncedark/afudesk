@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:afudesk/guncelleme.dart';
 import 'package:afudesk/bilesenler/guncelle_karti.dart';
 import 'package:flutter/material.dart';
@@ -22,6 +23,55 @@ void main() {
   setUp(() => GuncelleKarti.ertelenen.clear());
   final yeni = Guncelleme('v1.7.0', Uri.parse('https://github.com/paket'),
       Uri.parse('https://github.com/ozet'), 100);
+  testWidgets('Acilista ve gunde bir kontrol eder, geri donuste tekrarlamaz', (
+    tester,
+  ) async {
+    final servis = SahteGuncelleyici();
+    await tester.pumpWidget(MaterialApp(home: GuncelleKarti(servis: servis)));
+    await tester.pumpAndSettle();
+    expect(servis.kontroller, 1);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(servis.kontroller, 1);
+    await tester.pump(const Duration(hours: 23));
+    expect(servis.kontroller, 1);
+    await tester.pump(const Duration(hours: 1));
+    await tester.pumpAndSettle();
+    expect(servis.kontroller, 2);
+    guncellemeKontrolIstegi.value++;
+    await tester.pumpAndSettle();
+    expect(servis.kontroller, 3);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(days: 1));
+    expect(servis.kontroller, 3);
+  });
+  test('1.8.0 surumu yalniz daha eski surumlere onerilir', () {
+    expect(yeniSurum('v1.8.0', '1.7.0+8'), isTrue);
+    expect(yeniSurum('v1.8.0', '1.8.0+9'), isFalse);
+    expect(yeniSurum('v1.8.0', '1.9.0'), isFalse);
+    expect(yeniSurum('v1.8.0-rc.1', '1.7.0'), isFalse);
+  });
+  test('releases/latest JSON Android paketini ve ozetini ayristirir', () {
+    final json =
+        jsonDecode('''{
+      "tag_name": "v1.8.0", "draft": false, "prerelease": false,
+      "assets": [
+        {"name": "AfuDesk-windows-x64.zip", "size": 200,
+         "browser_download_url": "https://github.com/pirncedark/afudesk/releases/download/v1.8.0/AfuDesk-windows-x64.zip"},
+        {"name": "AfuDesk-android.apk", "size": 123456,
+         "browser_download_url": "https://github.com/pirncedark/afudesk/releases/download/v1.8.0/AfuDesk-android.apk"},
+        {"name": "AfuDesk-android.apk.sha256", "size": 86,
+         "browser_download_url": "https://github.com/pirncedark/afudesk/releases/download/v1.8.0/AfuDesk-android.apk.sha256"}
+      ]
+    }''')
+            as Map<String, dynamic>;
+    final g = Guncelleme.yayindan(json, '1.7.0+8', 'AfuDesk-android.apk')!;
+    expect(g.surum, 'v1.8.0');
+    expect(g.boyut, 123456);
+    expect(g.paket.path, endsWith('/v1.8.0/AfuDesk-android.apk'));
+    expect(g.ozet.toString(), '${g.paket}.sha256');
+  });
   test('Windows kaynak secimi her iki asamada yapilir', () {
     expect(windowsKurulum, contains("Join-Path \$stage 'afudesk.exe'"));
     expect(windowsKurulum, contains("Join-Path \$stage 'AfuDesk'"));
