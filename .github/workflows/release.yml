@@ -1,0 +1,219 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Sürüm etiketi (boşsa mevcut ref kullanılır, ör. v1.8.1)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  gate:
+    name: Sürüm Denetimi
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.version.outputs.tag_name }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sürüm doğrula
+        id: version
+        shell: bash
+        run: |
+          RAW_TAG="${{ inputs.tag }}"
+          if [ -z "$RAW_TAG" ]; then
+            RAW_TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "Hedef etiket: $RAW_TAG"
+
+          if [[ ! "$RAW_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
+            echo "::error::Etiket 'vX.Y.Z' biçiminde olmalıdır: $RAW_TAG"
+            exit 1
+          fi
+
+          TAG_VERSION="${RAW_TAG#v}"
+          TAG_BASE="${TAG_VERSION%%+*}"
+
+          PUBSPEC_VERSION_FULL=$(grep '^version:' app/pubspec.yaml | sed 's/version:[[:space:]]*//' | tr -d '\r"')
+          PUBSPEC_BASE="${PUBSPEC_VERSION_FULL%%+*}"
+
+          echo "Etiket taban sürümü: $TAG_BASE"
+          echo "pubspec.yaml sürümü: $PUBSPEC_VERSION_FULL (taban: $PUBSPEC_BASE)"
+
+          if [ "$TAG_BASE" != "$PUBSPEC_BASE" ]; then
+            echo "::error::Sürüm uyuşmazlığı: pubspec.yaml ($PUBSPEC_BASE) != etiket ($TAG_BASE)"
+            exit 1
+          fi
+
+          echo "tag_name=$RAW_TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$TAG_BASE" >> "$GITHUB_OUTPUT"
+
+  android:
+    name: Android APK
+    needs: gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.9
+          channel: stable
+      - name: İmza anahtarı
+        working-directory: app/android
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_PAROLA: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > afudesk.p12
+            printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=afudesk\nkeyPassword=%s\n' \
+              "$PWD/afudesk.p12" "$KEYSTORE_PAROLA" "$KEYSTORE_PAROLA" > key.properties
+          fi
+      - name: APK derle
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter build apk --release
+          cp build/app/outputs/flutter-apk/app-release.apk AfuDesk-android.apk
+          sha256sum AfuDesk-android.apk | sed 's|  .*|  AfuDesk-android.apk|' > AfuDesk-android.apk.sha256
+          cat AfuDesk-android.apk.sha256
+      - name: İmza doğrula
+        working-directory: app
+        run: |
+          APKSIGNER=$(ls $ANDROID_HOME/build-tools/*/apksigner | sort -V | tail -1)
+          $APKSIGNER verify --print-certs AfuDesk-android.apk | head -5
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-android
+          path: |
+            app/AfuDesk-android.apk
+            app/AfuDesk-android.apk.sha256
+
+  windows:
+    name: Windows Zip
+    needs: gate
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.9
+          channel: stable
+      - name: Windows derleme
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter build windows --release
+      - name: Windows paketi hazırla (AfuDesk-windows-x64.zip)
+        shell: pwsh
+        working-directory: app/build/windows/x64/runner/Release
+        run: |
+          # afudesk.exe, afudesk_kopru.dll ve data klasörü kökte olacak şekilde paketle
+          Compress-Archive -Path * -DestinationPath "$env:GITHUB_WORKSPACE\AfuDesk-windows-x64.zip" -Force
+      - name: SHA-256 hesapla
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash -Algorithm SHA256 AfuDesk-windows-x64.zip).Hash.ToLower()
+          "$hash  AfuDesk-windows-x64.zip" | Out-File -Encoding utf8NoBOM -FilePath AfuDesk-windows-x64.zip.sha256
+          Get-Content AfuDesk-windows-x64.zip.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: |
+            AfuDesk-windows-x64.zip
+            AfuDesk-windows-x64.zip.sha256
+
+  release:
+    name: GitHub Release
+    needs: [gate, android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-android
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-windows
+          path: dist
+      - name: Sürüm notu gövdesi hazırla
+        shell: bash
+        run: |
+          TAG="${{ needs.gate.outputs.tag_name }}"
+          VER="${{ needs.gate.outputs.version }}"
+
+          DOC_NOTE="docs/SURUM_NOTLARI_${VER}.md"
+          BODY_FILE="release_body.md"
+
+          APK_SHA=$(cat dist/AfuDesk-android.apk.sha256 | awk '{print $1}')
+          WIN_SHA=$(cat dist/AfuDesk-windows-x64.zip.sha256 | awk '{print $1}')
+
+          if [ -f "$DOC_NOTE" ]; then
+            cat "$DOC_NOTE" > "$BODY_FILE"
+            echo "" >> "$BODY_FILE"
+          else
+            echo "## AfuDesk $TAG" > "$BODY_FILE"
+            echo "" >> "$BODY_FILE"
+            echo "Release $TAG of AfuDesk." >> "$BODY_FILE"
+            echo "" >> "$BODY_FILE"
+            echo "### Changes" >> "$BODY_FILE"
+            git log -1 --pretty=format:"* %s" >> "$BODY_FILE"
+            echo "" >> "$BODY_FILE"
+            echo "" >> "$BODY_FILE"
+            echo "---" >> "$BODY_FILE"
+            echo "" >> "$BODY_FILE"
+            echo "## Türkçe" >> "$BODY_FILE"
+            echo "" >> "$BODY_FILE"
+            echo "AfuDesk $TAG sürümü." >> "$BODY_FILE"
+            echo "" >> "$BODY_FILE"
+          fi
+
+          printf '\n## SHA-256 Checksums\n\n| Dosya / File | SHA-256 |\n|---|---|\n| `AfuDesk-windows-x64.zip` | `%s` |\n| `AfuDesk-android.apk` | `%s` |\n' "$WIN_SHA" "$APK_SHA" >> "$BODY_FILE"
+
+          cat "$BODY_FILE"
+      - name: Release oluştur / güncelle
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.gate.outputs.tag_name }}
+          name: AfuDesk ${{ needs.gate.outputs.tag_name }}
+          body_path: release_body.md
+          files: |
+            dist/AfuDesk-windows-x64.zip
+            dist/AfuDesk-windows-x64.zip.sha256
+            dist/AfuDesk-android.apk
+            dist/AfuDesk-android.apk.sha256
+      - name: Telegram bildirimi gönder
+        if: ${{ env.TELEGRAM_BOT_TOKEN != '' && env.TELEGRAM_CHAT_ID != '' }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TAG: ${{ needs.gate.outputs.tag_name }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          RELEASE_URL="https://github.com/${REPO}/releases/tag/${TAG}"
+          APK_URL="https://github.com/${REPO}/releases/download/${TAG}/AfuDesk-android.apk"
+          WIN_URL="https://github.com/${REPO}/releases/download/${TAG}/AfuDesk-windows-x64.zip"
+
+          MESSAGE=$(printf '🚀 *AfuDesk %s yayınlandı!*\n\n📱 [Android APK indir](%s)\n💻 [Windows x64 Zip indir](%s)\n\n🔗 [GitHub Release Detayları](%s)' "$TAG" "$APK_URL" "$WIN_URL" "$RELEASE_URL")
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d parse_mode="Markdown" \
+            -d text="${MESSAGE}" \
+            -d disable_web_page_preview="false" > /dev/null || echo "Telegram bildirimi gönderilemedi (ağ hatası)."
