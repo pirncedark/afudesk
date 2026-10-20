@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'motor.dart';
+import 'hesap/hesap_servisi.dart';
+import 'hesap/hesap_sayfasi.dart';
 import 'sayfalar/ana.dart';
 import 'sayfalar/baglanti_ver.dart';
 import 'src/rust/api/afudesk.dart' as rust;
@@ -24,14 +26,16 @@ Future<void> main() async {
       // Klasör alınamazsa kayıtlı cihazlar olmadan çalışır (kodla bağlantı etkilenmez).
     }
   }
-  runApp(AfuDeskUygulama(motor: RustMotor()));
+  runApp(AfuDeskUygulama(motor: RustMotor(), hesapServisi: HazirDegilHesapServisi()));
 }
 
 /// Uygulama kökü: bağlantı isteklerinin onay penceresini hangi ekranda olunursa olsun
 /// gösterir (kayıtlı cihazlar "Bağlantı ver" açık olmasa da bağlanmak isteyebilir).
 class AfuDeskUygulama extends StatefulWidget {
   final Motor motor;
-  const AfuDeskUygulama({super.key, required this.motor});
+  // Servisin yaşam süresini çağıran yönetir; null eski akışı korur.
+  final HesapServisi? hesapServisi;
+  const AfuDeskUygulama({super.key, required this.motor, this.hesapServisi});
 
   @override
   State<AfuDeskUygulama> createState() => _AfuDeskUygulamaDurum();
@@ -94,7 +98,13 @@ class _AfuDeskUygulamaDurum extends State<AfuDeskUygulama> {
       title: 'AfuDesk',
       debugShowCheckedModeBanner: false,
       theme: afuTema(),
-      home: AnaSayfa(motor: widget.motor),
+      builder: (context, child) => widget.hesapServisi == null ? child! :
+        HesapBaglantiSeridi(servis: widget.hesapServisi!, child: child!),
+      home: widget.hesapServisi == null ? AnaSayfa(motor: widget.motor) :
+        HesapSayfasi(servis: widget.hesapServisi!, kodlaBaglan: () {
+          _gezgin.currentState?.push(MaterialPageRoute(
+            builder: (_) => AnaSayfa(motor: widget.motor)));
+        }),
     );
   }
 }
