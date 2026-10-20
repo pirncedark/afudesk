@@ -11,8 +11,7 @@ class GuncelleKarti extends StatefulWidget {
   State<GuncelleKarti> createState() => _GuncelleKartiDurum();
 }
 
-class _GuncelleKartiDurum extends State<GuncelleKarti>
-    with WidgetsBindingObserver {
+class _GuncelleKartiDurum extends State<GuncelleKarti> {
   late final Guncelleyici _servis;
   bool _gizli = false;
   Guncelleme? _yayin;
@@ -25,22 +24,15 @@ class _GuncelleKartiDurum extends State<GuncelleKarti>
     super.initState();
     _servis = widget.servis ?? Guncelleyici();
     guncellemeKontrolIstegi.addListener(_bak);
-    WidgetsBinding.instance.addObserver(this);
     _bak();
-    _timer = Timer.periodic(const Duration(hours: 6), (_) => _bak());
+    _timer = Timer.periodic(const Duration(days: 1), (_) => _bak());
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     guncellemeKontrolIstegi.removeListener(_bak);
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _bak();
   }
 
   Future<void> _bak() async {
@@ -118,7 +110,7 @@ class _GuncelleKartiDurum extends State<GuncelleKarti>
               key: const Key('guncelle_dugme'),
               onPressed: _mesgul ? null : _kur,
               icon: const Icon(Icons.system_update),
-              label: const Text('Güncelle'),
+              label: const Text('Yeni sürüm var — güncelle'),
                 )),
                 TextButton(
                   key: const Key('guncelle_sonra'),
