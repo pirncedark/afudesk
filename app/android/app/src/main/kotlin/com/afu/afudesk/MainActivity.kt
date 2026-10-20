@@ -24,6 +24,7 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        GoogleSecureStorage(this, flutterEngine.dartExecutor.binaryMessenger)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "afudesk/guncelle").setMethodCallHandler { call, result ->
             try {
                 when (call.method) {

@@ -10,6 +10,11 @@ plugins {
 val anahtarDosyasi = rootProject.file("key.properties")
 val anahtar = Properties().apply { if (anahtarDosyasi.exists()) anahtarDosyasi.inputStream().use { load(it) } }
 
+// Public OAuth identifier, supplied locally or by CI; never a token/secret.
+val googleWebClientId = providers.gradleProperty("AFUDESK_GOOGLE_WEB_CLIENT_ID")
+    .orElse(providers.environmentVariable("AFUDESK_GOOGLE_WEB_CLIENT_ID"))
+    .orElse("")
+
 android {
     namespace = "com.afu.afudesk"
     compileSdk = flutter.compileSdkVersion
@@ -22,6 +27,7 @@ android {
 
     defaultConfig {
         applicationId = "com.afu.afudesk"
+        resValue("string", "afudesk_google_web_client_id", googleWebClientId.get())
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
