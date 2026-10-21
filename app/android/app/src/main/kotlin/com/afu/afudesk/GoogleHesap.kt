@@ -130,7 +130,7 @@ class GoogleHesap(private val activity: FlutterActivity) {
         val result = authorizationResult ?: return
         try {
             check(generation == authorizationGeneration)
-            check(value.grantedScopes.any { it.scopeUri == "https://www.googleapis.com/auth/drive.appdata" })
+            check(value.grantedScopes.any { it == "https://www.googleapis.com/auth/drive.appdata" })
             val access = requireNotNull(value.accessToken).also { check(it.isNotEmpty()) }
             val id = requireNotNull(authorizationToken)
             authorizationResult = null; authorizationToken = null
