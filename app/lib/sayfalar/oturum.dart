@@ -13,6 +13,7 @@ import '../klavye.dart';
 import '../motor.dart';
 import '../oyun_kolu.dart';
 import '../tema.dart';
+import '../terminal_girdi.dart';
 import 'terminal_modu.dart';
 
 /// Uzak ekran oturumu: bağlanır, onayı bekler, kareleri çizer, girdiyi gönderir.
@@ -187,7 +188,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
       if (!_terminalIpucuGosterildi) {
         _terminalIpucuGosterildi = true;
         _terminalBilgi(
-          'Klavye düğmesine dokun; önceki satırlar için ekranı kaydır.',
+          'Klavye mikrofonuyla yaz veya Bas-konuş düğmesini basılı tut.',
         );
       }
     } else {
@@ -200,10 +201,10 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
 
   void _terminalKapat({bool gonder = true}) {
     _terminalSaat?.cancel();
+    _tuslariBirak();
     if (gonder && (_terminal || _terminalBekliyor)) {
       widget.motor.girdi(const Girdi('terminal_kapat'));
     }
-    _tuslariBirak();
     _yaziOdak.unfocus();
     SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
     final degisti = _terminal || _terminalBekliyor;
@@ -251,6 +252,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     if (!mounted || !_terminal || !_kontrol || _yeniden != null) return;
     if (_terminalCtrl) _terminalCtrlDegistir();
     if (veri?.text?.isNotEmpty ?? false) {
+      _yaziSifirla();
       _gonder([Girdi('metin', metin: veri!.text!)]);
     }
   }
@@ -277,6 +279,8 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   final Map<int, Duration> _sonTekrar = {};
   final Set<String> _basiliFare = {};
   final _yazi = TextEditingController(text: _gozcu);
+  String _oncekiYazi = _gozcu;
+  late final _basKonus = BasKonusGirdisi(_gonder);
   bool _klavyeAcik = false;
   bool _oyunKoluIzni = false, _kolAcik = false;
   OyunKoluDurumu? _sonKol, _bekleyenKol;
@@ -292,6 +296,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _yaziOdak.addListener(_yaziOdakDegisti);
+    _yazi.addListener(_imeDegisti);
     _kolKanal.setMethodCallHandler(_androidKol);
     if (widget.motor.dokunmatik) {
       // Telefonda bilgisayar ekranı yatayda ve tam ekranda çok daha okunaklı.
@@ -374,6 +379,8 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
         _terminalListesi(o.metin);
       case 'terminal_durum':
         _terminalDurumu(o.metin);
+      case 'terminal_uyari':
+        if (_terminal) _terminalBilgi(o.metin);
       case 'bekliyor':
         setState(() {
           _asama = _Asama.onayBekleniyor;
@@ -602,10 +609,10 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   @override
   void dispose() {
     _terminalSaat?.cancel();
+    _tuslariBirak();
     if (_terminal || _terminalBekliyor) {
       widget.motor.girdi(const Girdi('terminal_kapat'));
     }
-    _tuslariBirak();
     WidgetsBinding.instance.removeObserver(this);
     _yaziOdak.removeListener(_yaziOdakDegisti);
     _kolGonderimBekle?.cancel();
@@ -616,6 +623,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     }
     _dokunmaSaat?.cancel();
     _yaziOdak.dispose();
+    _yazi.removeListener(_imeDegisti);
     _yazi.dispose();
     _abonelik?.cancel();
     widget.motor.izleyiciKapat();
@@ -690,9 +698,25 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     }
   }
 
-  /// Görünmez yazı alanı hep tek bir gözcü karakter tutar: silinirse Backspace,
-  /// eklenen her şey metin olarak gider.
+  void _imeDegisti() => _yaziDegisti(_yazi.text);
+
+  void _yaziSifirla() {
+    _oncekiYazi = _gozcu;
+    _yazi.value = const TextEditingValue(
+      text: _gozcu,
+      selection: TextSelection.collapsed(offset: 1),
+    );
+  }
+
+  /// Composing ve commit aynı metni taşıyabilir; yalnız metin farkını gönder.
   void _yaziDegisti(String v) {
+    if (v == _oncekiYazi) return;
+    final onceki = _oncekiYazi;
+    _oncekiYazi = v;
+    if (!_kontrol || _yeniden != null) {
+      _yaziSifirla();
+      return;
+    }
     if (_terminalCtrl) {
       final yeni = v.replaceAll(_gozcu, '');
       if (v.isEmpty) _ozelTus('Backspace');
@@ -700,22 +724,25 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
         final c = String.fromCharCode(harf).toUpperCase();
         if (RegExp(r'^[A-Z]$').hasMatch(c)) _ozelTus(c.toLowerCase());
       }
-    } else if (v.isEmpty) {
+      _yaziSifirla();
+    } else if (v.isEmpty && onceki == _gozcu) {
       _ozelTus('Backspace');
+      _yaziSifirla();
     } else {
-      final yeni = v.replaceAll(_gozcu, '');
-      if (yeni.isNotEmpty) _gonder([Girdi('metin', metin: yeni)]);
+      _gonder(
+        imeGirdileri(onceki.replaceAll(_gozcu, ''), v.replaceAll(_gozcu, '')),
+      );
+      if (v.isEmpty) _yaziSifirla();
     }
-    _yazi.value = const TextEditingValue(
-      text: _gozcu,
-      selection: TextSelection.collapsed(offset: 1),
-    );
   }
 
-  void _ozelTus(String ad) => _gonder([
-    Girdi('tus', ad: ad, basili: true),
-    Girdi('tus', ad: ad, basili: false),
-  ]);
+  void _ozelTus(String ad) {
+    _yaziSifirla();
+    _gonder([
+      Girdi('tus', ad: ad, basili: true),
+      Girdi('tus', ad: ad, basili: false),
+    ]);
+  }
 
   Widget _dokunmatikCubuk() {
     final dar = MediaQuery.sizeOf(context).width < 520;
@@ -806,7 +833,6 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
                 controller: _yazi,
                 autocorrect: false,
                 enableSuggestions: false,
-                onChanged: _yaziDegisti,
                 onSubmitted: (_) {
                   _ozelTus('Enter');
                   _yaziOdak.requestFocus();
@@ -1017,6 +1043,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   }
 
   void _tuslariBirak() {
+    _basKonus.iptal();
     if (_terminalCtrl) {
       widget.motor.girdi(const Girdi('tus', ad: 'Ctrl', basili: false));
       _terminalCtrl = false;
@@ -1064,6 +1091,12 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     if (!_kontrol || _yeniden != null) return KeyEventResult.ignored;
     final hid = e.physicalKey.usbHidUsage;
     final ad = tusAdi(e.logicalKey) ?? '';
+    if (_terminal && ad == 'Space') {
+      _yaziSifirla();
+      if (e is KeyDownEvent) _basKonus.spaceBas();
+      if (e is KeyUpEvent) _basKonus.spaceBirak();
+      return KeyEventResult.handled;
+    }
     if (hid == 0 && ad.isEmpty) return KeyEventResult.ignored;
     if (e is KeyRepeatEvent) {
       if (!_basiliTuslar.contains(hid)) return KeyEventResult.handled;
@@ -1083,8 +1116,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
       _tusAdlari.remove(hid);
       _sonTekrar.remove(hid);
     }
+    _yaziSifirla();
     widget.motor.girdi(Girdi('tus', hid: hid, ad: ad, basili: basili));
-    // Fiziksel tu?u TextField t?ketmez; ekran klavyesi onChanged ?zerinden gider.
+    // Fiziksel tuşu TextField tüketmez; IME metni controller üzerinden gider.
     return KeyEventResult.handled;
   }
 
@@ -1100,6 +1134,11 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
           ctrlDegistir: _terminalCtrlDegistir,
           kopyayiKes: _terminalKes,
           yapistir: _terminalYapistir,
+          basKonus: (basili) {
+            if (!_kontrol || _yeniden != null) return;
+            _yaziSifirla();
+            _basKonus.dugme(basili);
+          },
           tus: _ozelTus,
           konum: _konum,
           fare: _fareDugmeleri,
@@ -1130,9 +1169,8 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
                 key: const Key('terminal_yazi'),
                 focusNode: _yaziOdak,
                 controller: _yazi,
-                autocorrect: false,
-                enableSuggestions: false,
-                onChanged: _yaziDegisti,
+                autocorrect: true,
+                enableSuggestions: true,
                 onSubmitted: (_) {
                   _ozelTus('Enter');
                   _yaziOdak.requestFocus();

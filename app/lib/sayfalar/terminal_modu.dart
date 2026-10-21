@@ -11,6 +11,7 @@ class TerminalModu extends StatelessWidget {
   final bool klavyeAcik;
   final VoidCallback kapat, klavye, ctrlDegistir, kopyayiKes, yapistir;
   final ValueChanged<String> tus;
+  final ValueChanged<bool> basKonus;
   final void Function(Offset konum, Size alan) konum;
   final ValueChanged<int> fare;
   final ValueChanged<PointerScrollEvent> kaydir;
@@ -27,6 +28,7 @@ class TerminalModu extends StatelessWidget {
     required this.kopyayiKes,
     required this.yapistir,
     required this.tus,
+    required this.basKonus,
     required this.konum,
     required this.fare,
     required this.kaydir,
@@ -144,6 +146,7 @@ class TerminalModu extends StatelessWidget {
                           klavyeAcik ? Icons.keyboard_hide : Icons.keyboard,
                         ),
                       ),
+                      _BasKonusDugmesi(basKonus: basKonus),
                       Expanded(
                         child: SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
@@ -174,4 +177,67 @@ class TerminalModu extends StatelessWidget {
       ),
     );
   }
+}
+
+class _BasKonusDugmesi extends StatefulWidget {
+  const _BasKonusDugmesi({required this.basKonus});
+  final ValueChanged<bool> basKonus;
+
+  @override
+  State<_BasKonusDugmesi> createState() => _BasKonusDugmesiState();
+}
+
+class _BasKonusDugmesiState extends State<_BasKonusDugmesi> {
+  int? _parmak;
+
+  void _birak() {
+    if (_parmak == null) return;
+    _parmak = null;
+    widget.basKonus(false);
+  }
+
+  @override
+  void dispose() {
+    _birak();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Listener(
+    key: const Key('terminal_bas_konus'),
+    onPointerDown: (e) {
+      if (_parmak != null) return;
+      _parmak = e.pointer;
+      widget.basKonus(true);
+      setState(() {});
+    },
+    onPointerUp: (e) {
+      if (_parmak != e.pointer) return;
+      _birak();
+      setState(() {});
+    },
+    onPointerCancel: (e) {
+      if (_parmak != e.pointer) return;
+      _birak();
+      setState(() {});
+    },
+    child: Semantics(
+      button: true,
+      label: 'Basılı tutarak konuş',
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 52, minWidth: 124),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: _parmak == null
+              ? Theme.of(context).colorScheme.primaryContainer
+              : Theme.of(context).colorScheme.tertiaryContainer,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [Icon(Icons.mic), SizedBox(width: 6), Text('Bas-konuş')],
+        ),
+      ),
+    ),
+  );
 }
