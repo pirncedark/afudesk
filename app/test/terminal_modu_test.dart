@@ -110,9 +110,12 @@ void main() {
             '{"id":2,"baslik":"Iki","uygulama":"Windows Terminal"}]',
       ),
     );
-    await t.pumpAndSettle();
+    // İlk kare henüz yok: yükleme göstergesi sürekli animasyon yapar.
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 300));
     await t.tap(find.text('Iki'));
-    await t.pumpAndSettle();
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 300));
     expect(m.girdiler.last.metin, '2');
     m.izleyici.add(IzleyiciOlay('terminal_durum', metin: 'acik'));
     await t.pump();

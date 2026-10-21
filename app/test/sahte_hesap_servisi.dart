@@ -9,6 +9,7 @@ class SahteHesapServisi extends HesapServisi {
   final List<Cihaz> _cihazlar;
   final _akis = StreamController<List<Cihaz>>.broadcast();
   List<Cihaz> _baglantilar = [];
+  bool? sonTerminalleBasla;
   @override
   Hesap? get hesap => _hesap;
   @override
@@ -59,7 +60,7 @@ class SahteHesapServisi extends HesapServisi {
   }
 
   @override
-  Future<void> baglan(String cihazId) async {
+  Future<void> baglan(String cihazId, {bool terminalleBasla = false}) async {
     _girisGerekli();
     final cihaz = _cihazlar.where((c) => c.id == cihazId).firstOrNull;
     if (cihaz == null || !cihaz.cevrimici) {
@@ -68,6 +69,7 @@ class SahteHesapServisi extends HesapServisi {
       );
     }
     _baglantilar = [cihaz];
+    sonTerminalleBasla = terminalleBasla;
     _yayinla();
   }
 

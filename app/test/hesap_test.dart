@@ -4,12 +4,84 @@ import 'sahte_hesap_servisi.dart';
 import 'package:afudesk/hesap/gercek_hesap_servisi.dart';
 import 'package:afudesk/hesap/hesap_servisi.dart';
 import 'package:afudesk/main.dart';
+import 'package:afudesk/motor.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'sahte_motor.dart';
 
 void main() {
+  testWidgets('Google Terminal bağlantısı şeridi ve Kes düğmesini korur', (
+    t,
+  ) async {
+    t.view.physicalSize = const Size(390, 844);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.resetPhysicalSize);
+    addTearDown(t.view.resetDevicePixelRatio);
+    final motor = SahteMotor();
+    var acilis = 0;
+    var kesildi = 0;
+    final servis = GercekHesapServisi(
+      islem: (op, _) async => switch (op) {
+        'baslat' => '{"url":"https://accounts.google.com/"}',
+        'tamamla' => '{"ad":"Hesabım"}',
+        'liste' => '[{"id":"ev","ad":"Ev bilgisayarı","cevrimici":true}]',
+        _ => '{}',
+      },
+      googleBaglan: (id) {
+        expect(id, 'ev');
+        acilis++;
+        return motor.izleyici.stream;
+      },
+      kes: () async {
+        kesildi++;
+        motor.izleyici.add(IzleyiciOlay('koptu', metin: 'Bağlantı kapandı.'));
+      },
+      hostOlaylari: motor.hostOlaylari,
+      platformGirisi: (_) async => {},
+      tarayiciAc: (_) async => true,
+    );
+    addTearDown(servis.dispose);
+    addTearDown(() async => t.pumpWidget(const SizedBox.shrink()));
+    await t.pumpWidget(AfuDeskUygulama(motor: motor, hesapServisi: servis));
+    await t.tap(find.text('Google ile giriş yap'));
+    await t.pumpAndSettle();
+    await t.tap(find.widgetWithText(TextButton, 'Terminal'));
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 300));
+    motor.izleyici.add(IzleyiciOlay('kabul', kontrol: true));
+    await t.pump();
+    expect(motor.girdiler.last.tur, 'terminal_liste');
+    motor.izleyici.add(
+      IzleyiciOlay(
+        'terminal_liste',
+        metin: '[{"id":42,"baslik":"Proje","uygulama":"PowerShell"}]',
+      ),
+    );
+    await t.pump();
+    expect(motor.girdiler.last.tur, 'terminal_ac');
+    motor.izleyici.add(IzleyiciOlay('terminal_durum', metin: 'acik'));
+    await t.pump();
+    expect(find.byKey(const Key('terminal_modu')), findsOneWidget);
+    final serit = find.text('Uzaktan bağlı: Ev bilgisayarı');
+    expect(serit, findsOneWidget);
+    expect(
+      t.getBottomLeft(serit).dy,
+      lessThan(t.getTopLeft(find.byKey(const Key('terminal_modu'))).dy),
+    );
+    expect(acilis, 1);
+    expect(motor.cagrilar.where((s) => s == 'baglan'), isEmpty);
+    await t.tap(find.text('Kes'));
+    await t.pump();
+    await t.pump();
+    expect(kesildi, 1);
+    expect(serit, findsNothing);
+    expect(find.byKey(const Key('terminal_modu')), findsNothing);
+    await servis.cikisYap();
+    await t.pump();
+    expect(t.takeException(), isNull);
+  });
+
   Future<void> ac(WidgetTester t, SahteHesapServisi servis) async {
     addTearDown(servis.dispose);
     addTearDown(() async => t.pumpWidget(const SizedBox.shrink()));
@@ -46,6 +118,7 @@ void main() {
     await t.pumpAndSettle();
     expect(find.byType(AlertDialog), findsNothing);
     expect(servis.baglantilar.single.id, 'ev');
+    expect(servis.sonTerminalleBasla, isFalse);
     expect(find.text('Uzaktan bağlı: Ev bilgisayarı'), findsOneWidget);
   });
 
@@ -97,6 +170,24 @@ void main() {
     await t.pumpAndSettle();
     expect(servis.baglantilar, isEmpty);
     expect(find.text('Çevrimdışı'), findsOneWidget);
+    expect(
+      t
+          .widget<TextButton>(find.widgetWithText(TextButton, 'Terminal'))
+          .onPressed,
+      isNull,
+    );
+  });
+
+  testWidgets('her bilgisayar satırında Terminal düğmesi bulunur', (t) async {
+    final servis = SahteHesapServisi(
+      cihazlar: [const Cihaz(id: 'ev', ad: 'Ev bilgisayarı', cevrimici: true)],
+    );
+    await ac(t, servis);
+    expect(find.widgetWithText(TextButton, 'Terminal'), findsOneWidget);
+    await t.tap(find.widgetWithText(TextButton, 'Terminal'));
+    await t.pumpAndSettle();
+    expect(servis.sonTerminalleBasla, isTrue);
+    expect(servis.baglantilar.single.id, 'ev');
   });
 
   testWidgets('başarısız gerçek giriş kodla akışı korur', (t) async {

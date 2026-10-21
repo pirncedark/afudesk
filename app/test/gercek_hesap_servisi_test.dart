@@ -66,7 +66,8 @@ void main() {
     () async {
       await servis.girisYap();
       StreamSubscription<IzleyiciOlay>? subscription;
-      servis.oturumAc = (cihaz, ac) {
+      servis.oturumAc = (cihaz, ac, {required terminalleBasla}) {
+        expect(terminalleBasla, isFalse);
         subscription = ac().listen((_) {});
       };
       await servis.baglan('ev');

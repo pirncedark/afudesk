@@ -138,7 +138,8 @@ void guvenilenYenidenAdla({required String kimlik, required String ad}) =>
 Future<List<String>> cevrimiciKimlikler() =>
     RustLib.instance.api.crateApiAfudeskCevrimiciKimlikler();
 
-/// Girdi. `tur`: konum | fare | kaydir | tus | metin.
+/// Girdi. `tur`: konum | fare | kaydir | tus | metin |
+/// terminal_liste | terminal_ac (metin=id, dx=en, dy=boy) | terminal_kapat.
 class GirdiOlayi {
   final String tur;
   final double x;
@@ -414,6 +415,7 @@ class KayitliCihaz {
           sonGorulme == other.sonGorulme;
 }
 
+/// Aynı Google hesabındaki bilgisayara kod ve onay olmadan bağlanır.
 Stream<IzleyiciOlayi> izleyiciGoogleBaglan({
   required String kimlik,
   required String ad,

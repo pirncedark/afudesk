@@ -29,7 +29,7 @@ abstract class HesapServisi extends ChangeNotifier {
   Future<void> cikisYap();
   Future<List<Cihaz>> bilgisayarlarim();
   Future<void> uzaktanErisimAyarla(bool acik);
-  Future<void> baglan(String cihazId);
+  Future<void> baglan(String cihazId, {bool terminalleBasla = false});
   Future<void> baglantiyiKes();
   Future<void> cihazCikar(String cihazId);
 }
