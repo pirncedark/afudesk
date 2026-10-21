@@ -9,8 +9,7 @@ Ana ekran açılışında, uygulamaya dönüldüğünde ve altı saatte bir GitH
 
 "Sonra" seçilen sürümü yalnız bu uygulama açılışı boyunca gizler. Bağlantıda sürüm uyuşmazlığı algılanırsa güncelleme hemen kontrol edilir.
 
-`pubspec.yaml` sürümü etiketle aynı olmalıdır. Her Android sürümünün build numarası artırılmalıdır. Release, CI artifact'larından Claude tarafından elle yayınlanır. Şu dört dosya birlikte yayınlanır:
-
+`pubspec.yaml` sürümü etiketle aynı olmalıdır. Her Android sürümünün build numarası artırılmalıdır. Sürüm yayınlama `.github/workflows/release.yml` iş akışı ile etiket (`vX.Y.Z`) push edildiğinde tam otomatik olarak çalışır. Şu dört dosya birlikte yayınlanır:
 - `AfuDesk-windows-x64.zip` (kökte `afudesk.exe`, `afudesk_kopru.dll`, `data/`; üst klasör yok)
 - `AfuDesk-windows-x64.zip.sha256`
 - `AfuDesk-android.apk`
@@ -19,6 +18,29 @@ Ana ekran açılışında, uygulamaya dönüldüğünde ve altı saatte bir GitH
 Release için `ANDROID_KEYSTORE_B64` ve `ANDROID_KEYSTORE_PASSWORD` zorunludur; anahtar önceki kurulumlarla aynı olmalıdır. Debug imzalı APK release olarak yayınlanmaz. Daha önce farklı anahtarla yüklenmiş APK yerinde güncellenemez.
 
 Güncelleme özelliğini içermeyen eski sürümler bu kartı gösteremez; özelliği içeren ilk sürüm bir kez mevcut indirme yöntemiyle kurulmalıdır.
+
+## Sürüm Nasıl Çıkarılır?
+
+1. **Sürüm numarasını güncelle (`app/pubspec.yaml`):**
+   - `version: X.Y.Z+BUILD` değerini artır (ör. `1.8.1+10`).
+   - Android build numarası (`+` sonrası) her sürümde artırılmalıdır.
+2. **Sürüm notunu hazırla (isteğe bağlı ama önerilen):**
+   - `docs/SURUM_NOTLARI_X.Y.Z.md` dosyasını oluştur (önce İngilizce, sonra Türkçe bölümleri).
+   - Bu dosya varsa release gövdesine otomatik eklenir; yoksa son commit mesajı kullanılır.
+3. **Değişiklikleri commit'le ve etiketle:**
+   ```bash
+   git add app/pubspec.yaml docs/SURUM_NOTLARI_X.Y.Z.md
+   git commit -m "AfuDesk vX.Y.Z"
+   git tag vX.Y.Z
+   git push origin main
+   git push origin vX.Y.Z
+   ```
+4. **Otomatik CI iş akışı (`release.yml`):**
+   - `gate`: `pubspec.yaml` sürümünün etiket ile tam uyuştuğunu doğrular (uyuşmazsa anında tek satır açıklayıcı hata verir ve durur).
+   - `android`: İmzalı `AfuDesk-android.apk` ve `.sha256` üretir.
+   - `windows`: `flutter build windows --release` çalıştırıp `AfuDesk-windows-x64.zip` (kökte `afudesk.exe`) ve `.sha256` üretir.
+   - `release`: Dört dosyayı GitHub Release'e yükler, SHA-256 tablosunu ekler.
+   - `telegram`: `TELEGRAM_BOT_TOKEN` ve `TELEGRAM_CHAT_ID` secret'ları tanımlıysa indirme linklerini Telegram kanalına gönderir.
 
 ## Doğrulama
 
