@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
+import '../arka_plan/arka_plan.dart';
 
 import '../guncelleme.dart';
 import '../hesap/hesap_servisi.dart';
@@ -18,6 +20,7 @@ class _AyarlarSayfasiDurum extends State<AyarlarSayfasi> {
   String? _hata, _bilgi, _hesapHatasi;
   bool _mesgul = false, _cikiliyor = false;
   double? _ilerleme;
+  bool _arkaPlan = false, _arkaPlanMesgul = true;
 
   @override
   void initState() {
@@ -26,6 +29,34 @@ class _AyarlarSayfasiDurum extends State<AyarlarSayfasi> {
     _servis.addListener(_degisti);
     widget.hesapServisi?.addListener(_degisti);
     _surumuOku();
+    if (Platform.isWindows) _arkaPlanOku();
+  }
+
+  Future<void> _arkaPlanOku() async {
+    try {
+      final acik = await ArkaPlan.oku();
+      if (mounted) setState(() => _arkaPlan = acik);
+    } catch (_) {
+      if (mounted) setState(() => _hata = 'Başlangıç ayarı okunamadı, Ayarlar’ı yeniden aç.');
+    } finally {
+      if (mounted) setState(() => _arkaPlanMesgul = false);
+    }
+  }
+
+  Future<void> _arkaPlanAyarla(bool acik) async {
+    setState(() => _arkaPlanMesgul = true);
+    try {
+      await ArkaPlan.ayarla(acik);
+      if (mounted) setState(() {
+        _arkaPlan = acik;
+        _bilgi = acik ? 'AfuDesk arka planda hazır; pencereyi kapatınca tepside kalır.' : 'Otomatik başlangıç kapatıldı.';
+        _hata = null;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _hata = 'Başlangıç ayarı değiştirilemedi, yeniden dene.');
+    } finally {
+      if (mounted) setState(() => _arkaPlanMesgul = false);
+    }
   }
 
   @override
@@ -151,6 +182,13 @@ class _AyarlarSayfasiDurum extends State<AyarlarSayfasi> {
               child: ListView(
                 padding: const EdgeInsets.all(24),
                 children: [
+                  if (Platform.isWindows)
+                    SwitchListTile(
+                      title: const Text('Bilgisayar açılınca hazır olsun'),
+                      subtitle: const Text('Windows oturumun açıldığında arka planda bekler.'),
+                      value: _arkaPlan,
+                      onChanged: _arkaPlanMesgul ? null : _arkaPlanAyarla,
+                    ),
                   ListTile(title: const Text('Sürüm'), subtitle: Text(_surum)),
                   const Divider(),
                   ListTile(
