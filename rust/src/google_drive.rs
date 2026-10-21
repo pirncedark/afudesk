@@ -169,7 +169,7 @@ impl DriveDizin {
             return Err(DogrulamaHatasi);
         }
         Ok(Self {
-            client: crate::google::http_client()
+            client: crate::google::http_client()?
                 .https_only(true)
                 .redirect(reqwest::redirect::Policy::none())
                 .timeout(Duration::from_secs(10))
@@ -370,7 +370,7 @@ mod tests {
             );
         });
         let dizin = DriveDizin {
-            client: crate::google::http_client().build().unwrap(),
+            client: crate::google::http_client().unwrap().build().unwrap(),
             token: "test-only".into(),
             sub: "account".into(),
             files: format!("{url}/files"),

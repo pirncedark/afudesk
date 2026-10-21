@@ -103,6 +103,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "vigem-client",
+ "webpki-roots",
  "windows-capture",
  "windows-sys 0.59.0",
  "xcap",

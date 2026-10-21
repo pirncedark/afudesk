@@ -183,6 +183,15 @@ class _AnaSayfaDurum extends State<AnaSayfa> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        actions: [
+          IconButton(
+            tooltip: 'Ayarlar',
+            onPressed: () => Navigator.pushNamed(context, '/ayarlar'),
+            icon: const Icon(Icons.settings_outlined),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(

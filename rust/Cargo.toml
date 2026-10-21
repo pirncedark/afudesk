@@ -30,6 +30,7 @@ dirs = "6"
 tempfile = "3"
 ring = "0.17"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+webpki-roots = "1"
 reqwest = { version = "0.13", default-features = false, features = ["json", "query", "rustls-no-provider"] }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]

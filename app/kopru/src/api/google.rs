@@ -9,7 +9,58 @@ use afudesk_core::{
 };
 use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::{json, Value};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Once};
+
+// Only fixed diagnostic messages are persisted. Panic payloads can contain
+// request URLs or credentials, so unknown payloads must never be copied.
+fn guvenli_panik_mesaji(mesaj: &str) -> &'static str {
+    if mesaj.contains("Expect rustls-platform-verifier to be initialized") {
+        "rustls-platform-verifier: Android JNI context is not initialized"
+    } else if mesaj.contains("CryptoProvider") {
+        "rustls: CryptoProvider is not configured"
+    } else {
+        "Rust panic (payload omitted)"
+    }
+}
+
+fn panik_tanisini_kur() {
+    static KURULDU: Once = Once::new();
+    let Some(klasor) = afudesk::veri() else {
+        return;
+    };
+    KURULDU.call_once(|| {
+        let onceki = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |bilgi| {
+            use std::io::Write;
+            let mesaj = bilgi
+                .payload()
+                .downcast_ref::<&str>()
+                .copied()
+                .or_else(|| bilgi.payload().downcast_ref::<String>().map(String::as_str))
+                .unwrap_or("");
+            // Capture the directory before installing the hook: no application
+            // mutex may be locked while unwinding another application mutex.
+            let _ = std::fs::create_dir_all(&klasor);
+            if let Ok(mut dosya) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(klasor.join("google_panic.log"))
+            {
+                let _ = write!(
+                    dosya,
+                    "{} | {}",
+                    afudesk_core::kod::simdi(),
+                    guvenli_panik_mesaji(mesaj)
+                );
+                if let Some(konum) = bilgi.location() {
+                    let _ = write!(dosya, " | {}:{}", konum.file(), konum.line());
+                }
+                let _ = writeln!(dosya);
+            }
+            onceki(bilgi);
+        }));
+    });
+}
 
 enum Bekleyen {
     Masaustu(MasaustuGiris, String),
@@ -86,6 +137,7 @@ fn adresleri_yenile(k: &mut CihazKaydi) {
 /// No tokens are returned except the native sign-in nonce. All failures are
 /// reduced to a safe stage code at this boundary; underlying text is never sent.
 pub async fn google_islem(islem: String, veri: String) -> Result<String> {
+    panik_tanisini_kur();
     islem_yap(&islem, &veri)
         .await
         .map(|v| v.to_string())
@@ -244,6 +296,22 @@ pub(super) fn etkin_hesap() -> Result<Arc<Erisim>> {
 mod tests {
     use super::*;
     use afudesk_core::google::Dogrulayici;
+
+    #[test]
+    fn panik_tanisi_token_ve_sir_yazmaz() {
+        assert_eq!(
+            guvenli_panik_mesaji("Expect rustls-platform-verifier to be initialized; secret-token"),
+            "rustls-platform-verifier: Android JNI context is not initialized"
+        );
+        assert_eq!(
+            guvenli_panik_mesaji("CryptoProvider: secret-token"),
+            "rustls: CryptoProvider is not configured"
+        );
+        assert_eq!(
+            guvenli_panik_mesaji("secret-token"),
+            "Rust panic (payload omitted)"
+        );
+    }
 
     #[test]
     fn masaustu_sir_zorunludur_ve_hataya_yansitilmaz() {

@@ -11,6 +11,7 @@ export 'guncelleme_yayin.dart';
 const guncelleKanali = MethodChannel('afudesk/guncelle');
 
 final guncellemeKontrolIstegi = ValueNotifier<int>(0);
+final guncelleyici = Guncelleyici();
 
 class GuncellemeSayfasiAcildi implements Exception {
   const GuncellemeSayfasiAcildi();
@@ -21,11 +22,39 @@ List<String> windowsPrepareArgumanlari(String script) => [
   '-ExecutionPolicy', 'Bypass', '-File', script, '-Prepare',
 ];
 
-class Guncelleyici {
-  Future<Guncelleme?> kontrol() async {
-    if (!Platform.isWindows && !Platform.isAndroid) return null;
+class Guncelleyici extends ChangeNotifier {
+  Guncelleme? yayin;
+  DateTime? sonDenetim;
+  Future<Guncelleme?>? _denetim;
+
+  Future<String> surum() async {
     final mevcut = await guncelleKanali.invokeMethod<String>('surum');
-    if (mevcut == null) return null;
+    if (mevcut == null || mevcut.isEmpty) {
+      throw const FormatException('Sürüm alınamadı');
+    }
+    return mevcut;
+  }
+
+  /// Otomatik şerit ve Ayarlar aynı başarılı denetimi paylaşır.
+  Future<Guncelleme?> denetle() => _denetim ??= _denetle();
+
+  Future<Guncelleme?> _denetle() async {
+    try {
+      final sonuc = await kontrol();
+      yayin = sonuc;
+      sonDenetim = DateTime.now();
+      notifyListeners();
+      return sonuc;
+    } finally {
+      _denetim = null;
+    }
+  }
+
+  Future<Guncelleme?> kontrol() async {
+    if (!Platform.isWindows && !Platform.isAndroid) {
+      throw UnsupportedError('Güncelleme bu cihazda desteklenmiyor');
+    }
+    final mevcut = await surum();
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 15);
     try {
