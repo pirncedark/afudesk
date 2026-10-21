@@ -298,7 +298,10 @@ class GercekHesapServisi extends HesapServisi {
           var tekrar = false;
           try {
             await for (final o in googleBaglan(cihaz.id)) {
-              if (nesil != _baglantiNesli || _kapali) return;
+              if (nesil != _baglantiNesli || _kapali) {
+                yield o;
+                return;
+              }
               if (o.tur == 'yeniden') {
                 // Stop the core's longer resume loop; this account stream owns
                 // exactly three fresh connection attempts with 1/2/4s waits.

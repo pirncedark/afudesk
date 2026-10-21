@@ -85,7 +85,9 @@ void main() {
       },
     );
     late Future<List<IzleyiciOlay>> olaylar;
-    servis.oturumAc = (_, ac) { olaylar = ac().toList(); };
+    servis.oturumAc = (_, ac, {required terminalleBasla}) {
+      olaylar = ac().toList();
+    };
     await servis.baglan('ev');
     final sonuc = await olaylar;
     expect(acilis, 4);
