@@ -69,6 +69,61 @@ enum Bekleyen {
 // Keep the audience allowlist with the transaction until remote access starts.
 static BEKLEYEN: Mutex<Option<(Bekleyen, Vec<String>)>> = Mutex::new(None);
 static HESAP: Mutex<Option<Arc<Erisim>>> = Mutex::new(None);
+// Plaintext lives only in memory and the encrypted native session boundary.
+// Deliberately no Debug implementation for this DTO.
+#[derive(Clone)]
+struct KaliciOturum {
+    client_id: String,
+    refresh_token: String,
+    sub: String,
+    nonce: String,
+    istemciler: Vec<String>,
+}
+impl KaliciOturum {
+    fn yaz(&self) -> String {
+        json!({"client_id":self.client_id, "refresh_token":self.refresh_token,
+            "sub":self.sub, "nonce":self.nonce, "istemciler":self.istemciler}).to_string()
+    }
+    fn oku(veri: &str) -> Result<Self> {
+        ensure!(veri.len() <= 65536, "G6");
+        let v: Value = serde_json::from_str(veri).context("G6")?;
+        let alan = |ad: &str, azami: usize| -> Result<String> {
+            Ok(v[ad].as_str().filter(|s| !s.is_empty() && s.len() <= azami)
+                .ok_or_else(|| anyhow!("G6"))?.to_owned())
+        };
+        let client_id = alan("client_id", 512)?;
+        let istemciler: Vec<String> = serde_json::from_value(v["istemciler"].clone()).context("G6")?;
+        ensure!(!istemciler.is_empty() && istemciler.len() <= 2
+            && istemciler.contains(&client_id)
+            && istemciler.iter().all(|id| id.ends_with(".apps.googleusercontent.com") && id.len() <= 512), "G6");
+        Ok(Self { client_id, refresh_token: alan("refresh_token", 16384)?,
+            sub: alan("sub", 256)?, nonce: alan("nonce", 256)?, istemciler })
+    }
+}
+static KALICI: Mutex<Option<KaliciOturum>> = Mutex::new(None);
+
+fn oturum_sonucu() -> Value {
+    json!({"ad":"Google hesabın", "oturum": KALICI.lock().unwrap().as_ref()
+        .map(KaliciOturum::yaz)})
+}
+
+async fn kalici_yenile(k: KaliciOturum) -> Result<Value> {
+    let (id, access, rotated) = afudesk_core::google_oauth::yenile(
+        &k.client_id, masaustu_sir(DESKTOP_SECRET)?, &k.refresh_token).await?;
+    let mut cihaz = cihaz()?;
+    adresleri_yenile(&mut cihaz);
+    let g = Erisim::yeni(id, access, k.istemciler.clone(), cihaz).await.context("G4")?;
+    // A different Google identity/nonce must never replace the stored grant.
+    ensure!(g.hesap.sub() == k.sub && g.hesap.nonce() == k.nonce, "G6");
+    g.dizin.hesabi_dogrula().await.context("G3")?;
+    g.dizin.kaydet(&g.cihaz).await.context("G3")?;
+    *KALICI.lock().unwrap() = Some(KaliciOturum {
+        refresh_token: rotated.unwrap_or(k.refresh_token), ..k
+    });
+    google_baglanti::etkinlestir(g.clone());
+    *HESAP.lock().unwrap() = Some(g);
+    Ok(oturum_sonucu())
+}
 // Serializes sign-in, sign-out and directory mutations across await points.
 static ISLEM: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
@@ -134,29 +189,64 @@ fn adresleri_yenile(k: &mut CihazKaydi) {
     k.son_gorulme = afudesk_core::kod::simdi();
 }
 
-/// No tokens are returned except the native sign-in nonce. All failures are
-/// reduced to a safe stage code at this boundary; underlying text is never sent.
+// Emit only fixed stage/rule names; never copy arbitrary error-chain text.
+fn guvenli_islem_hatasi(e: anyhow::Error) -> anyhow::Error {
+    let code = ["G2", "G3", "G4", "G5", "G6"]
+        .into_iter()
+        .find(|code| e.chain().any(|cause| cause.to_string() == *code))
+        .unwrap_or("G9");
+    if code == "G6" {
+        anyhow!("Google ile yeniden giriş yap (G6).")
+    } else if code == "G2" {
+        anyhow!("Google girişi bu sürümde yapılandırılmamış (G2).")
+    } else if code == "G4" {
+        let neden = e
+            .chain()
+            .find_map(|cause| cause.downcast_ref::<afudesk_core::google::DogrulamaHatasi>())
+            .map_or("diger", |hata| hata.nedeni());
+        anyhow!("Google işlemi tamamlanamadı (G4:{neden}), yeniden giriş yap.")
+    } else {
+        anyhow!("Google işlemi tamamlanamadı ({code}), yeniden giriş yap.")
+    }
+}
+
+/// Only the native nonce and encrypted-storage DTO cross this boundary.
+/// The DTO is passed directly to native DPAPI, never UI or diagnostics.
+/// Failures contain only stage codes; underlying text is never returned.
 pub async fn google_islem(islem: String, veri: String) -> Result<String> {
     panik_tanisini_kur();
     islem_yap(&islem, &veri)
         .await
         .map(|v| v.to_string())
-        .map_err(|e| {
-            let code = ["G2", "G3", "G4", "G5"]
-                .into_iter()
-                .find(|code| e.chain().any(|cause| cause.to_string() == *code))
-                .unwrap_or("G9");
-            if code == "G2" {
-                anyhow!("Google girişi bu sürümde yapılandırılmamış (G2).")
-            } else {
-                anyhow!("Google işlemi tamamlanamadı ({code}), yeniden giriş yap.")
-            }
-        })
+        .map_err(guvenli_islem_hatasi)
 }
 
 async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
     let _islem = ISLEM.lock().await;
     match islem {
+        "geriYukle" => {
+            ensure!(HESAP.lock().unwrap().is_none(), "already signed in");
+            ensure!(veri.len() <= 65536, "G6");
+            let k = KaliciOturum::oku(veri)?;
+            kalici_yenile(k).await
+        }
+        "duraklat" => {
+            let g = HESAP.lock().unwrap().take();
+            if let Some(g) = &g {
+                google_baglanti::kapat(&g.cihaz.host);
+            }
+            afudesk::host_kes();
+            afudesk::izleyici_kapat();
+            afudesk::host_durdur();
+            if let Some(g) = g {
+                let mut kayit = g.cihaz.clone();
+                kayit.erisim = false;
+                // Local access is already revoked; an offline directory cannot
+                // block stop/exit. Its last-seen record expires normally.
+                let _ = g.dizin.yenile(&kayit).await;
+            }
+            Ok(json!({}))
+        }
         "baslat" => {
             ensure!(HESAP.lock().unwrap().is_none(), "already signed in");
             ensure!(BEKLEYEN.lock().unwrap().is_none(), "sign-in pending");
@@ -208,9 +298,19 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
                 .unwrap()
                 .take()
                 .ok_or_else(|| anyhow!("no transaction"))?;
+            let mut kalici = None;
             let (id, access) = match pending {
                 Bekleyen::Masaustu(g, secret) => {
                     let token = g.kod_bekle().await?.oturum(Some(&secret)).await?;
+                    if let Some(refresh) = token.refresh_token {
+                        kalici = Some(KaliciOturum {
+                            client_id: token.client_id,
+                            refresh_token: refresh,
+                            sub: token.hesap.sub().into(),
+                            nonce: token.hesap.nonce().into(),
+                            istemciler: kabul_edilen.clone(),
+                        });
+                    } else { return Err(anyhow!("G6")); }
                     (token.id_token, token.access_token)
                 }
                 Bekleyen::Android(g) => {
@@ -220,7 +320,11 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
                         .await
                         .context("G5")?;
                     let identity = d.dogrula(id, afudesk_core::kod::simdi()).context("G4")?;
-                    ensure!(identity.nonce() == g.nonce(), "G4");
+                    if identity.nonce() != g.nonce() {
+                        return Err(
+                            anyhow!(afudesk_core::google::DogrulamaHatasi::NONCE).context("G4")
+                        );
+                    }
                     (
                         id.to_owned(),
                         v["accessToken"]
@@ -239,7 +343,8 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
             g.dizin.kaydet(&g.cihaz).await.context("G3")?;
             google_baglanti::etkinlestir(g.clone());
             *HESAP.lock().unwrap() = Some(g);
-            Ok(json!({"ad":"Google hesabın"}))
+            *KALICI.lock().unwrap() = kalici;
+            Ok(oturum_sonucu())
         }
         "liste" => {
             let g = hesap()?;
@@ -253,6 +358,10 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
         }
         "yenile" => {
             let g = hesap()?;
+            if g.hesap.gecerlilik_sonu() <= afudesk_core::kod::simdi() + 300 {
+                let kalici = KALICI.lock().unwrap().clone();
+                if let Some(k) = kalici { return kalici_yenile(k).await; }
+            }
             ensure!(
                 g.hesap.gecerlilik_sonu() > afudesk_core::kod::simdi(),
                 "expired"
@@ -273,6 +382,7 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
             Ok(json!({}))
         }
         "cikis" | "erisimKapat" => {
+            KALICI.lock().unwrap().take();
             BEKLEYEN.lock().unwrap().take();
             let g = HESAP.lock().unwrap().take();
             afudesk::host_kes();
@@ -310,6 +420,44 @@ mod tests {
         assert_eq!(
             guvenli_panik_mesaji("secret-token"),
             "Rust panic (payload omitted)"
+        );
+    }
+
+    #[test]
+    fn g4_yalniz_sabit_kural_adini_aktarir() {
+        let fixture: Value =
+            serde_json::from_str(include_str!("../../../../rust/tests/fixtures/google.json"))
+                .unwrap();
+        let d = Dogrulayici::yeni(
+            vec!["test.apps.googleusercontent.com".into()],
+            &fixture["jwks"].to_string(),
+        )
+        .unwrap();
+        for (name, reason) in [("wrong_aud", "aud"), ("bad_signature", "imza")] {
+            let hata = d
+                .dogrula(fixture[name].as_str().unwrap(), 1_700_000_100)
+                .unwrap_err();
+            assert_eq!(
+                guvenli_islem_hatasi(anyhow!(hata).context("G4")).to_string(),
+                format!("Google işlemi tamamlanamadı (G4:{reason}), yeniden giriş yap.")
+            );
+        }
+        let hata = anyhow!(afudesk_core::google::DogrulamaHatasi::NONCE)
+            .context("token=secret sub=private user@example.com")
+            .context("G4");
+        assert_eq!(
+            guvenli_islem_hatasi(hata).to_string(),
+            "Google işlemi tamamlanamadı (G4:nonce), yeniden giriş yap."
+        );
+        let hata = anyhow!("token=secret").context("G4");
+        assert_eq!(
+            guvenli_islem_hatasi(hata).to_string(),
+            "Google işlemi tamamlanamadı (G4:diger), yeniden giriş yap."
+        );
+        let hata = anyhow!(afudesk_core::google::DogrulamaHatasi::NONCE).context("G3");
+        assert_eq!(
+            guvenli_islem_hatasi(hata).to_string(),
+            "Google işlemi tamamlanamadı (G3), yeniden giriş yap."
         );
     }
 

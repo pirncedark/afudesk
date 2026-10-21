@@ -9,6 +9,8 @@ import '../motor.dart';
 import '../src/rust/api/google.dart' as rust;
 import 'hesap_servisi.dart';
 import 'google_hatasi.dart';
+import 'oturum_kasasi.dart';
+import '../arka_plan/arka_plan.dart';
 
 typedef GoogleOturumAc =
     void Function(
@@ -26,6 +28,8 @@ class GercekHesapServisi extends HesapServisi {
     required this.platformGirisi,
     required this.tarayiciAc,
     this.taniYaz = googleTaniYaz,
+    this.kasa,
+    this.bekle = Future<void>.delayed,
   }) {
     _host = hostOlaylari.listen((o) {
       if (o.tur == 'baglandi') {
@@ -39,6 +43,7 @@ class GercekHesapServisi extends HesapServisi {
   }
 
   factory GercekHesapServisi.rust(RustMotor motor) => GercekHesapServisi(
+    kasa: Platform.isWindows ? WindowsOturumKasasi() : null,
     islem: (islem, veri) async => rust.googleIslem(
       islem: islem,
       veri: islem == 'baslat' && Platform.isWindows
@@ -76,6 +81,15 @@ class GercekHesapServisi extends HesapServisi {
   final Future<Map<String, dynamic>> Function(String) platformGirisi;
   final Future<bool> Function(String) tarayiciAc;
   final Future<void> Function(GoogleHatasi) taniYaz;
+  final OturumKasasi? kasa;
+  final Future<void> Function(Duration) bekle;
+  Duration? sonBaglanmaSuresi;
+  Future<void> _kasaSirasi = Future<void>.value();
+  String? durum;
+  bool _kapali = false, _duraklatildi = false;
+  int _oturumNesli = 0;
+  int _baglantiNesli = 0;
+  Timer? _geriYukleme;
   GoogleOturumAc? oturumAc;
   late final StreamSubscription<HostOlay> _host;
   final _akis = StreamController<List<Cihaz>>.broadcast();
@@ -93,6 +107,7 @@ class GercekHesapServisi extends HesapServisi {
   @override
   Stream<List<Cihaz>> get aktifBaglantilar => _akis.stream;
   void _yayinla() {
+    if (_kapali) return;
     _akis.add(baglantilar);
     notifyListeners();
   }
@@ -100,10 +115,91 @@ class GercekHesapServisi extends HesapServisi {
   Future<dynamic> _cagir(String op, [String data = '']) async =>
       jsonDecode(await islem(op, data));
 
+  void _saatBaslat() {
+    _heartbeat?.cancel();
+    _heartbeat = Timer.periodic(const Duration(seconds: 60), (_) => _yenile());
+  }
+
+  Future<void> _kasada(Future<void> Function() islem) {
+    final sonuc = _kasaSirasi.then((_) => islem());
+    _kasaSirasi = sonuc.then<void>((_) {}, onError: (Object _) {});
+    return sonuc;
+  }
+
+  Future<void> _kimligiAl(Map identity) async {
+    final nesil = _oturumNesli;
+    final oturum = identity['oturum'];
+    if (oturum is String && kasa != null) {
+      await _kasada(() async {
+        if (!_kapali && nesil == _oturumNesli) await kasa!.yaz(oturum);
+      });
+    }
+    if (_kapali || nesil != _oturumNesli) return;
+    _hesap = Hesap(eposta: '', ad: identity['ad'] as String);
+    durum = null;
+    _saatBaslat();
+    _yayinla();
+  }
+
+  Future<void> geriYukle() async {
+    if (kasa == null || _mesgul || _hesap != null || _kapali || _duraklatildi) return;
+    _mesgul = true;
+    final nesil = _oturumNesli;
+    var etkinlesti = false;
+    try {
+      final kayit = await kasa!.oku();
+      if (kayit == null || _kapali) return;
+      final identity = await _cagir('geriYukle', kayit) as Map;
+      etkinlesti = true;
+      if (nesil != _oturumNesli || _kapali) return;
+      await _kimligiAl(identity);
+    } catch (e) {
+      if (_kapali || nesil != _oturumNesli) return;
+      // Persistence can fail after native authorisation succeeded. Revoke that
+      // invisible identity before retrying, but retain the encrypted grant.
+      if (etkinlesti) {
+        try { await _cagir('duraklat'); } catch (_) {}
+      }
+      if ('$e'.contains('(G6)')) {
+        await _kasada(() => kasa!.sil());
+        durum = 'Google ile yeniden giriş yap';
+      } else {
+        durum = 'Bilgisayar hazır olamadı, internet bağlantını kontrol et.';
+        _geriYukleme?.cancel();
+        _geriYukleme = Timer(const Duration(seconds: 30), geriYukle);
+      }
+      _yayinla();
+    } finally { _mesgul = false; }
+  }
+
+  Future<void> duraklat() async {
+    _oturumNesli++;
+    _duraklatildi = true;
+    _baglantiNesli++;
+    _heartbeat?.cancel();
+    _geriYukleme?.cancel();
+    try {
+      await _cagir('duraklat');
+    } finally {
+      try {
+        await kes();
+      } finally {
+        _hesap = null;
+        _gelen = null;
+        _giden = null;
+        durum = 'Bağlantılar durduruldu; devam etmek için uygulamayı yeniden aç.';
+        _yayinla();
+      }
+    }
+  }
+
   @override
   Future<void> girisYap() async {
     if (_mesgul || _hesap != null) return;
+    _duraklatildi = false;
+    _geriYukleme?.cancel();
     _mesgul = true;
+    final nesil = _oturumNesli;
     var asama = 'baslat';
     try {
       final start = await _cagir('baslat') as Map;
@@ -116,18 +212,16 @@ class GercekHesapServisi extends HesapServisi {
       }
       asama = 'tamamla';
       final identity = await _cagir('tamamla', data) as Map;
-      _hesap = Hesap(eposta: '', ad: identity['ad'] as String);
-      _heartbeat = Timer.periodic(
-        const Duration(seconds: 60),
-        (_) => _yenile(),
-      );
-      _yayinla();
+      if (nesil != _oturumNesli || _kapali) return;
+      await _kimligiAl(identity);
     } catch (hata) {
       final tani = GoogleHatasi.cevir(hata, asama: asama);
       // Diagnostics must not delay cancellation or keep the UI busy on failure.
       unawaited(_taniKaydet(tani));
       try {
-        await _cagir('iptal');
+        // A failure to persist the completed grant must not leave an invisible
+        // host authorised while the UI reports failed sign-in.
+        await _cagir(asama == 'tamamla' ? 'cikis' : 'iptal');
       } catch (_) {
         /* Keep the original failure. */
       }
@@ -149,10 +243,25 @@ class GercekHesapServisi extends HesapServisi {
   Future<void> _yenile() async {
     if (_yeniliyor || _mesgul || _hesap == null) return;
     _yeniliyor = true;
+    final nesil = _oturumNesli;
     try {
-      await _cagir('yenile');
-    } catch (_) {
-      await cikisYap();
+      final identity = await _cagir('yenile');
+      if (_kapali || nesil != _oturumNesli) return;
+      if (identity is Map && identity['ad'] is String) {
+        await _kimligiAl(identity);
+      } else if (durum != null) {
+        durum = null;
+        _yayinla();
+      }
+    } catch (e) {
+      if (_kapali || nesil != _oturumNesli) return;
+      if ('$e'.contains('(G6)')) {
+        await cikisYap();
+        durum = 'Google ile yeniden giriş yap';
+      } else {
+        durum = 'Bağlantı yenilenemedi, internet bağlantını kontrol et.';
+      }
+      if (!_kapali) _yayinla();
     } finally {
       _yeniliyor = false;
     }
@@ -179,18 +288,57 @@ class GercekHesapServisi extends HesapServisi {
         'Bilgisayara ulaşılamadı, açık olduğunu kontrol et.',
       );
     }
+    final nesil = ++_baglantiNesli;
     oturumAc!(cihaz, () async* {
+      var deneme = 0;
+      final saat = Stopwatch()..start();
+      sonBaglanmaSuresi = null;
       try {
-        await for (final o in googleBaglan(cihaz.id)) {
-          if (o.tur == 'kabul') {
-            _giden = cihaz;
-            _yayinla();
+        while (nesil == _baglantiNesli && !_kapali) {
+          var tekrar = false;
+          try {
+            await for (final o in googleBaglan(cihaz.id)) {
+              if (nesil != _baglantiNesli || _kapali) {
+                yield o;
+                return;
+              }
+              if (o.tur == 'yeniden') {
+                // Stop the core's longer resume loop; this account stream owns
+                // exactly three fresh connection attempts with 1/2/4s waits.
+                tekrar = true;
+                await kes();
+                break;
+              }
+              if (o.tur == 'hata' && deneme > 0) {
+                tekrar = true;
+                break;
+              }
+              if (o.tur == 'istatistik') deneme = 0;
+              if (o.tur == 'kabul') {
+                sonBaglanmaSuresi ??= saat.elapsed;
+                _giden = cihaz;
+                _yayinla();
+              }
+              if (o.tur == 'koptu' || o.tur == 'hata') {
+                _giden = null;
+                _yayinla();
+              }
+              yield o;
+            }
+          } catch (_) {
+            if (deneme == 0) rethrow;
+            tekrar = true;
           }
-          if (o.tur == 'koptu' || o.tur == 'hata') {
-            _giden = null;
-            _yayinla();
+          if (!tekrar || nesil != _baglantiNesli || _kapali) return;
+          _giden = null;
+          _yayinla();
+          final gecikme = yenidenBaglanmaBeklemesi(deneme++);
+          if (gecikme == null) {
+            yield IzleyiciOlay('koptu', metin: 'Bağlantı kurulamadı, bilgisayarın açık olduğunu kontrol et.');
+            return;
           }
-          yield o;
+          yield IzleyiciOlay('yeniden', metin: 'Bağlantı koptu, yeniden bağlanılıyor… ($deneme/3)');
+          await bekle(gecikme);
         }
       } finally {
         _giden = null;
@@ -201,6 +349,7 @@ class GercekHesapServisi extends HesapServisi {
 
   @override
   Future<void> baglantiyiKes() async {
+    _baglantiNesli++;
     await kes();
     // The host's actual disconnect event clears the incoming banner.
     _giden = null;
@@ -209,11 +358,20 @@ class GercekHesapServisi extends HesapServisi {
 
   @override
   Future<void> cikisYap() async {
+    _oturumNesli++;
+    _baglantiNesli++;
+    _geriYukleme?.cancel();
     _heartbeat?.cancel();
     _heartbeat = null;
     _hesap = null;
+    durum = null;
     try {
-      await _cagir('cikis');
+      try {
+        await _kasada(() async { await kasa?.sil(); });
+      } finally {
+        // Local revocation must run even if deleting the encrypted file fails.
+        await _cagir('cikis');
+      }
     } finally {
       await kes();
       _giden = null;
@@ -237,6 +395,10 @@ class GercekHesapServisi extends HesapServisi {
 
   @override
   void dispose() {
+    _oturumNesli++;
+    _kapali = true;
+    _baglantiNesli++;
+    _geriYukleme?.cancel();
     _heartbeat?.cancel();
     _host.cancel();
     _akis.close();

@@ -113,7 +113,6 @@ fn gecersiz_token_anahtar_kapaliyken_bile_reddedilir() {
         "bad_signature",
         "wrong_aud",
         "wrong_iss",
-        "future",
         "none",
     ] {
         assert!(
@@ -121,6 +120,9 @@ fn gecersiz_token_anahtar_kapaliyken_bile_reddedilir() {
             "{name}"
         );
     }
+    // iat 100 sn ileride: saat kayması toleransı (300 sn) içinde kabul; 400 sn ileride red.
+    assert!(d.dogrula(v["future"].as_str().unwrap(), 1_700_000_100).is_ok());
+    assert!(d.dogrula(v["future"].as_str().unwrap(), 1_699_999_800).is_err());
     assert_eq!(
         karar(
             None,
