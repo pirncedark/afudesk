@@ -65,8 +65,9 @@ class TerminalModu extends StatelessWidget {
                 child: LayoutBuilder(
                   builder: (context, c) {
                     final k = kare;
-                    if (k == null)
+                    if (k == null) {
                       return const Center(child: CircularProgressIndicator());
+                    }
                     final alan = Size(
                       c.maxWidth,
                       c.maxWidth * k.height / k.width,
@@ -80,8 +81,9 @@ class TerminalModu extends StatelessWidget {
                         onPointerHover: (e) => konum(e.localPosition, alan),
                         onPointerDown: (e) {
                           konum(e.localPosition, alan);
-                          if (e.kind == PointerDeviceKind.mouse)
+                          if (e.kind == PointerDeviceKind.mouse) {
                             fare(e.buttons);
+                          }
                         },
                         onPointerMove: (e) {
                           if (e.kind != PointerDeviceKind.mouse) return;
@@ -89,8 +91,9 @@ class TerminalModu extends StatelessWidget {
                           fare(e.buttons);
                         },
                         onPointerUp: (e) {
-                          if (e.kind == PointerDeviceKind.mouse)
+                          if (e.kind == PointerDeviceKind.mouse) {
                             fare(e.buttons);
+                          }
                         },
                         onPointerCancel: (_) => fare(0),
                         onPointerSignal: (e) {

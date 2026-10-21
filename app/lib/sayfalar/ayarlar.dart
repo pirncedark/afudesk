@@ -47,11 +47,13 @@ class _AyarlarSayfasiDurum extends State<AyarlarSayfasi> {
     setState(() => _arkaPlanMesgul = true);
     try {
       await ArkaPlan.ayarla(acik);
-      if (mounted) setState(() {
-        _arkaPlan = acik;
-        _bilgi = acik ? 'AfuDesk arka planda hazır; pencereyi kapatınca tepside kalır.' : 'Otomatik başlangıç kapatıldı.';
-        _hata = null;
-      });
+      if (mounted) {
+        setState(() {
+          _arkaPlan = acik;
+          _bilgi = acik ? 'AfuDesk arka planda hazır; pencereyi kapatınca tepside kalır.' : 'Otomatik başlangıç kapatıldı.';
+          _hata = null;
+        });
+      }
     } catch (_) {
       if (mounted) setState(() => _hata = 'Başlangıç ayarı değiştirilemedi, yeniden dene.');
     } finally {

@@ -63,8 +63,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     if (!_kontrol ||
         _yeniden != null ||
         _terminalBekliyor ||
-        _terminalListeBekliyor)
+        _terminalListeBekliyor) {
       return;
+    }
     setState(() => _terminalListeBekliyor = true);
     widget.motor.girdi(const Girdi('terminal_liste'));
     _terminalZamanAsimi();
@@ -143,8 +144,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
           !mounted ||
           _asama != _Asama.bagli ||
           !_kontrol ||
-          _yeniden != null)
+          _yeniden != null) {
         return;
+      }
       final boyut = MediaQuery.sizeOf(context);
       final en = boyut.shortestSide;
       final boy = boyut.longestSide;
@@ -190,15 +192,17 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
       }
     } else {
       _terminalKapat(gonder: false);
-      if (metin != 'kapali')
+      if (metin != 'kapali') {
         _terminalBilgi('Terminal açılamadı. Yeniden dene.');
+      }
     }
   }
 
   void _terminalKapat({bool gonder = true}) {
     _terminalSaat?.cancel();
-    if (gonder && (_terminal || _terminalBekliyor))
+    if (gonder && (_terminal || _terminalBekliyor)) {
       widget.motor.girdi(const Girdi('terminal_kapat'));
+    }
     _tuslariBirak();
     _yaziOdak.unfocus();
     SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
@@ -234,8 +238,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   }
 
   void _terminalKes() {
-    if (!_terminalCtrl)
+    if (!_terminalCtrl) {
       widget.motor.girdi(const Girdi('tus', ad: 'Ctrl', basili: true));
+    }
     _ozelTus('c');
     widget.motor.girdi(const Girdi('tus', ad: 'Ctrl', basili: false));
     setState(() => _terminalCtrl = false);
@@ -245,8 +250,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     final veri = await Clipboard.getData(Clipboard.kTextPlain);
     if (!mounted || !_terminal || !_kontrol || _yeniden != null) return;
     if (_terminalCtrl) _terminalCtrlDegistir();
-    if (veri?.text?.isNotEmpty ?? false)
+    if (veri?.text?.isNotEmpty ?? false) {
       _gonder([Girdi('metin', metin: veri!.text!)]);
+    }
   }
 
   bool _dosyaIzni = false;
@@ -596,8 +602,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   @override
   void dispose() {
     _terminalSaat?.cancel();
-    if (_terminal || _terminalBekliyor)
+    if (_terminal || _terminalBekliyor) {
       widget.motor.girdi(const Girdi('terminal_kapat'));
+    }
     _tuslariBirak();
     WidgetsBinding.instance.removeObserver(this);
     _yaziOdak.removeListener(_yaziOdakDegisti);
