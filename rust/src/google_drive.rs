@@ -77,7 +77,9 @@ pub fn drive_karari(
     let Ok(karsi) = karsi else {
         return Karar::Red;
     };
-    if simdi < 0 || yerel.gecerlilik_sonu() <= simdi || karsi.gecerlilik_sonu() <= simdi {
+    // The host identity was established locally; only the incoming proof must
+    // be fresh. The caller still reads live Drive membership for both devices.
+    if simdi < 0 || karsi.gecerlilik_sonu() <= simdi {
         return Karar::Red;
     }
     if yerel.sub() != karsi.sub() {

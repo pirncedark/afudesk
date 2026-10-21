@@ -143,6 +143,7 @@ struct Claims {
     azp: Option<String>,
     exp: i64,
     iat: i64,
+    #[serde(default)]
     nonce: String,
 }
 
@@ -232,6 +233,30 @@ impl Dogrulayici {
     }
 
     pub fn dogrula(&self, token: &str, simdi: i64) -> Sonuc<Dogrulanmis> {
+        self.dogrula_ici(token, simdi, None)
+    }
+
+    /// Only for a direct token-endpoint refresh of a locally saved grant.
+    /// Refresh responses may omit nonce; peer proofs must always use dogrula.
+    pub(crate) fn dogrula_yenileme(
+        &self,
+        token: &str,
+        simdi: i64,
+        sub: &str,
+        nonce: &str,
+    ) -> Sonuc<Dogrulanmis> {
+        if sub.is_empty() || nonce.is_empty() || nonce.len() > 256 {
+            return Err(DogrulamaHatasi);
+        }
+        self.dogrula_ici(token, simdi, Some((sub, nonce)))
+    }
+
+    fn dogrula_ici(
+        &self,
+        token: &str,
+        simdi: i64,
+        yenileme: Option<(&str, &str)>,
+    ) -> Sonuc<Dogrulanmis> {
         if token.len() > AZAMI_TOKEN || simdi < 0 {
             return Err(DogrulamaHatasi::nedenli("imza"));
         }
@@ -262,8 +287,18 @@ impl Dogrulayici {
             )
             .map_err(|_| DogrulamaHatasi::nedenli("imza"))?;
         // Claim'ler yalnız imza doğrulandıktan sonra yetki için işlenir.
-        let c: Claims =
+        let mut c: Claims =
             serde_json::from_slice(&coz(p)?).map_err(|_| DogrulamaHatasi::nedenli("claim"))?;
+        if let Some((sub, nonce)) = yenileme {
+            if c.sub != sub {
+                return Err(DogrulamaHatasi::nedenli("sub"));
+            }
+            if c.nonce.is_empty() {
+                c.nonce = nonce.into();
+            } else if c.nonce != nonce {
+                return Err(DogrulamaHatasi::NONCE);
+            }
+        }
         let aud = c.aud.degerler();
         let neden = if !matches!(
             c.iss.as_str(),
@@ -353,6 +388,71 @@ mod dizin_testleri {
     use super::*;
     use crate::google_dizin::Dizin;
     use iroh::SecretKey;
+
+    #[test]
+    fn host_tokeni_yenilenirken_taze_karsi_kanit_ve_drive_kaydi_yeterli() {
+        use crate::google_drive::{drive_karari, CihazKaydi};
+        let yerel = Dogrulanmis {
+            sub: "hesap".into(),
+            nonce: "yerel".into(),
+            exp: 999,
+        };
+        let karsi = Dogrulanmis {
+            sub: "hesap".into(),
+            nonce: anahtar_nonce("host", "viewer"),
+            exp: 2000,
+        };
+        let mut kayit = CihazKaydi {
+            v: 1,
+            sub: "hesap".into(),
+            host: "host".into(),
+            izleyici: "viewer".into(),
+            ad: "Telefon".into(),
+            platform: "android".into(),
+            adresler: vec![],
+            relaylar: vec![],
+            son_gorulme: 1000,
+            erisim: true,
+        };
+        assert_eq!(
+            drive_karari(&yerel, Ok(&karsi), "viewer", &[kayit.clone()], 1000),
+            Karar::Kabul
+        );
+        kayit.erisim = false;
+        assert_eq!(
+            drive_karari(&yerel, Ok(&karsi), "viewer", &[kayit], 1000),
+            Karar::Red
+        );
+        assert_eq!(
+            drive_karari(&yerel, Ok(&karsi), "viewer", &[], 1000),
+            Karar::Red
+        );
+    }
+
+    #[test]
+    fn yenileme_nonce_olmadan_yalniz_kayitli_hesabi_dogrular() {
+        let d = Dogrulayici::yeni(vec![WEB.into()], TEST_JWKS).unwrap();
+        let token = signed_claims(|c| {
+            c.as_object_mut().unwrap().remove("nonce");
+        });
+        assert!(d.dogrula(&token, NOW).is_err());
+        assert!(d
+            .dogrula_yenileme(&token, NOW, "test-account", "kayitli-nonce")
+            .is_ok());
+        assert!(d
+            .dogrula_yenileme(&token, NOW, "baska-hesap", "kayitli-nonce")
+            .is_err());
+        let yanlis_nonce = signed_claims(|c| c["nonce"] = "baska-nonce".into());
+        assert!(d
+            .dogrula_yenileme(&yanlis_nonce, NOW, "test-account", "kayitli-nonce")
+            .is_err());
+        let expired = signed_claims(|c| {
+            c["exp"] = NOW.into();
+        });
+        assert!(d
+            .dogrula_yenileme(&expired, NOW, "test-account", "test-nonce")
+            .is_err());
+    }
 
     #[tokio::test]
     async fn android_tls_istemcisi_jni_baslatmadan_kurulur() {
