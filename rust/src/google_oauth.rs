@@ -305,7 +305,7 @@ impl Kod {
             .map_err(|_| DogrulamaHatasi)?;
         let hesap = verifier.dogrula(&token.id_token, simdi)?;
         if hesap.nonce() != self.giris.nonce {
-            return Err(DogrulamaHatasi);
+            return Err(DogrulamaHatasi::NONCE);
         }
         Ok(GoogleOturumu {
             hesap,
