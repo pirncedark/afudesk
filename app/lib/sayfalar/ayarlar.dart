@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../guncelleme.dart';
+import '../motor.dart';
 import '../hesap/hesap_servisi.dart';
 
 class AyarlarSayfasi extends StatefulWidget {
@@ -152,6 +153,22 @@ class _AyarlarSayfasiDurum extends State<AyarlarSayfasi> {
                 padding: const EdgeInsets.all(24),
                 children: [
                   ListTile(title: const Text('Sürüm'), subtitle: Text(_surum)),
+                  ExpansionTile(
+                    title: const Text('Bağlantı bilgisi'),
+                    children: [
+                      ValueListenableBuilder<int?>(
+                        valueListenable: BaglantiOlcumu.ortalamaMs,
+                        builder: (context, ms, _) => ListTile(
+                          dense: true,
+                          title: Text(
+                            ms == null
+                                ? 'Yazı yazdığında bağlantı süresi ölçülür.'
+                                : 'Tuş → ekran ortalaması: $ms ms',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   const Divider(),
                   ListTile(
                     title: const Text('Güncelleme'),

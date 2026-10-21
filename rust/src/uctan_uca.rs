@@ -10,6 +10,111 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 
 const SURE: Duration = Duration::from_secs(20);
 
+/// Gerçek QUIC üzerinden, yalnız enjekte edilmiş girdinin değiştirdiği pikselleri ölçer.
+/// Fiziksel monitör/telefon sunumu değildir; yerel girdi -> çözülmüş kare ölçümüdür.
+#[tokio::test(flavor = "multi_thread")]
+async fn hiz_girdi_piksel_gecikmesi() {
+    use crate::{
+        goruntu::Goruntu,
+        platform::{Enjektor, Fabrika, Yakalayici},
+    };
+    use std::sync::atomic::{AtomicU8, Ordering};
+    struct TestEkrani(Arc<AtomicU8>);
+    impl Yakalayici for TestEkrani {
+        fn degisim_gudumlu(&self) -> bool {
+            true
+        }
+        fn yakala(&mut self) -> anyhow::Result<Goruntu> {
+            let v = self.0.load(Ordering::SeqCst);
+            Ok(Goruntu {
+                genislik: 64,
+                yukseklik: 64,
+                rgba: [v, v, v, 255].repeat(64 * 64),
+            })
+        }
+    }
+    impl Enjektor for TestEkrani {
+        fn uygula(&mut self, g: &Girdi) -> anyhow::Result<()> {
+            if matches!(g, Girdi::Metin(_)) {
+                self.0.fetch_add(20, Ordering::SeqCst);
+            }
+            Ok(())
+        }
+    }
+    struct TestFabrikasi(Arc<AtomicU8>);
+    impl Fabrika for TestFabrikasi {
+        fn yakalayici(&self) -> anyhow::Result<Box<dyn Yakalayici>> {
+            Ok(Box::new(TestEkrani(self.0.clone())))
+        }
+        fn enjektor(&self) -> anyhow::Result<Box<dyn Enjektor>> {
+            Ok(Box::new(TestEkrani(self.0.clone())))
+        }
+        fn pano(&self) -> anyhow::Result<Box<dyn crate::pano::Pano>> {
+            Ok(Box::new(SahtePano::default()))
+        }
+        fn kol_surucusu(&self) -> anyhow::Result<Box<dyn crate::sanal_kol::KolSurucusu>> {
+            anyhow::bail!("testte kol yok")
+        }
+    }
+    let fab = Arc::new(TestFabrikasi(Arc::new(AtomicU8::new(0))));
+    let mut h = host::baslat(ayar("472916"), fab).await.unwrap();
+    let (kod, parola) = hazir(&mut h).await;
+    let mut i = izleyici::baglan(&kod, &parola, "Gecikme testi")
+        .await
+        .unwrap();
+    i.parcali_ayarla(true);
+    olay_bekle(&mut h, |o| matches!(o, HostOlay::Istek { .. })).await;
+    h.komut(HostKomut::Kabul(Izinler {
+        kontrol: true,
+        pano: false,
+        dosya: false,
+        oyun_kolu: false,
+    }))
+    .await;
+    iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Parcalar { .. })).await;
+    let mut ms = Vec::new();
+    for n in 1..=10u8 {
+        // Farklı fazlarda örnekle; sabit uyku döngüsüyle aynı faza kilitlenme.
+        tokio::time::sleep(Duration::from_millis(7 + n as u64 * 3)).await;
+        let basla = std::time::Instant::now();
+        i.gonder(Girdi::Metin("şİ😀".into())).await;
+        let o = iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Parcalar { dosemeler, .. }
+            if dosemeler.first().and_then(|d| d.rgba.first()).is_some_and(|p| (*p as i16 - (n as i16 * 20)).abs() <= 3))).await;
+        if let IzleyiciOlay::Parcalar {
+            girdi_ms,
+            host_girdi_ms,
+            ..
+        } = o
+        {
+            // The first frame may precede capability negotiation; by the last
+            // input the control-stream round trips have completed.
+            if n == 10 {
+                assert!(girdi_ms > 0 && host_girdi_ms > 0, "girdi zaman damgası kayboldu");
+            }
+        }
+        ms.push(basla.elapsed().as_secs_f64() * 1000.0);
+    }
+    let ort = ms.iter().sum::<f64>() / ms.len() as f64;
+    ms.sort_by(f64::total_cmp);
+    eprintln!("HIZ_OLCUM yerel_QUIC_girdi_cozulmus_piksel n={} ortalama_ms={ort:.2} medyan_ms={:.2} p90_ms={:.2}", ms.len(), ms[ms.len()/2], ms[9]);
+    assert!(ms[9] < 1000.0, "yerel gecikme sınırı: {ms:?}");
+    // A static event-driven screen sends no repeated image frames.
+    assert!(
+        tokio::time::timeout(Duration::from_millis(200), async {
+            loop {
+                if matches!(i.olaylar.recv().await, Some(IzleyiciOlay::Parcalar { .. })) {
+                    break;
+                }
+            }
+        })
+        .await
+        .is_err(),
+        "durağan ekranda kare gönderildi"
+    );
+    i.kapat();
+    h.durdur();
+}
+
 fn ayar(parola: &str) -> HostAyar {
     HostAyar {
         ad: "Ali PC".into(),

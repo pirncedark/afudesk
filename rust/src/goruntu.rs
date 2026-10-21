@@ -57,6 +57,8 @@ pub struct Kodlayici {
     /// Ulaşmadan iptal edilen karelerin döşemeleri: değişmeseler de yeniden gönderilir.
     zorunlu: std::collections::HashSet<(u32, u32)>,
     kalite: u8,
+    kayipsiz: bool,
+    terminal: bool,
     sira: u64,
     /// Bu kadar karede bir tam kare gönder (paket kaybı/yeni izleyici için).
     tam_aralik: u64,
@@ -68,9 +70,25 @@ impl Kodlayici {
             onceki: None,
             zorunlu: Default::default(),
             kalite,
+            kayipsiz: false,
+            terminal: false,
             sira: 0,
             tam_aralik: 150,
         }
+    }
+
+    pub fn kayipsiz_ayarla(&mut self, acik: bool) {
+        if self.kayipsiz != acik {
+            self.tam_kare_iste();
+        }
+        self.kayipsiz = acik;
+    }
+
+    pub fn terminal_ayarla(&mut self, acik: bool) {
+        if self.terminal != acik {
+            self.tam_kare_iste();
+        }
+        self.terminal = acik;
     }
 
     pub fn kalite_ayarla(&mut self, k: u8) {
@@ -93,7 +111,14 @@ impl Kodlayici {
     /// Değişiklik yoksa `None`.
     pub fn kodla(&mut self, g: &Goruntu) -> anyhow::Result<Option<Kare>> {
         anyhow::ensure!(
-            g.rgba.len() == (g.genislik * g.yukseklik * 4) as usize,
+            g.genislik > 0
+                && g.yukseklik > 0
+                && g.genislik <= 16384
+                && g.yukseklik <= 16384
+                && Some(g.rgba.len())
+                    == (g.genislik as usize)
+                        .checked_mul(g.yukseklik as usize)
+                        .and_then(|n| n.checked_mul(4)),
             "RGBA boyutu uyuşmuyor"
         );
         let boyut_degisti = self
@@ -131,7 +156,11 @@ impl Kodlayici {
                     y,
                     gen,
                     yuk,
-                    jpeg: jpeg_kodla(g, x, y, gen, yuk, kalite)?,
+                    jpeg: if self.kayipsiz {
+                        uyarlamali_kodla(g, x, y, gen, yuk, kalite, self.terminal)?
+                    } else {
+                        jpeg_kodla(g, x, y, gen, yuk, kalite)?
+                    },
                 })
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
@@ -196,6 +225,8 @@ pub struct Birlestirici {
     /// Her döşemeye en son uygulanan kare sırası: kareler bağımsız akışlardan
     /// sırasız gelebilir; eski kare yeni içeriğin üstüne yazamaz.
     doseme_sira: std::collections::HashMap<(u32, u32), u64>,
+    boyut_sira: u64,
+    son_sira: u64,
 }
 
 impl Default for Birlestirici {
@@ -207,53 +238,227 @@ impl Default for Birlestirici {
                 rgba: Vec::new(),
             },
             doseme_sira: Default::default(),
+            boyut_sira: 0,
+            son_sira: 0,
         }
     }
 }
 
+/// Yalnız değişen parçalar; tam ekran RGBA kopyalamadan UI'ya taşınabilir.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DosemeRgba {
+    pub x: u32,
+    pub y: u32,
+    pub gen: u32,
+    pub yuk: u32,
+    pub rgba: Vec<u8>,
+}
+
 impl Birlestirici {
-    pub fn uygula(&mut self, k: &Kare) -> anyhow::Result<()> {
+    pub fn parcalar(&mut self, k: &Kare) -> anyhow::Result<Vec<DosemeRgba>> {
         anyhow::ensure!(
             k.genislik > 0 && k.yukseklik > 0 && k.genislik <= 16384 && k.yukseklik <= 16384,
             "geçersiz kare boyutu"
         );
-        if k.genislik != self.goruntu.genislik || k.yukseklik != self.goruntu.yukseklik {
+        let degisti = k.genislik != self.goruntu.genislik || k.yukseklik != self.goruntu.yukseklik;
+        if k.sira < self.boyut_sira
+            || (degisti && k.sira <= self.son_sira && self.goruntu.genislik != 0)
+        {
+            return Ok(Vec::new());
+        }
+        let mut parcalar = Vec::new();
+        let mut konumlar = std::collections::HashSet::new();
+        for d in &k.dosemeler {
+            anyhow::ensure!(
+                d.gen > 0
+                    && d.yuk > 0
+                    && d.x.checked_add(d.gen).is_some_and(|v| v <= k.genislik)
+                    && d.y.checked_add(d.yuk).is_some_and(|v| v <= k.yukseklik),
+                "döşeme ekran dışında"
+            );
+            anyhow::ensure!(
+                d.x % DOSEME == 0
+                    && d.y % DOSEME == 0
+                    && d.gen == DOSEME.min(k.genislik - d.x)
+                    && d.yuk == DOSEME.min(k.yukseklik - d.y)
+                    && konumlar.insert((d.x, d.y)),
+                "geçersiz veya tekrarlanan döşeme konumu"
+            );
+            if !degisti
+                && self
+                    .doseme_sira
+                    .get(&(d.x, d.y))
+                    .is_some_and(|s| *s >= k.sira)
+            {
+                continue;
+            }
+            parcalar.push(DosemeRgba {
+                x: d.x,
+                y: d.y,
+                gen: d.gen,
+                yuk: d.yuk,
+                rgba: doseme_coz(d)?,
+            });
+        }
+        // Bozuk kare durumunda sıra ve boyut bilgisi değişmez; tekrar gönderim çalışır.
+        if degisti {
+            if self.goruntu.genislik != 0 {
+                self.boyut_sira = k.sira;
+            }
             self.goruntu = Goruntu {
                 genislik: k.genislik,
                 yukseklik: k.yukseklik,
-                rgba: vec![0; (k.genislik * k.yukseklik * 4) as usize],
+                rgba: Vec::new(),
             };
             self.doseme_sira.clear();
         }
-        let satir = (k.genislik * 4) as usize;
-        for d in &k.dosemeler {
-            anyhow::ensure!(
-                d.gen > 0 && d.yuk > 0 && d.x + d.gen <= k.genislik && d.y + d.yuk <= k.yukseklik,
-                "döşeme ekran dışında"
-            );
-            let son = self.doseme_sira.entry((d.x, d.y)).or_insert(0);
-            if *son >= k.sira {
-                continue; // bu döşemenin daha yeni hali zaten ekranda
-            }
-            *son = k.sira;
-            let coz = image::codecs::jpeg::JpegDecoder::new(std::io::Cursor::new(&d.jpeg))?;
-            let (gw, gh) = coz.dimensions();
-            anyhow::ensure!(gw == d.gen && gh == d.yuk, "döşeme boyutu uyuşmuyor");
-            let mut rgb = vec![0u8; coz.total_bytes() as usize];
-            coz.read_image(&mut rgb)?;
-            for yy in 0..d.yuk {
-                let hedef = (d.y + yy) as usize * satir + d.x as usize * 4;
-                let kaynak = (yy * d.gen * 3) as usize;
-                for xx in 0..d.gen as usize {
-                    let h = hedef + xx * 4;
-                    let s = kaynak + xx * 3;
-                    self.goruntu.rgba[h..h + 3].copy_from_slice(&rgb[s..s + 3]);
-                    self.goruntu.rgba[h + 3] = 255;
-                }
+        self.son_sira = self.son_sira.max(k.sira);
+        for d in &parcalar {
+            self.doseme_sira.insert((d.x, d.y), k.sira);
+        }
+        Ok(parcalar)
+    }
+
+    pub fn uygula(&mut self, k: &Kare) -> anyhow::Result<()> {
+        let parcalar = self.parcalar(k)?;
+        if parcalar.is_empty() {
+            return Ok(());
+        }
+        let n = self.goruntu.genislik as usize * self.goruntu.yukseklik as usize * 4;
+        self.goruntu.rgba.resize(n, 0);
+        let satir = self.goruntu.genislik as usize * 4;
+        for d in parcalar {
+            let gen = d.gen as usize * 4;
+            for yy in 0..d.yuk as usize {
+                let hedef = (d.y as usize + yy) * satir + d.x as usize * 4;
+                self.goruntu.rgba[hedef..hedef + gen]
+                    .copy_from_slice(&d.rgba[yy * gen..(yy + 1) * gen]);
             }
         }
         Ok(())
     }
+}
+
+// AFDT + version(1) + format(1 palette RLE, 2 RGBA RLE).
+// Dimensions remain in Doseme, keeping the legacy bincode layout unchanged.
+const MAGIC: &[u8] = b"AFDT";
+fn uyarlamali_kodla(
+    g: &Goruntu,
+    x: u32,
+    y: u32,
+    gen: u32,
+    yuk: u32,
+    kalite: u8,
+    terminal: bool,
+) -> anyhow::Result<Vec<u8>> {
+    let mut pixels = Vec::<[u8; 4]>::with_capacity((gen * yuk) as usize);
+    let mut palet = Vec::<[u8; 4]>::new();
+    let mut indisler = Vec::new();
+    let mut harita = std::collections::HashMap::new();
+    for yy in y..y + yuk {
+        let bas = ((yy * g.genislik + x) * 4) as usize;
+        for p in g.rgba[bas..bas + gen as usize * 4].chunks_exact(4) {
+            let p: [u8; 4] = p.try_into().unwrap();
+            pixels.push(p);
+            if palet.len() <= 256 {
+                let i = *harita.entry(p).or_insert_with(|| {
+                    let i = palet.len();
+                    palet.push(p);
+                    i
+                });
+                indisler.push(i as u8);
+            }
+        }
+    }
+    if palet.len() > 256 && !terminal {
+        return jpeg_kodla(g, x, y, gen, yuk, kalite);
+    }
+    let palette = palet.len() <= 256;
+    let mut out = MAGIC.to_vec();
+    out.extend_from_slice(&[1, if palette { 1 } else { 2 }]);
+    if palette {
+        out.extend_from_slice(&(palet.len() as u16).to_le_bytes());
+        for p in &palet {
+            out.extend_from_slice(p);
+        }
+    }
+    let mut i = 0;
+    while i < pixels.len() {
+        let mut son = i + 1;
+        while son < pixels.len() && pixels[son] == pixels[i] && son - i < u16::MAX as usize {
+            son += 1;
+        }
+        out.extend_from_slice(&((son - i) as u16).to_le_bytes());
+        if palette {
+            out.push(indisler[i]);
+        } else {
+            out.extend_from_slice(&pixels[i]);
+        }
+        i = son;
+    }
+    Ok(out)
+}
+
+/// Saf ve sınırlı çözücü: JPEG veya anlaşılmış AFDT döşemesi → RGBA.
+pub fn doseme_coz(d: &Doseme) -> anyhow::Result<Vec<u8>> {
+    anyhow::ensure!(
+        d.gen > 0 && d.yuk > 0 && d.gen <= DOSEME && d.yuk <= DOSEME,
+        "geçersiz döşeme boyutu"
+    );
+    let adet = d.gen as usize * d.yuk as usize;
+    anyhow::ensure!(d.jpeg.len() <= 128 * 1024, "döşeme çok büyük");
+    if d.jpeg.starts_with(MAGIC) {
+        let mut c = std::io::Cursor::new(&d.jpeg[4..]);
+        fn al<const N: usize>(c: &mut std::io::Cursor<&[u8]>) -> anyhow::Result<[u8; N]> {
+            let mut v = [0; N];
+            std::io::Read::read_exact(c, &mut v)?;
+            Ok(v)
+        }
+        let [surum, bicim] = al::<2>(&mut c)?;
+        anyhow::ensure!(
+            surum == 1 && (bicim == 1 || bicim == 2),
+            "bilinmeyen döşeme biçimi"
+        );
+        let mut palet = Vec::new();
+        if bicim == 1 {
+            let n = u16::from_le_bytes(al::<2>(&mut c)?) as usize;
+            anyhow::ensure!(n > 0 && n <= 256, "geçersiz palet");
+            for _ in 0..n {
+                palet.push(al::<4>(&mut c)?);
+            }
+        }
+        let mut out = Vec::with_capacity(adet * 4);
+        while out.len() < adet * 4 {
+            let n = u16::from_le_bytes(al::<2>(&mut c)?) as usize;
+            anyhow::ensure!(
+                n > 0 && n <= adet - out.len() / 4,
+                "geçersiz tekrar uzunluğu"
+            );
+            let p = if bicim == 1 {
+                let i = al::<1>(&mut c)?[0] as usize;
+                *palet
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("geçersiz palet indisi"))?
+            } else {
+                al::<4>(&mut c)?
+            };
+            for _ in 0..n {
+                out.extend_from_slice(&p);
+            }
+        }
+        anyhow::ensure!(
+            c.position() as usize == d.jpeg.len() - 4,
+            "döşemede artık veri"
+        );
+        return Ok(out);
+    }
+    let coz = image::codecs::jpeg::JpegDecoder::new(std::io::Cursor::new(&d.jpeg))?;
+    anyhow::ensure!(
+        coz.dimensions() == (d.gen, d.yuk),
+        "döşeme boyutu uyuşmuyor"
+    );
+    let rgb = image::DynamicImage::from_decoder(coz)?.to_rgba8();
+    Ok(rgb.into_raw())
 }
 
 #[cfg(test)]
@@ -441,5 +646,170 @@ mod testler {
         let mut g = deneme_goruntu(64, 64, 0);
         g.rgba.pop();
         assert!(Kodlayici::new(80).kodla(&g).is_err());
+    }
+}
+
+#[cfg(test)]
+mod hiz_testleri {
+    use super::*;
+    #[test]
+    fn turkce_terminal_renkleri_kayipsiz_ve_parcali() {
+        // Türkçe gliflerin kenarlarındaki renk/alpha değerleri birebir korunmalı.
+        let mut g = Goruntu {
+            genislik: 64,
+            yukseklik: 64,
+            rgba: [13, 18, 31, 255].repeat(4096),
+        };
+        for (i, _) in "çğıöşüÇĞİÖŞÜ".chars().enumerate() {
+            g.rgba[i * 4..i * 4 + 4].copy_from_slice(&[240, i as u8, 90, 199]);
+        }
+        let mut e = Kodlayici::new(80);
+        e.kayipsiz_ayarla(true);
+        e.terminal_ayarla(true);
+        let k = e.kodla(&g).unwrap().unwrap();
+        assert_eq!(doseme_coz(&k.dosemeler[0]).unwrap(), g.rgba);
+        let mut b = Birlestirici::default();
+        assert_eq!(b.parcalar(&k).unwrap()[0].rgba, g.rgba);
+        assert!(b.parcalar(&k).unwrap().is_empty());
+    }
+    #[test]
+    fn fotograf_jpeg_legacy_de_korunur() {
+        let g = deneme_goruntu(64, 64, 42);
+        let mut e = Kodlayici::new(90);
+        e.kayipsiz_ayarla(true);
+        let k = e.kodla(&g).unwrap().unwrap();
+        assert!(k.dosemeler[0].jpeg.starts_with(&[255, 216]));
+        assert_eq!(doseme_coz(&k.dosemeler[0]).unwrap().len(), 64 * 64 * 4);
+        let flat = Goruntu {
+            genislik: 1,
+            yukseklik: 1,
+            rgba: vec![3, 4, 5, 255],
+        };
+        assert!(
+            Kodlayici::new(90).kodla(&flat).unwrap().unwrap().dosemeler[0]
+                .jpeg
+                .starts_with(&[255, 216])
+        );
+    }
+    #[test]
+    fn bozuk_ve_tasan_doseme_reddedilir_ve_sira_zehirlenmez() {
+        let g = deneme_goruntu(64, 64, 7);
+        let k = Kodlayici::new(90).kodla(&g).unwrap().unwrap();
+        let mut bad = k.clone();
+        bad.dosemeler[0].jpeg = b"AFDT\x01\x01".to_vec();
+        let mut b = Birlestirici::default();
+        assert!(b.parcalar(&bad).is_err());
+        assert_eq!(b.parcalar(&k).unwrap().len(), 1);
+        bad.dosemeler[0].x = u32::MAX;
+        assert!(b.parcalar(&bad).is_err());
+        bad.dosemeler[0].gen = u32::MAX;
+        assert!(doseme_coz(&bad.dosemeler[0]).is_err());
+    }
+}
+
+#[cfg(test)]
+mod bicim_guvenlik_testleri {
+    use super::*;
+    #[test]
+    fn terminal_fotograf_da_rgba_kayipsizdir() {
+        let g = deneme_goruntu(64, 64, 19);
+        let mut e = Kodlayici::new(80);
+        e.kayipsiz_ayarla(true);
+        e.terminal_ayarla(true);
+        let k = e.kodla(&g).unwrap().unwrap();
+        assert_eq!(&k.dosemeler[0].jpeg[..6], b"AFDT\x01\x02");
+        assert_eq!(doseme_coz(&k.dosemeler[0]).unwrap(), g.rgba);
+    }
+    #[test]
+    fn bozuk_kayipsiz_akislari_reddet() {
+        let mut d = Doseme {
+            x: 0,
+            y: 0,
+            gen: 1,
+            yuk: 1,
+            jpeg: vec![],
+        };
+        let veriler: &[&[u8]] = &[
+            b"AFDT\x02\x02",                         // version
+            b"AFDT\x01\x03",                         // format
+            b"AFDT\x01\x01\0\0",                     // empty palette
+            b"AFDT\x01\x02\0\0\0\0\0\0",             // zero run
+            b"AFDT\x01\x02\x02\0\0\0\0\0",           // run exceeds tile
+            b"AFDT\x01\x02\x01\0\0\0\0\0x",          // trailing data
+            b"AFDT\x01\x01\x01\0\0\0\0\0\x01\0\x01", // invalid palette index
+        ];
+        for veri in veriler {
+            d.jpeg = veri.to_vec();
+            assert!(doseme_coz(&d).is_err(), "{veri:?}");
+        }
+        d.jpeg = vec![0; 128 * 1024 + 1];
+        assert!(doseme_coz(&d).is_err());
+    }
+    #[test]
+    fn jpeg_boyutu_ve_eksik_veri_reddedilir() {
+        let k = Kodlayici::new(80)
+            .kodla(&deneme_goruntu(64, 64, 9))
+            .unwrap()
+            .unwrap();
+        let mut d = k.dosemeler[0].clone();
+        d.gen = 63;
+        assert!(doseme_coz(&d).is_err());
+        d.gen = 64;
+        d.jpeg.truncate(20);
+        assert!(doseme_coz(&d).is_err());
+    }
+}
+
+#[cfg(test)]
+mod birlestirme_guvenlik_testleri {
+    use super::*;
+    fn kare(gen: u32, sira: u64) -> Kare {
+        let mut k = Kodlayici::new(80)
+            .kodla(&deneme_goruntu(gen, 64, 3))
+            .unwrap()
+            .unwrap();
+        k.sira = sira;
+        k
+    }
+    #[test]
+    fn boyut_degisiminden_onceki_bos_doseme_eski_kareyi_canlandirmaz() {
+        let mut b = Birlestirici::default();
+        b.parcalar(&kare(128, 1)).unwrap();
+        b.parcalar(&kare(64, 3)).unwrap();
+        let mut eski = kare(64, 2);
+        eski.dosemeler[0].x = 0;
+        assert!(b.parcalar(&eski).unwrap().is_empty());
+        let mut eski_boyut = kare(128, 2);
+        eski_boyut.dosemeler.retain(|d| d.x == 64);
+        assert!(b.parcalar(&eski_boyut).unwrap().is_empty());
+    }
+    #[test]
+    fn ilk_delta_sonrasi_eksik_eski_doseme_doldurulur() {
+        let mut yeni = kare(128, 2);
+        yeni.dosemeler.retain(|d| d.x == 64);
+        let mut eski = kare(128, 1);
+        eski.dosemeler.retain(|d| d.x == 0);
+        let mut b = Birlestirici::default();
+        assert_eq!(b.parcalar(&yeni).unwrap().len(), 1);
+        assert_eq!(b.parcalar(&eski).unwrap().len(), 1);
+    }
+    #[test]
+    fn kaymis_ve_cakisan_dosemeler_reddedilir() {
+        let mut k = kare(128, 1);
+        k.dosemeler[0].x = 1;
+        assert!(Birlestirici::default().parcalar(&k).is_err());
+        let mut k = kare(64, 1);
+        k.dosemeler.push(k.dosemeler[0].clone());
+        assert!(Birlestirici::default().parcalar(&k).is_err());
+    }
+    #[test]
+    fn bos_yeni_boyut_sira_esigini_korur() {
+        let mut b = Birlestirici::default();
+        b.parcalar(&kare(128, 1)).unwrap();
+        let mut yeni = kare(64, 3);
+        yeni.dosemeler.clear();
+        b.parcalar(&yeni).unwrap();
+        assert!(b.parcalar(&kare(128, 2)).unwrap().is_empty());
+        assert_eq!(b.goruntu.genislik, 64);
     }
 }

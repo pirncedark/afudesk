@@ -10,6 +10,10 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 /// Protokol sürümü ALPN'nin içindedir: tel biçimi değişince ikisi birlikte artar.
 /// Uyuşmayan sürümler el sıkışmada ayrılır (paket sürümüne bağlı değildir).
 pub const SURUM: u32 = 8;
+/// Yetenek mesajıyla karşılıklı etkinleştirilen hız uzantısı.
+pub const HIZ_SURUM: u32 = 1;
+/// Eski hostlarla da okunabilen yetenek sorgusu.
+pub const HIZ_SOR: u64 = u64::MAX - 1;
 pub const ALPN: &[u8] = b"afudesk/8";
 /// Tek mesaj için üst sınır (kötü niyetli uzunluk alanına karşı).
 pub const AZAMI_MESAJ: usize = 32 * 1024 * 1024;
@@ -41,7 +45,7 @@ pub enum Girdi {
     },
     /// Adlandırılmış tuş ("Enter", "Backspace", "Ctrl", "a", "ş" ...).
     Tus {
-        /// USB HID usage (sayfa ve kullan?m birlikte); s?f?rsa ad yede?i.
+        /// USB HID usage (sayfa ve kullanım birlikte); sıfırsa ad yedeği.
         hid: u32,
         ad: String,
         basili: bool,
@@ -144,7 +148,7 @@ pub enum Kontrol {
         relaylar: Vec<String>,
         jeton: String,
     },
-    /// Google kan?t? yaln?z ?ifreli, kimli?i do?rulanm?? QUIC ak???nda ta??n?r.
+    /// Google kanıtı yalnız şifreli, kimliği doğrulanmış QUIC akışında taşınır.
     MerhabaGoogle {
         kanit: crate::google_baglanti::Kanit,
         ad: String,
@@ -162,6 +166,34 @@ pub enum Kontrol {
         acik: bool,
         hata: Option<String>,
     },
+    /// Yalnız iki uç da ilan ederse yeni kare/kodek biçimleri kullanılır.
+    Yetenekler {
+        surum: u32,
+    },
+    GirdiZamanli {
+        girdi: Girdi,
+        izleyici_ms: u64,
+    },
+    Imlec(Imlec),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Imlec {
+    pub x: f32,
+    pub y: f32,
+    pub gorunur: bool,
+    pub gen: u32,
+    pub yuk: u32,
+    pub sicak_x: u32,
+    pub sicak_y: u32,
+    pub rgba: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct KarePaketi {
+    pub kare: Kare,
+    pub girdi_ms: u64,
+    pub host_girdi_ms: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -209,6 +241,35 @@ pub async fn oku<R: AsyncReadExt + Unpin, T: for<'de> Deserialize<'de>>(
     let mut b = vec![0u8; n];
     r.read_exact(&mut b).await?;
     Ok(Some(bincode::deserialize(&b)?))
+}
+
+/// Persistent paketli ve eski tek-kare akışlarını aynı uzunluk önekiyle okur.
+/// Yalnız mesaj sınırındaki EOF normal kapanıştır.
+pub async fn kare_oku<R: AsyncReadExt + Unpin>(r: &mut R) -> anyhow::Result<Option<KarePaketi>> {
+    use bincode::Options;
+    let mut uzunluk = [0u8; 4];
+    if r.read(&mut uzunluk[..1]).await? == 0 {
+        return Ok(None);
+    }
+    r.read_exact(&mut uzunluk[1..]).await?;
+    let n = u32::from_be_bytes(uzunluk) as usize;
+    anyhow::ensure!(n > 0 && n <= AZAMI_MESAJ, "geçersiz kare uzunluğu: {n}");
+    let mut baytlar = vec![0; n];
+    r.read_exact(&mut baytlar).await?;
+    // serialize() uses fixed integers; DefaultOptions alone uses varints.
+    let secenekler = bincode::DefaultOptions::new()
+        .with_fixint_encoding()
+        .with_limit(n as u64)
+        .reject_trailing_bytes();
+    if let Ok(paket) = secenekler.deserialize::<KarePaketi>(&baytlar) {
+        return Ok(Some(paket));
+    }
+    let kare = secenekler.deserialize::<Kare>(&baytlar)?;
+    Ok(Some(KarePaketi {
+        kare,
+        girdi_ms: 0,
+        host_girdi_ms: 0,
+    }))
 }
 
 #[cfg(test)]
@@ -297,5 +358,129 @@ mod testler {
         a.write_all(&4u32.to_be_bytes()).await.unwrap();
         a.write_all(&[0xff, 0xff, 0xff, 0xff]).await.unwrap();
         assert!(oku::<_, Kontrol>(&mut b).await.is_err());
+    }
+}
+
+#[cfg(test)]
+mod hiz_uyumluluk_testleri {
+    use super::*;
+    #[test]
+    fn eski_tel_baytlari_aynen_kalir() {
+        assert_eq!(ALPN, b"afudesk/8");
+        assert_eq!(
+            bincode::serialize(&Kontrol::TerminalListesi).unwrap(),
+            19u32.to_le_bytes()
+        );
+        assert_eq!(
+            bincode::serialize(&Kontrol::Kapat("x".into())).unwrap(),
+            vec![5, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, b'x']
+        );
+        let k = Kare {
+            sira: 1,
+            genislik: 2,
+            yukseklik: 3,
+            tam: true,
+            dosemeler: vec![],
+            yakalama_ms: 4,
+        };
+        let mut eski = Vec::new();
+        eski.extend_from_slice(&1u64.to_le_bytes());
+        eski.extend_from_slice(&2u32.to_le_bytes());
+        eski.extend_from_slice(&3u32.to_le_bytes());
+        eski.push(1);
+        eski.extend_from_slice(&0u64.to_le_bytes());
+        eski.extend_from_slice(&4u64.to_le_bytes());
+        assert_eq!(bincode::serialize(&k).unwrap(), eski);
+        assert_eq!(bincode::deserialize::<Kare>(&eski).unwrap(), k);
+    }
+    #[test]
+    fn hiz_uzantilari_gidis_donus() {
+        let m = Kontrol::GirdiZamanli {
+            girdi: Girdi::Metin("çğıöşü".into()),
+            izleyici_ms: 99,
+        };
+        assert_eq!(
+            bincode::deserialize::<Kontrol>(&bincode::serialize(&m).unwrap()).unwrap(),
+            m
+        );
+        assert_eq!(
+            &bincode::serialize(&Kontrol::Yetenekler { surum: HIZ_SURUM }).unwrap()[..4],
+            &23u32.to_le_bytes()
+        );
+    }
+}
+
+#[cfg(test)]
+mod kare_okuma_testleri {
+    use super::*;
+    fn kare() -> Kare {
+        Kare {
+            sira: 7,
+            genislik: 64,
+            yukseklik: 64,
+            tam: true,
+            dosemeler: vec![],
+            yakalama_ms: 12,
+        }
+    }
+    #[tokio::test]
+    async fn eski_host_karesi_okunur() {
+        let k = kare();
+        let mut veri = Vec::new();
+        yaz(&mut veri, &k).await.unwrap();
+        let mut r = veri.as_slice();
+        assert_eq!(
+            kare_oku(&mut r).await.unwrap(),
+            Some(KarePaketi {
+                kare: k,
+                girdi_ms: 0,
+                host_girdi_ms: 0
+            })
+        );
+        assert!(kare_oku(&mut r).await.unwrap().is_none());
+    }
+    #[tokio::test]
+    async fn paketli_akista_iki_kare_okunur() {
+        let a = KarePaketi {
+            kare: kare(),
+            girdi_ms: 10,
+            host_girdi_ms: 11,
+        };
+        let mut b = a.clone();
+        b.kare.sira += 1;
+        let mut veri = Vec::new();
+        yaz(&mut veri, &a).await.unwrap();
+        yaz(&mut veri, &b).await.unwrap();
+        let mut r = veri.as_slice();
+        assert_eq!(kare_oku(&mut r).await.unwrap(), Some(a));
+        assert_eq!(kare_oku(&mut r).await.unwrap(), Some(b));
+        assert!(kare_oku(&mut r).await.unwrap().is_none());
+    }
+    #[tokio::test]
+    async fn bozuk_kare_ve_yarim_uzunluk_reddedilir() {
+        let paket = KarePaketi {
+            kare: kare(),
+            girdi_ms: 10,
+            host_girdi_ms: 11,
+        };
+        let mut eski_artik = bincode::serialize(&kare()).unwrap();
+        eski_artik.push(0);
+        let mut yeni_artik = bincode::serialize(&paket).unwrap();
+        yeni_artik.push(0);
+        let mut yeni_eksik = bincode::serialize(&paket).unwrap();
+        yeni_eksik.pop();
+        for baytlar in [eski_artik, yeni_artik, yeni_eksik, vec![255; 8]] {
+            let mut veri = (baytlar.len() as u32).to_be_bytes().to_vec();
+            veri.extend(baytlar);
+            assert!(kare_oku(&mut veri.as_slice()).await.is_err());
+        }
+        for veri in [
+            vec![0],
+            vec![0, 0, 0],
+            (AZAMI_MESAJ as u32 + 1).to_be_bytes().to_vec(),
+            vec![0, 0, 0, 2, 0],
+        ] {
+            assert!(kare_oku(&mut veri.as_slice()).await.is_err());
+        }
     }
 }

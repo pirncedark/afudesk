@@ -63,8 +63,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     if (!_kontrol ||
         _yeniden != null ||
         _terminalBekliyor ||
-        _terminalListeBekliyor)
+        _terminalListeBekliyor) {
       return;
+    }
     setState(() => _terminalListeBekliyor = true);
     widget.motor.girdi(const Girdi('terminal_liste'));
     _terminalZamanAsimi();
@@ -143,8 +144,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
           !mounted ||
           _asama != _Asama.bagli ||
           !_kontrol ||
-          _yeniden != null)
+          _yeniden != null) {
         return;
+      }
       final boyut = MediaQuery.sizeOf(context);
       final en = boyut.shortestSide;
       final boy = boyut.longestSide;
@@ -190,15 +192,17 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
       }
     } else {
       _terminalKapat(gonder: false);
-      if (metin != 'kapali')
+      if (metin != 'kapali') {
         _terminalBilgi('Terminal açılamadı. Yeniden dene.');
+      }
     }
   }
 
   void _terminalKapat({bool gonder = true}) {
     _terminalSaat?.cancel();
-    if (gonder && (_terminal || _terminalBekliyor))
+    if (gonder && (_terminal || _terminalBekliyor)) {
       widget.motor.girdi(const Girdi('terminal_kapat'));
+    }
     _tuslariBirak();
     _yaziOdak.unfocus();
     SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
@@ -234,8 +238,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   }
 
   void _terminalKes() {
-    if (!_terminalCtrl)
+    if (!_terminalCtrl) {
       widget.motor.girdi(const Girdi('tus', ad: 'Ctrl', basili: true));
+    }
     _ozelTus('c');
     widget.motor.girdi(const Girdi('tus', ad: 'Ctrl', basili: false));
     setState(() => _terminalCtrl = false);
@@ -245,8 +250,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     final veri = await Clipboard.getData(Clipboard.kTextPlain);
     if (!mounted || !_terminal || !_kontrol || _yeniden != null) return;
     if (_terminalCtrl) _terminalCtrlDegistir();
-    if (veri?.text?.isNotEmpty ?? false)
+    if (veri?.text?.isNotEmpty ?? false) {
       _gonder([Girdi('metin', metin: veri!.text!)]);
+    }
   }
 
   bool _dosyaIzni = false;
@@ -257,7 +263,145 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   bool _aktarmali = false;
   // Bağlantı koptu, kendiliğinden yeniden bağlanılıyor: gösterilecek metin.
   String? _yeniden;
-  ui.Image? _kare;
+  UzakGoruntu? _kare;
+  ui.Image? _cursor;
+  Offset _cursorPosition = Offset.zero, _hotspot = Offset.zero;
+  bool _cursorVisible = false;
+  int _cursorNesli = 0, _sonGirdiMs = 0, _gecikmeToplam = 0, _gecikmeAdet = 0;
+
+  UzakGoruntu _goruntu(int gen, int yuk, Map<Offset, ui.Image> tiles) =>
+      UzakGoruntu(
+        gen,
+        yuk,
+        tiles,
+        cursor: _cursor,
+        cursorPosition: _cursorPosition,
+        hotspot: _hotspot,
+        cursorVisible: _cursorVisible,
+      );
+
+  void _cizimBitti(int girdiMs) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (girdiMs > _sonGirdiMs && girdiMs > 0) {
+        final sure = DateTime.now().millisecondsSinceEpoch - girdiMs;
+        if (sure >= 0 && sure < 60000) {
+          _sonGirdiMs = girdiMs;
+          _gecikmeToplam += sure;
+          _gecikmeAdet++;
+          BaglantiOlcumu.ortalamaMs.value = (_gecikmeToplam / _gecikmeAdet)
+              .round();
+        }
+      }
+      widget.motor.kareCizildi();
+    });
+  }
+
+  Future<ui.Image> _decode(DosemePaket p) {
+    final c = Completer<ui.Image>();
+    ui.decodeImageFromPixels(
+      p.rgba,
+      p.gen,
+      p.yuk,
+      ui.PixelFormat.rgba8888,
+      c.complete,
+    );
+    return c.future;
+  }
+
+  Future<void> _parcalar(IzleyiciOlay o) async {
+    final nesil = _kareNesli;
+    final decoded = <Offset, ui.Image>{};
+    try {
+      final tiles = DosemePaket.oku(o.rgba);
+      if (o.genislik <= 0 ||
+          o.yukseklik <= 0 ||
+          tiles.any(
+            (p) => p.x + p.gen > o.genislik || p.y + p.yuk > o.yukseklik,
+          )) {
+        throw const FormatException('Parca ekran disinda');
+      }
+      await Future.wait(
+        tiles.map((p) async {
+          decoded[Offset(p.x.toDouble(), p.y.toDouble())] = await _decode(p);
+        }),
+      );
+      if (!mounted || nesil != _kareNesli) {
+        for (final image in decoded.values) {
+          image.dispose();
+        }
+        if (mounted) widget.motor.kareCizildi();
+        return;
+      }
+      final old = _kare;
+      final reset =
+          o.ek['tam'] == true ||
+          old?.width != o.genislik ||
+          old?.height != o.yukseklik;
+      final merged = <Offset, ui.Image>{
+        if (!reset && old != null) ...old.tiles,
+        ...decoded,
+      };
+      final retained = merged.values.toSet();
+      final retired =
+          old?.tiles.values.where((i) => !retained.contains(i)).toList() ??
+          <ui.Image>[];
+      setState(() => _kare = _goruntu(o.genislik, o.yukseklik, merged));
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        for (final i in retired) {
+          i.dispose();
+        }
+      });
+      _cizimBitti((o.ek['girdi_ms'] as num?)?.toInt() ?? 0);
+    } catch (_) {
+      for (final image in decoded.values) {
+        image.dispose();
+      }
+      if (mounted) widget.motor.kareCizildi();
+    }
+  }
+
+  Future<void> _imlec(IzleyiciOlay o) async {
+    final ek = o.ek;
+    setState(() {
+      _cursorPosition = Offset(
+        (ek['x'] as num?)?.toDouble() ?? 0,
+        (ek['y'] as num?)?.toDouble() ?? 0,
+      );
+      // Position-only messages omit shape metadata: retain the previous hotspot.
+      if (o.rgba.isNotEmpty) {
+        _hotspot = Offset(
+          (ek['sicak_x'] as num?)?.toDouble() ?? 0,
+          (ek['sicak_y'] as num?)?.toDouble() ?? 0,
+        );
+      }
+      _cursorVisible = ek['gorunur'] == true;
+      final k = _kare;
+      if (k != null) _kare = _goruntu(k.width, k.height, k.tiles);
+    });
+    if (o.rgba.isEmpty ||
+        o.genislik <= 0 ||
+        o.yukseklik <= 0 ||
+        o.rgba.length != o.genislik * o.yukseklik * 4) {
+      return;
+    }
+    final seq = ++_cursorNesli;
+    final image = await _decode(
+      DosemePaket(0, 0, o.genislik, o.yukseklik, o.rgba),
+    );
+    if (!mounted || seq != _cursorNesli) {
+      image.dispose();
+      return;
+    }
+    final old = _cursor;
+    setState(() {
+      _cursor = image;
+      final k = _kare;
+      if (k != null) _kare = _goruntu(k.width, k.height, k.tiles);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => old?.dispose());
+  }
+
   final _odak = FocusNode();
   // Dokunmatik kip
   final _dokunma = DokunmaCevirici();
@@ -284,6 +428,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    BaglantiOlcumu.ortalamaMs.value = null;
     WidgetsBinding.instance.addObserver(this);
     _yaziOdak.addListener(_yaziOdakDegisti);
     _kolKanal.setMethodCallHandler(_androidKol);
@@ -428,6 +573,15 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
         }
       case 'kol':
         setState(() => _p2 = true);
+      case 'imlec':
+        unawaited(_imlec(o));
+      case 'parcalar':
+        if (_terminalIlkKare && o.genislik > o.yukseklik) {
+          widget.motor.kareCizildi();
+          break;
+        }
+        _terminalIlkKare = false;
+        unawaited(_parcalar(o));
       case 'kare':
         // Desktop frames already in flight must not flash inside terminal mode.
         if (_terminalIlkKare && o.genislik > o.yukseklik) {
@@ -448,7 +602,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
               return;
             }
             final eski = _kare;
-            setState(() => _kare = img);
+            setState(
+              () => _kare = _goruntu(img.width, img.height, {Offset.zero: img}),
+            );
             // Eski görüntü bu karede hâlâ çizim katmanında olabilir: kare çizildikten sonra bırak.
             WidgetsBinding.instance.addPostFrameCallback((_) {
               eski?.dispose();
@@ -596,8 +752,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   @override
   void dispose() {
     _terminalSaat?.cancel();
-    if (_terminal || _terminalBekliyor)
+    if (_terminal || _terminalBekliyor) {
       widget.motor.girdi(const Girdi('terminal_kapat'));
+    }
     _tuslariBirak();
     WidgetsBinding.instance.removeObserver(this);
     _yaziOdak.removeListener(_yaziOdakDegisti);
@@ -612,6 +769,11 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     _yazi.dispose();
     _abonelik?.cancel();
     widget.motor.izleyiciKapat();
+    _kareNesli++;
+    _cursorNesli++;
+    final cursor = _cursor;
+    _cursor = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) => cursor?.dispose());
     final son = _kare;
     _kare = null;
     WidgetsBinding.instance.addPostFrameCallback((_) => son?.dispose());
@@ -812,7 +974,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     );
   }
 
-  Widget _dokunmatikEkran(ui.Image? k) {
+  Widget _dokunmatikEkran(UzakGoruntu? k) {
     return _klavyeOdak(
       Column(
         children: [
@@ -912,11 +1074,8 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
                                       : Transform(
                                           transform: _zoom.matris,
                                           transformHitTests: false,
-                                          child: RawImage(
+                                          child: k.widget(
                                             key: const Key('oturum_kare'),
-                                            image: k,
-                                            fit: BoxFit.contain,
-                                            filterQuality: FilterQuality.medium,
                                           ),
                                         ),
                                 ),
@@ -1086,7 +1245,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     if (_terminal && _asama == _Asama.bagli) {
       return _klavyeOdak(
         TerminalModu(
-          kare: _kare,
+          goruntu: _kare,
           ctrl: _terminalCtrl,
           klavyeAcik: _klavyeAcik,
           kapat: _terminalKapat,
@@ -1371,12 +1530,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
                     child: SizedBox.expand(
                       child: k == null
                           ? const Center(child: CircularProgressIndicator())
-                          : RawImage(
-                              key: const Key('oturum_kare'),
-                              image: k,
-                              fit: BoxFit.contain,
-                              filterQuality: FilterQuality.medium,
-                            ),
+                          : k.widget(key: const Key('oturum_kare')),
                     ),
                   ),
                 ),

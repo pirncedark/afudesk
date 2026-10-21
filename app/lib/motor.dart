@@ -1,13 +1,20 @@
 // Arayüz ile Rust çekirdeği arasındaki sözleşme. Testler SahteMotor kullanır.
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show Platform;
 import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart' as fs;
+import 'package:flutter/foundation.dart' show ValueNotifier;
 
 import 'src/rust/api/afudesk.dart' as rust;
 import 'oyun_kolu.dart';
 import 'guncelleme.dart';
+
+/// Son oturumun çizim sonrası ölçümü; yalnız Ayarlar'da isteğe bağlı gösterilir.
+class BaglantiOlcumu {
+  static final ortalamaMs = ValueNotifier<int?>(null);
+}
 
 /// Host tarafı olayı.
 class HostOlay {
@@ -58,6 +65,43 @@ String goreliZaman(DateTime t, {DateTime? simdi}) {
   return '${iki(t.day)}.${iki(t.month)}.${t.year}';
 }
 
+/// Zero-copy views into the bridge tile packet; no full-screen allocation.
+class DosemePaket {
+  final int x, y, gen, yuk;
+  final Uint8List rgba;
+  const DosemePaket(this.x, this.y, this.gen, this.yuk, this.rgba);
+  static List<DosemePaket> oku(Uint8List bytes) {
+    final sonuc = <DosemePaket>[];
+    final h = ByteData.sublistView(bytes);
+    var offset = 0;
+    while (offset < bytes.length) {
+      if (bytes.length - offset < 16) {
+        throw const FormatException('Eksik parca');
+      }
+      final x = h.getUint32(offset, Endian.little);
+      final y = h.getUint32(offset + 4, Endian.little);
+      final w = h.getUint32(offset + 8, Endian.little);
+      final hgt = h.getUint32(offset + 12, Endian.little);
+      offset += 16;
+      final count = w * hgt * 4;
+      if (w == 0 || hgt == 0 || count > bytes.length - offset) {
+        throw const FormatException('Eksik parca');
+      }
+      sonuc.add(
+        DosemePaket(
+          x,
+          y,
+          w,
+          hgt,
+          Uint8List.sublistView(bytes, offset, offset + count),
+        ),
+      );
+      offset += count;
+    }
+    return sonuc;
+  }
+}
+
 class IzleyiciOlay {
   final String
   tur; // bekliyor | kabul | kare | istatistik | koptu | hata | pano | dosya
@@ -71,6 +115,13 @@ class IzleyiciOlay {
   final int genislik;
   final int yukseklik;
   final Uint8List rgba;
+  Map<String, dynamic> get ek {
+    try {
+      return (jsonDecode(metin) as Map).cast<String, dynamic>();
+    } catch (_) {
+      return const {};
+    }
+  }
 
   /// kabul: karşı taraf dosya almaya izin verdi mi.
   final bool dosya;

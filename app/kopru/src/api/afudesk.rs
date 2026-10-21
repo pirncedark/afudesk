@@ -32,6 +32,78 @@ static HOST: Mutex<Option<(host::Host, tokio::sync::mpsc::Sender<HostKomut>)>> =
 static IZLEYICI: Mutex<Option<Arc<izleyici::Izleyici>>> = Mutex::new(None);
 /// Dart son kareyi çizdi mi? (en-yeni-kazanır geri basıncı)
 static KARE_SERBEST: AtomicBool = AtomicBool::new(true);
+static KARE_UYANDIR: tokio::sync::Notify = tokio::sync::Notify::const_new();
+static IZLEYICI_NESLI: AtomicU32 = AtomicU32::new(0);
+#[derive(Default)]
+struct BekleyenParcalar {
+    gen: u32,
+    yuk: u32,
+    tam: bool,
+    girdi_ms: u64,
+    host_girdi_ms: u64,
+    tiles: std::collections::BTreeMap<(u32, u32), afudesk_core::goruntu::DosemeRgba>,
+}
+impl BekleyenParcalar {
+    fn ekle_kare(&mut self, gen: u32, yuk: u32, rgba: Vec<u8>) {
+        let mut tiles = Vec::new();
+        let adim = afudesk_core::goruntu::DOSEME;
+        for y in (0..yuk).step_by(adim as usize) {
+            for x in (0..gen).step_by(adim as usize) {
+                let w = adim.min(gen - x);
+                let h = adim.min(yuk - y);
+                let mut pixels = Vec::with_capacity((w * h * 4) as usize);
+                for row in y..y + h {
+                    let start = (row as usize * gen as usize + x as usize) * 4;
+                    pixels.extend_from_slice(&rgba[start..start + w as usize * 4]);
+                }
+                tiles.push(afudesk_core::goruntu::DosemeRgba {
+                    x, y, gen: w, yuk: h, rgba: pixels,
+                });
+            }
+        }
+        self.ekle(gen, yuk, true, tiles, 0, 0);
+    }
+    fn ekle(
+        &mut self,
+        gen: u32,
+        yuk: u32,
+        tam: bool,
+        tiles: Vec<afudesk_core::goruntu::DosemeRgba>,
+        girdi_ms: u64,
+        host_girdi_ms: u64,
+    ) {
+        if tam || self.gen != gen || self.yuk != yuk {
+            self.tiles.clear();
+            self.tam = true;
+        }
+        self.gen = gen;
+        self.yuk = yuk;
+        self.girdi_ms = self.girdi_ms.max(girdi_ms);
+        self.host_girdi_ms = self.host_girdi_ms.max(host_girdi_ms);
+        for t in tiles {
+            self.tiles.insert((t.x, t.y), t);
+        }
+    }
+    fn al(&mut self) -> Option<IzleyiciOlayi> {
+        if self.tiles.is_empty() {
+            return None;
+        }
+        let mut rgba = Vec::new();
+        for (_, t) in std::mem::take(&mut self.tiles) {
+            for n in [t.x, t.y, t.gen, t.yuk] {
+                rgba.extend_from_slice(&n.to_le_bytes());
+            }
+            rgba.extend_from_slice(&t.rgba);
+        }
+        let dto = IzleyiciOlayi { tur: "parcalar".into(), genislik: self.gen, yukseklik: self.yuk, rgba,
+            metin: serde_json::json!({"tam": self.tam,"girdi_ms": self.girdi_ms,"host_girdi_ms": self.host_girdi_ms}).to_string(),
+            ..Default::default() };
+        self.tam = false;
+        self.girdi_ms = 0;
+        self.host_girdi_ms = 0;
+        Some(dto)
+    }
+}
 static IZLEYICI_KOL_IZNI: AtomicBool = AtomicBool::new(false);
 static IZLEYICI_KOL_SIRASI: AtomicU32 = AtomicU32::new(0);
 /// Kalıcı cihaz kimliği + kayıtlı cihazlar klasörü (Dart uygulama destek klasörünü verir).
@@ -51,7 +123,10 @@ pub(super) fn veri() -> Option<PathBuf> {
 }
 
 pub(super) fn host_adresleri() -> Option<(Vec<String>, Vec<String>)> {
-    HOST.lock().unwrap().as_ref().map(|(h, _)| h.google_adresleri())
+    HOST.lock()
+        .unwrap()
+        .as_ref()
+        .map(|(h, _)| h.google_adresleri())
 }
 
 pub fn izleyici_google_baglan(kimlik: String, ad: String, olaylar: StreamSink<IzleyiciOlayi>) {
@@ -61,7 +136,8 @@ pub fn izleyici_google_baglan(kimlik: String, ad: String, olaylar: StreamSink<Iz
         let g = super::google::etkin_hesap()?;
         let v = veri().ok_or_else(|| anyhow::anyhow!("Cihaz kaydedilemedi, yeniden dene."))?;
         #[cfg(not(target_os = "android"))]
-        let pano = afudesk_core::pano::ArboardPano::new().ok()
+        let pano = afudesk_core::pano::ArboardPano::new()
+            .ok()
             .map(|p| Box::new(p) as Box<dyn afudesk_core::pano::Pano>);
         #[cfg(target_os = "android")]
         let pano = None;
@@ -445,12 +521,30 @@ fn izleyici_pompala(sonuc: anyhow::Result<izleyici::Izleyici>, olaylar: StreamSi
             return;
         }
     };
+    iz.parcali_ayarla(true);
     let mut alici = std::mem::replace(&mut iz.olaylar, tokio::sync::mpsc::channel(1).1);
     let iz = Arc::new(iz);
     *IZLEYICI.lock().unwrap() = Some(iz);
     KARE_SERBEST.store(true, Ordering::SeqCst);
+    let nesil = IZLEYICI_NESLI.load(Ordering::SeqCst);
     rt().spawn(async move {
-        while let Some(o) = alici.recv().await {
+        let mut bekleyen = BekleyenParcalar::default();
+        loop {
+            let o = tokio::select! {
+                o = alici.recv() => o,
+                _ = KARE_UYANDIR.notified() => {
+                    if nesil != IZLEYICI_NESLI.load(Ordering::SeqCst) { break; }
+                    if KARE_SERBEST.load(Ordering::SeqCst) {
+                        if let Some(dto) = bekleyen.al() {
+                            KARE_SERBEST.store(false, Ordering::SeqCst);
+                            if olaylar.add(dto).is_err() { break; }
+                        }
+                    }
+                    continue;
+                }
+            };
+            let Some(o) = o else { break; };
+            if nesil != IZLEYICI_NESLI.load(Ordering::SeqCst) { break; }
             let dto = match o {
                 IzleyiciOlay::OnayBekleniyor { karsi_ad } => IzleyiciOlayi {
                     tur: "bekliyor".into(),
@@ -474,23 +568,25 @@ fn izleyici_pompala(sonuc: anyhow::Result<izleyici::Izleyici>, olaylar: StreamSi
                         ..Default::default()
                     }
                 }
-                IzleyiciOlay::Kare {
-                    genislik,
-                    yukseklik,
-                    rgba,
-                } => {
-                    // Dart önceki kareyi çizmediyse bunu atla; sıradaki daha yeni olacak.
-                    if !KARE_SERBEST.swap(false, Ordering::SeqCst) {
-                        continue;
-                    }
-                    IzleyiciOlayi {
-                        tur: "kare".into(),
-                        genislik,
-                        yukseklik,
-                        rgba,
-                        ..Default::default()
-                    }
+                IzleyiciOlay::Kare { genislik, yukseklik, rgba } => {
+                    // Normalize the initial legacy frame to the same tile grid.
+                    // A delayed full image must never overwrite a newer delta.
+                    bekleyen.ekle_kare(genislik, yukseklik, rgba);
+                    if !KARE_SERBEST.swap(false, Ordering::SeqCst) { continue; }
+                    let Some(dto) = bekleyen.al() else { KARE_SERBEST.store(true, Ordering::SeqCst); continue; };
+                    dto
                 }
+                IzleyiciOlay::Parcalar { genislik, yukseklik, tam, dosemeler, girdi_ms, host_girdi_ms } => {
+                    bekleyen.ekle(genislik, yukseklik, tam, dosemeler, girdi_ms, host_girdi_ms);
+                    if !KARE_SERBEST.swap(false, Ordering::SeqCst) { continue; }
+                    let Some(dto) = bekleyen.al() else { KARE_SERBEST.store(true, Ordering::SeqCst); continue; };
+                    dto
+                }
+                IzleyiciOlay::Imlec(c) => IzleyiciOlayi {
+                    tur: "imlec".into(), genislik: c.gen, yukseklik: c.yuk, rgba: c.rgba,
+                    metin: serde_json::json!({"x":c.x,"y":c.y,"gorunur":c.gorunur,"sicak_x":c.sicak_x,"sicak_y":c.sicak_y}).to_string(),
+                    ..Default::default()
+                },
                 // metin: kullanılan yol ("doğrudan" | "relay").
                 IzleyiciOlay::Istatistik {
                     rtt_ms,
@@ -573,6 +669,7 @@ fn izleyici_pompala(sonuc: anyhow::Result<izleyici::Izleyici>, olaylar: StreamSi
 #[flutter_rust_bridge::frb(sync)]
 pub fn kare_cizildi() {
     KARE_SERBEST.store(true, Ordering::SeqCst);
+    KARE_UYANDIR.notify_one();
 }
 
 pub fn izleyici_girdi(g: GirdiOlayi) {
@@ -749,6 +846,8 @@ pub fn izleyici_dosya_gonder(yol: String) {
 }
 
 pub fn izleyici_kapat() {
+    IZLEYICI_NESLI.fetch_add(1, Ordering::SeqCst);
+    KARE_UYANDIR.notify_waiters();
     if let Some(iz) = IZLEYICI.lock().unwrap().take() {
         iz.kapat();
     }
@@ -780,4 +879,63 @@ pub async fn cevrimici_kimlikler() -> Vec<String> {
     let kimlikler = afudesk_core::ag::cevrimici_kimlikler(kimlik).await;
     *ACIK_KIMLIKLER.lock().unwrap() = kimlikler.clone();
     kimlikler
+}
+
+#[cfg(test)]
+mod parca_testleri {
+    use super::*;
+    #[test]
+    fn legacy_base_and_newer_delta_share_one_tile_queue() {
+        let mut p = BekleyenParcalar::default();
+        p.ekle_kare(65, 1, [1, 0, 0, 255].repeat(65));
+        p.ekle(65, 1, false, vec![afudesk_core::goruntu::DosemeRgba {
+            x: 0, y: 0, gen: 64, yuk: 1, rgba: [3, 0, 0, 255].repeat(64),
+        }], 11, 21);
+        let dto = p.al().unwrap();
+        assert_eq!(dto.tur, "parcalar");
+        assert_eq!(dto.rgba[16], 3);
+        assert_eq!(dto.rgba[16 + 64 * 4 + 16], 1);
+        assert!(serde_json::from_str::<serde_json::Value>(&dto.metin).unwrap()["tam"].as_bool().unwrap());
+        assert!(p.al().is_none());
+    }
+    #[test]
+    fn newer_full_image_replaces_pending_delta() {
+        let mut p = BekleyenParcalar::default();
+        p.ekle(1, 1, false, vec![tile(0, 3)], 11, 21);
+        p.ekle_kare(1, 1, vec![9, 0, 0, 255]);
+        assert_eq!(p.al().unwrap().rgba[16], 9);
+        assert!(p.al().is_none());
+    }
+    fn tile(x: u32, color: u8) -> afudesk_core::goruntu::DosemeRgba {
+        afudesk_core::goruntu::DosemeRgba {
+            x,
+            y: 0,
+            gen: 1,
+            yuk: 1,
+            rgba: vec![color, 0, 0, 255],
+        }
+    }
+    #[test]
+    fn pending_deltas_keep_untouched_tiles_and_latest_pixel() {
+        let mut p = BekleyenParcalar::default();
+        p.ekle(2, 1, true, vec![tile(0, 1), tile(1, 2)], 10, 20);
+        p.ekle(2, 1, false, vec![tile(0, 3)], 11, 21);
+        let dto = p.al().unwrap();
+        assert_eq!(dto.rgba.len(), 40);
+        assert_eq!(dto.rgba[16], 3);
+        assert_eq!(dto.rgba[36], 2);
+        let meta: serde_json::Value = serde_json::from_str(&dto.metin).unwrap();
+        assert_eq!(meta["tam"], true);
+        assert_eq!(meta["girdi_ms"], 11);
+        assert!(p.al().is_none());
+    }
+    #[test]
+    fn full_reset_discards_previous_surface_tiles() {
+        let mut p = BekleyenParcalar::default();
+        p.ekle(2, 1, true, vec![tile(0, 1), tile(1, 2)], 10, 20);
+        p.ekle(1, 1, true, vec![tile(0, 3)], 11, 21);
+        let dto = p.al().unwrap();
+        assert_eq!((dto.genislik, dto.yukseklik, dto.rgba.len()), (1, 1, 20));
+        assert_eq!(dto.rgba[16], 3);
+    }
 }
