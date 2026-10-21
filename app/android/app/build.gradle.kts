@@ -16,7 +16,7 @@ val googleWebClientId = providers.gradleProperty("AFUDESK_GOOGLE_WEB_CLIENT_ID")
     .orElse("")
 
 android {
-    buildFeatures { buildConfig = true }
+    buildFeatures { buildConfig = true; resValues = true }
     namespace = "com.afu.afudesk"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
