@@ -333,6 +333,7 @@ class GercekHesapServisi extends HesapServisi {
           try {
             await for (final o in googleBaglan(cihaz.id)) {
               if (nesil != _baglantiNesli || _kapali) {
+                yield o;
                 return;
               }
               if (o.tur == 'yeniden') {

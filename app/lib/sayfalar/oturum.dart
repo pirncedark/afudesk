@@ -725,6 +725,14 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
         if (RegExp(r'^[A-Z]$').hasMatch(c)) _ozelTus(c.toLowerCase());
       }
       _yaziSifirla();
+    } else if (!_terminal) {
+      if (v.isEmpty) {
+        _ozelTus('Backspace');
+      } else {
+        final yeni = v.replaceAll(_gozcu, '');
+        if (yeni.isNotEmpty) _gonder([Girdi('metin', metin: yeni)]);
+      }
+      _yaziSifirla();
     } else if (v.isEmpty && onceki == _gozcu) {
       _ozelTus('Backspace');
       _yaziSifirla();
