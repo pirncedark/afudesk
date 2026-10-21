@@ -6,6 +6,7 @@ import '../tema.dart';
 import '../bilesenler/guncelle_karti.dart';
 import 'hesap_servisi.dart';
 import 'google_hatasi.dart';
+import 'gercek_hesap_servisi.dart';
 
 /// Eski kodla bağlantı akışı [kodlaBaglan] üzerinden aynen erişilebilir.
 class HesapSayfasi extends StatefulWidget {
@@ -127,6 +128,9 @@ class _HesapSayfasiDurum extends State<HesapSayfasi> {
             child: ListView(
               padding: const EdgeInsets.all(24),
               children: [
+                if (servis is GercekHesapServisi && (servis as GercekHesapServisi).durum != null)
+                  Semantics(liveRegion: true,
+                    child: Text((servis as GercekHesapServisi).durum!)),
                 if (_hata != null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 16),

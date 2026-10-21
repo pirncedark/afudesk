@@ -34,7 +34,8 @@ $trigger.Enabled = $true
 $action = $task.Actions.Create(0) # TASK_ACTION_EXEC
 $action.Path = $resolvedExe
 $action.WorkingDirectory = [IO.Path]::GetDirectoryName($resolvedExe)
-# Argüman yok: mevcut uygulama başlatılır; desteklenmeyen --headless uydurulmaz.
+$action.Arguments = '--arka-plan'
+# Eski elle kurulum yolu; uygulamadaki ayar HKCU Run kullanır. İkisini birlikte kurmayın.
 $folder = $scheduler.GetFolder('\')
 $null = $folder.RegisterTaskDefinition($taskName, $task, 6, $identity.User.Value, $null, 3)
 Write-Output 'AfuDesk bir sonraki oturum açılışında başlayacak.'
