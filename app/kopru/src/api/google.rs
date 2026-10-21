@@ -7,12 +7,12 @@ use afudesk_core::{
     google_oauth::{Giris, MasaustuGiris},
     kimlik,
 };
-use anyhow::{anyhow, ensure, Result};
+use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::{json, Value};
 use std::sync::{Arc, Mutex};
 
 enum Bekleyen {
-    Masaustu(MasaustuGiris),
+    Masaustu(MasaustuGiris, String),
     Android(Giris),
 }
 // Keep the audience allowlist with the transaction until remote access starts.
@@ -20,6 +20,26 @@ static BEKLEYEN: Mutex<Option<(Bekleyen, Vec<String>)>> = Mutex::new(None);
 static HESAP: Mutex<Option<Arc<Erisim>>> = Mutex::new(None);
 // Serializes sign-in, sign-out and directory mutations across await points.
 static ISLEM: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+fn masaustu_sir(derlenen: Option<&str>) -> Result<&str> {
+    derlenen
+        .filter(|s| !s.trim().is_empty())
+        .ok_or_else(|| anyhow!("G2"))
+}
+
+// Android binaries never embed the desktop credential, even if the build
+// machine happens to have the environment variable set.
+#[cfg(not(target_os = "android"))]
+const DESKTOP_SECRET: Option<&str> = option_env!("AFUDESK_GOOGLE_DESKTOP_CLIENT_SECRET");
+#[cfg(target_os = "android")]
+const DESKTOP_SECRET: Option<&str> = None;
+
+fn web_istemci<'a>(ayarlar: &'a Value, derlenen: Option<&'a str>) -> Option<&'a str> {
+    ayarlar["webClientId"]
+        .as_str()
+        .filter(|id| !id.is_empty())
+        .or(derlenen)
+}
 
 fn istemciler(desktop: Option<&str>, web: Option<&str>) -> Vec<String> {
     [desktop, web]
@@ -64,12 +84,22 @@ fn adresleri_yenile(k: &mut CihazKaydi) {
 }
 
 /// No tokens are returned except the native sign-in nonce. All failures are
-/// deliberately reduced to one user-facing sentence at this boundary.
+/// reduced to a safe stage code at this boundary; underlying text is never sent.
 pub async fn google_islem(islem: String, veri: String) -> Result<String> {
     islem_yap(&islem, &veri)
         .await
         .map(|v| v.to_string())
-        .map_err(|_| anyhow!("Google işlemi tamamlanamadı, yeniden giriş yap."))
+        .map_err(|e| {
+            let code = ["G2", "G3", "G4", "G5"]
+                .into_iter()
+                .find(|code| e.chain().any(|cause| cause.to_string() == *code))
+                .unwrap_or("G9");
+            if code == "G2" {
+                anyhow!("Google girişi bu sürümde yapılandırılmamış (G2).")
+            } else {
+                anyhow!("Google işlemi tamamlanamadı ({code}), yeniden giriş yap.")
+            }
+        })
 }
 
 async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
@@ -89,20 +119,30 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
                 .as_str()
                 .filter(|id| !id.is_empty())
                 .or(option_env!("AFUDESK_GOOGLE_DESKTOP_CLIENT_ID"));
-            let web = option_env!("AFUDESK_GOOGLE_WEB_CLIENT_ID");
+            // Same trusted BuildConfig value used by Credential Manager. This
+            // also works when Gradle is invoked with -P instead of an env var.
+            let web = web_istemci(&ayarlar, option_env!("AFUDESK_GOOGLE_WEB_CLIENT_ID"));
             let kabul_edilen = istemciler(desktop, web);
+            let secret = if cfg!(target_os = "android") {
+                None
+            } else {
+                Some(masaustu_sir(DESKTOP_SECRET)?)
+            };
             let k = cihaz()?;
             if cfg!(target_os = "android") {
-                let id = web.ok_or_else(|| anyhow!("configuration"))?;
-                let g = Giris::yeni(id, 1, &k.host, &k.izleyici)?;
+                let id = web.ok_or_else(|| anyhow!("G2"))?;
+                let g = Giris::yeni(id, 1, &k.host, &k.izleyici).context("G2")?;
                 let nonce = g.nonce().to_owned();
                 *BEKLEYEN.lock().unwrap() = Some((Bekleyen::Android(g), kabul_edilen));
                 Ok(json!({"nonce":nonce}))
             } else {
-                let id = desktop.ok_or_else(|| anyhow!("configuration"))?;
+                let id = desktop.ok_or_else(|| anyhow!("G2"))?;
                 let g = MasaustuGiris::baslat(id, &k.host, &k.izleyici).await?;
                 let url = g.url().to_owned();
-                *BEKLEYEN.lock().unwrap() = Some((Bekleyen::Masaustu(g), kabul_edilen));
+                *BEKLEYEN.lock().unwrap() = Some((
+                    Bekleyen::Masaustu(g, secret.ok_or_else(|| anyhow!("G2"))?.to_owned()),
+                    kabul_edilen,
+                ));
                 Ok(json!({"url":url}))
             }
         }
@@ -117,17 +157,18 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
                 .take()
                 .ok_or_else(|| anyhow!("no transaction"))?;
             let (id, access) = match pending {
-                Bekleyen::Masaustu(g) => {
-                    let token = g.kod_bekle().await?.oturum(None).await?;
+                Bekleyen::Masaustu(g, secret) => {
+                    let token = g.kod_bekle().await?.oturum(Some(&secret)).await?;
                     (token.id_token, token.access_token)
                 }
                 Bekleyen::Android(g) => {
                     let v: Value = serde_json::from_str(veri)?;
                     let id = v["idToken"].as_str().ok_or_else(|| anyhow!("id"))?;
-                    let d =
-                        afudesk_core::google::Dogrulayici::google_dan(kabul_edilen.clone()).await?;
-                    let identity = d.dogrula(id, afudesk_core::kod::simdi())?;
-                    ensure!(identity.nonce() == g.nonce(), "nonce");
+                    let d = afudesk_core::google::Dogrulayici::google_dan(kabul_edilen.clone())
+                        .await
+                        .context("G5")?;
+                    let identity = d.dogrula(id, afudesk_core::kod::simdi()).context("G4")?;
+                    ensure!(identity.nonce() == g.nonce(), "G4");
                     (
                         id.to_owned(),
                         v["accessToken"]
@@ -139,9 +180,11 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
             };
             let mut k = cihaz()?;
             adresleri_yenile(&mut k);
-            let g = Erisim::yeni(id, access, kabul_edilen, k).await?;
-            g.dizin.hesabi_dogrula().await?;
-            g.dizin.kaydet(&g.cihaz).await?;
+            let g = Erisim::yeni(id, access, kabul_edilen, k)
+                .await
+                .context("G4")?;
+            g.dizin.hesabi_dogrula().await.context("G3")?;
+            g.dizin.kaydet(&g.cihaz).await.context("G3")?;
             google_baglanti::etkinlestir(g.clone());
             *HESAP.lock().unwrap() = Some(g);
             Ok(json!({"ad":"Google hesabın"}))
@@ -203,6 +246,73 @@ mod tests {
     use afudesk_core::google::Dogrulayici;
 
     #[test]
+    fn masaustu_sir_zorunludur_ve_hataya_yansitilmaz() {
+        for eksik in [None, Some(""), Some(" \r\n\t")] {
+            assert_eq!(masaustu_sir(eksik).unwrap_err().to_string(), "G2");
+        }
+        assert_eq!(
+            masaustu_sir(Some("test-desktop-credential")).unwrap(),
+            "test-desktop-credential"
+        );
+    }
+
+    #[cfg(not(target_os = "android"))]
+    #[tokio::test]
+    async fn masaustu_sir_yoksa_tarayicidan_once_g2_doner() {
+        if option_env!("AFUDESK_GOOGLE_DESKTOP_CLIENT_SECRET").is_some_and(|s| !s.trim().is_empty())
+        {
+            return;
+        }
+        let hata = google_islem(
+            "baslat".into(),
+            json!({"desktopClientId":"desktop.apps.googleusercontent.com"}).to_string(),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(
+            hata.to_string(),
+            "Google girişi bu sürümde yapılandırılmamış (G2)."
+        );
+    }
+
+    #[test]
+    fn android_buildconfig_derleme_ortami_olmadan_audience_saglar() {
+        let ayarlar = json!({"webClientId":"test.apps.googleusercontent.com"});
+        let ids = istemciler(None, web_istemci(&ayarlar, None));
+        let fixture: Value =
+            serde_json::from_str(include_str!("../../../../rust/tests/fixtures/google.json"))
+                .unwrap();
+        let d = Dogrulayici::yeni(ids, &fixture["jwks"].to_string()).unwrap();
+        assert!(d
+            .dogrula(fixture["token"].as_str().unwrap(), 1_700_000_100)
+            .is_ok());
+        assert!(d
+            .dogrula(fixture["wrong_aud"].as_str().unwrap(), 1_700_000_100)
+            .is_err());
+        assert_eq!(
+            web_istemci(&ayarlar, Some("old.apps.googleusercontent.com")),
+            Some("test.apps.googleusercontent.com")
+        );
+        assert_eq!(
+            web_istemci(
+                &json!({"webClientId":""}),
+                Some("env.apps.googleusercontent.com")
+            ),
+            Some("env.apps.googleusercontent.com")
+        );
+    }
+
+    #[tokio::test]
+    async fn bilinmeyen_hata_yalniz_guvenli_kod_dondurur() {
+        let e = google_islem("secret-operation".into(), "secret-token".into())
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains("(G9)"));
+        assert!(!e.contains("secret"));
+    }
+
+    #[test]
     fn web_ve_desktop_audience_kabul_edilir_yabanci_reddedilir() {
         let fixture: Value =
             serde_json::from_str(include_str!("../../../../rust/tests/fixtures/google.json"))
@@ -232,6 +342,30 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn android_istemci_kimligi_audience_olarak_kabul_edilmez() {
+        let ayarlar = json!({
+            "desktopClientId": "desktop.apps.googleusercontent.com",
+            "webClientId": "web.apps.googleusercontent.com",
+            "androidClientId": "test.apps.googleusercontent.com",
+        });
+        let ids = istemciler(
+            ayarlar["desktopClientId"].as_str(),
+            web_istemci(&ayarlar, None),
+        );
+        assert_eq!(ids.len(), 2);
+        assert!(!ids
+            .iter()
+            .any(|id| id == ayarlar["androidClientId"].as_str().unwrap()));
+        let fixture: Value =
+            serde_json::from_str(include_str!("../../../../rust/tests/fixtures/google.json"))
+                .unwrap();
+        let d = Dogrulayici::yeni(ids, &fixture["jwks"].to_string()).unwrap();
+        assert!(d
+            .dogrula(fixture["token"].as_str().unwrap(), 1_700_000_100)
+            .is_err());
     }
 
     #[test]
