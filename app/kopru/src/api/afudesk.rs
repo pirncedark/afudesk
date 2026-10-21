@@ -5,7 +5,7 @@ use afudesk_core::{
     guvenilen,
     host::{self, HostAyar, HostKomut, HostOlay},
     izleyici::{self, IzleyiciOlay},
-    protokol::{FareTusu, Girdi, Izinler},
+    protokol::{FareTusu, Girdi, Izinler, Kontrol},
 };
 use std::{
     path::PathBuf,
@@ -194,7 +194,7 @@ pub struct IzleyiciOlayi {
     pub kucuk: u8,
 }
 
-/// Girdi. `tur`: konum | fare | kaydir | tus | metin.
+/// Girdi. Terminal: terminal_liste | terminal_ac (metin=id, dx=en, dy=boy) | terminal_kapat.
 #[derive(Debug, Clone, Default)]
 pub struct GirdiOlayi {
     pub tur: String,
@@ -525,6 +525,16 @@ fn izleyici_pompala(sonuc: anyhow::Result<izleyici::Izleyici>, olaylar: StreamSi
                     metin,
                     ..Default::default()
                 },
+                IzleyiciOlay::TerminalListesi(pencereler) => IzleyiciOlayi {
+                    tur: "terminal_liste".into(),
+                    metin: serde_json::to_string(&pencereler).unwrap_or_else(|_| "[]".into()),
+                    ..Default::default()
+                },
+                IzleyiciOlay::TerminalDurum { acik, hata } => IzleyiciOlayi {
+                    tur: "terminal_durum".into(),
+                    metin: hata.unwrap_or_else(|| if acik { "acik" } else { "kapali" }.into()),
+                    ..Default::default()
+                },
                 IzleyiciOlay::Dosya {
                     ad,
                     gonderilen,
@@ -569,6 +579,12 @@ pub fn izleyici_girdi(g: GirdiOlayi) {
     let Some(iz) = IZLEYICI.lock().unwrap().clone() else {
         return;
     };
+    if let Some(komut) = terminal_komutu(&g) {
+        rt().spawn(async move {
+            let _ = iz.terminal_komut(komut).await;
+        });
+        return;
+    }
     let girdi = match g.tur.as_str() {
         "konum" => Girdi::FareKonum {
             x: g.x as f32,
@@ -592,6 +608,100 @@ pub fn izleyici_girdi(g: GirdiOlayi) {
         _ => return,
     };
     rt().spawn(async move { iz.gonder(girdi).await });
+}
+
+/// Mevcut DTO kullanılır; terminal komutları Girdi olarak karşıya gönderilmez.
+fn terminal_komutu(g: &GirdiOlayi) -> Option<Kontrol> {
+    match g.tur.as_str() {
+        "terminal_liste" => Some(Kontrol::TerminalListesi),
+        "terminal_ac" => {
+            let id = g.metin.parse::<u64>().ok().filter(|id| *id != 0)?;
+            let en = u32::try_from(g.dx).ok().filter(|v| *v > 0)?;
+            let boy = u32::try_from(g.dy).ok().filter(|v| *v > 0)?;
+            Some(Kontrol::TerminalModu {
+                ac: Some(id),
+                en,
+                boy,
+            })
+        }
+        "terminal_kapat" => Some(Kontrol::TerminalModu {
+            ac: None,
+            en: 0,
+            boy: 0,
+        }),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod terminal_testleri {
+    use super::*;
+
+    #[test]
+    fn terminal_kimligi_tam_hassasiyetle_aktarilir() {
+        let g = GirdiOlayi {
+            tur: "terminal_ac".into(),
+            metin: u64::MAX.to_string(),
+            dx: 390,
+            dy: 844,
+            ..Default::default()
+        };
+        assert_eq!(
+            terminal_komutu(&g),
+            Some(Kontrol::TerminalModu {
+                ac: Some(u64::MAX),
+                en: 390,
+                boy: 844,
+            })
+        );
+    }
+
+    #[test]
+    fn gecersiz_terminal_istekleri_gonderilmez() {
+        for (id, en, boy) in [
+            ("0", 390, 844),
+            ("abc", 390, 844),
+            ("42", -1, 844),
+            ("42", 390, 0),
+        ] {
+            assert!(terminal_komutu(&GirdiOlayi {
+                tur: "terminal_ac".into(),
+                metin: id.into(),
+                dx: en,
+                dy: boy,
+                ..Default::default()
+            })
+            .is_none());
+        }
+    }
+
+    #[test]
+    fn liste_ve_kapat_girdi_degildir() {
+        assert_eq!(
+            terminal_komutu(&GirdiOlayi {
+                tur: "terminal_liste".into(),
+                ..Default::default()
+            }),
+            Some(Kontrol::TerminalListesi)
+        );
+        assert_eq!(
+            terminal_komutu(&GirdiOlayi {
+                tur: "terminal_kapat".into(),
+                ..Default::default()
+            }),
+            Some(Kontrol::TerminalModu {
+                ac: None,
+                en: 0,
+                boy: 0
+            })
+        );
+        assert!(terminal_komutu(&GirdiOlayi {
+            tur: "metin".into(),
+            metin: "terminal_ac".into(),
+            ..Default::default()
+        })
+        .is_none());
+    }
 }
 
 /// Dart'tan gelen oyun kolu durumunu mevcut datagram yoluna verir; sıra numarasını Rust atar.

@@ -9,8 +9,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// Protokol sürümü ALPN'nin içindedir: tel biçimi değişince ikisi birlikte artar.
 /// Uyuşmayan sürümler el sıkışmada ayrılır (paket sürümüne bağlı değildir).
-pub const SURUM: u32 = 7;
-pub const ALPN: &[u8] = b"afudesk/7";
+pub const SURUM: u32 = 8;
+pub const ALPN: &[u8] = b"afudesk/8";
 /// Tek mesaj için üst sınır (kötü niyetli uzunluk alanına karşı).
 pub const AZAMI_MESAJ: usize = 32 * 1024 * 1024;
 /// İzleyicide aynı anda işlenen tek yönlü akış tavanı (kareler + dosyalar).
@@ -145,7 +145,23 @@ pub enum Kontrol {
         jeton: String,
     },
     /// Google kan?t? yaln?z ?ifreli, kimli?i do?rulanm?? QUIC ak???nda ta??n?r.
-    MerhabaGoogle { kanit: crate::google_baglanti::Kanit, ad: String },
+    MerhabaGoogle {
+        kanit: crate::google_baglanti::Kanit,
+        ad: String,
+    },
+    /// İzin verilen mevcut terminal pencerelerini iste.
+    TerminalListesi,
+    TerminalPencereleri(Vec<crate::terminal::Pencere>),
+    /// None: masaüstüne dön ve pencerenin önceki yerleşimini geri yükle.
+    TerminalModu {
+        ac: Option<u64>,
+        en: u32,
+        boy: u32,
+    },
+    TerminalDurum {
+        acik: bool,
+        hata: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -198,6 +214,40 @@ pub async fn oku<R: AsyncReadExt + Unpin, T: for<'de> Deserialize<'de>>(
 #[cfg(test)]
 mod testler {
     use super::*;
+
+    #[test]
+    fn terminal_mesajlari_gidis_donus() {
+        let mesajlar = [
+            Kontrol::TerminalListesi,
+            Kontrol::TerminalPencereleri(vec![crate::terminal::Pencere {
+                id: 42,
+                baslik: "Türkçe — Codex".into(),
+                uygulama: "Windows Terminal".into(),
+            }]),
+            Kontrol::TerminalModu {
+                ac: Some(42),
+                en: 390,
+                boy: 844,
+            },
+            Kontrol::TerminalModu {
+                ac: None,
+                en: 0,
+                boy: 0,
+            },
+            Kontrol::TerminalDurum {
+                acik: true,
+                hata: None,
+            },
+            Kontrol::TerminalDurum {
+                acik: false,
+                hata: Some("Terminal kapandı, yeniden seç.".into()),
+            },
+        ];
+        for mesaj in mesajlar {
+            let baytlar = bincode::serialize(&mesaj).unwrap();
+            assert_eq!(bincode::deserialize::<Kontrol>(&baytlar).unwrap(), mesaj);
+        }
+    }
 
     #[test]
     fn alpn_protokol_surumunu_tasir() {
