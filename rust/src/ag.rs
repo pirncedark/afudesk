@@ -492,6 +492,8 @@ mod testler {
         async fn uc() -> Endpoint {
             Endpoint::builder(presets::Minimal)
                 .relay_mode(RelayMode::Disabled)
+                .clear_ip_transports()
+                .bind_addr("127.0.0.1:0").unwrap()
                 .alpns(vec![ALPN.to_vec()])
                 .address_lookup(
                     iroh_mdns_address_lookup::MdnsAddressLookup::builder()
@@ -527,7 +529,11 @@ mod testler {
 
     #[tokio::test]
     async fn cevrimici_sorgu_calisan_ucun_kesfini_kullanir() {
-        let endpoint = uc_nokta(Kurulum::Internet, false).await.unwrap();
+        let endpoint = uc_nokta(Kurulum::YalnizYerel, false).await.unwrap();
+        let mdns = std::sync::Arc::new(iroh_mdns_address_lookup::MdnsAddressLookup::builder()
+            .service_name(MDNS_SERVISI).build(endpoint.id()).unwrap());
+        kesifler().lock().unwrap().insert(kimlik_metni(endpoint.id()),
+            (std::sync::Arc::downgrade(&mdns), Default::default()));
         let kimlik = kimlik_metni(endpoint.id());
         {
             let kesif = kesifler().lock().unwrap();

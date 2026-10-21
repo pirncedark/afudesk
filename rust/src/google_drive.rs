@@ -92,6 +92,9 @@ pub fn drive_karari(
     if eslesen.next().is_some() {
         return Karar::Red;
     }
+    if !k.erisim {
+        return Karar::Red;
+    }
     let bag = anahtar_nonce(&k.host, &k.izleyici);
     let nonce = karsi.nonce();
     if nonce == bag
@@ -148,6 +151,17 @@ async fn json<T: DeserializeOwned>(response: Response) -> Result<T> {
 }
 
 impl DriveDizin {
+    /// The Drive bearer must belong to the same subject as the signed ID token.
+    /// In particular Android authorization must not silently select another account.
+    pub async fn hesabi_dogrula(&self) -> Result<()> {
+        #[derive(Deserialize)]
+        struct UserInfo { sub: String }
+        let user: UserInfo = json(self.client
+            .get("https://www.googleapis.com/oauth2/v3/userinfo")
+            .bearer_auth(&self.token).send().await.map_err(|_| DogrulamaHatasi)?).await?;
+        if user.sub != self.sub { return Err(DogrulamaHatasi); }
+        Ok(())
+    }
     /// `hesap` must be the verified identity from the OAuth transaction returning
     /// this access token. An ID token is not a Drive access token.
     pub fn yeni(access_token: String, hesap: &Dogrulanmis) -> Result<Self> {
@@ -155,7 +169,7 @@ impl DriveDizin {
             return Err(DogrulamaHatasi);
         }
         Ok(Self {
-            client: Client::builder()
+            client: crate::google::http_client()
                 .https_only(true)
                 .redirect(reqwest::redirect::Policy::none())
                 .timeout(Duration::from_secs(10))
@@ -356,7 +370,7 @@ mod tests {
             );
         });
         let dizin = DriveDizin {
-            client: Client::new(),
+            client: crate::google::http_client().build().unwrap(),
             token: "test-only".into(),
             sub: "account".into(),
             files: format!("{url}/files"),

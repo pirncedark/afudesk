@@ -249,7 +249,7 @@ impl Kod {
         if self.giris.baslangic.elapsed() > OMUR {
             return Err(DogrulamaHatasi);
         }
-        let client = reqwest::Client::builder()
+        let client = crate::google::http_client()
             .redirect(reqwest::redirect::Policy::none())
             .timeout(Duration::from_secs(20))
             .build()

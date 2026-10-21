@@ -138,3 +138,100 @@ birime doğrudan verilmemeli. Eski onaylı bağlantı akışı korunmaktadır.
 
 Gerçek OAuth değerleri istenmedi; ücretsiz istemci oluşturma adımı planda.
 Yeni bulut hesabı/ücretli servis oluşturulmadı; servis/autostart kurulmadı.
+
+
+## Tamamla2 - continuation 2/5 (2026-10-21)
+
+Status: integration files updated; complete verification remains blocked by the environment. Read git status/diff first and preserved previous work. No commits, branch changes, service/autostart/firewall changes or writes to .tmp_main.
+
+The real HesapServisi uses app/kopru OAuth/JWKS/Drive operations. Desktop OAuth uses PKCE/nonce; Android requests ID credentials and Drive authorization. Google userinfo binds the access token to the verified ID token subject. Drive appData contains public device metadata only. Same subject, current enabled Drive record, QUIC node identity and key-bound nonce are required for automatic acceptance. Different accounts retain host approval. Tokens are masked in Debug and errors are reduced at the bridge boundary.
+
+This continuation adds real-adapter tests for login/list, incoming connection banner/disconnect, outgoing stream completion and sign-out. Outgoing stream completion/cancellation now clears the banner. The obsolete HazirDegilHesapServisi test reference was replaced with an actual adapter failure case. New Rust negatives reject records moved to another host/viewer/subject and future timestamps. Flutter tests could not execute; these Dart tests are not claimed passing.
+
+Baseline: main e7e0a07 sources from reports/main-baseline were checked against git show. Both real screen tests fail there too with exactly 0x80070006, while the injector passes. Evidence: google-tamamla2-tur2-main-screen.txt. Tests were not deleted/ignored; production capture code was not changed. Main code-refresh test also fails with Elapsed at its 2-second deadline (google-tamamla2-tur2-main-code.txt). The existing working-tree test with its 20-second deadline passes in the full suite.
+
+QUIC test endpoints and OAuth/mock HTTP listeners use 127.0.0.1:0. Real mDNS discovery still depends on multicast; a guarantee that every test socket binds only loopback has NOT been established.
+
+### Actual verification
+
+Full `cargo test` in rust/: exit 101. The 0-failed target was NOT met. Final output:
+```text
+ 
+ - - - -   p l a t f o r m : : m a s a u s t u : : t e s t l e r : : g e r c e k _ w g c _ y a k a l a n i r   s t d o u t   - - - - 
+ 
+ 
+ 
+ t h r e a d   ' p l a t f o r m : : m a s a u s t u : : t e s t l e r : : g e r c e k _ w g c _ y a k a l a n i r '   ( 2 2 6 2 8 )   p a n i c k e d   a t   s r c \ p l a t f o r m . r s : 6 3 7 : 3 9 : 
+ 
+ x c a p   k a r e   y a k a l a y a m a d 1:   0_l e y i c i   g e ç e r s i z .   ( 0 x 8 0 0 7 0 0 0 6 ) 
+ 
+ 
+ 
+ 
+ 
+ f a i l u r e s : 
+ 
+         p l a t f o r m : : m a s a u s t u : : t e s t l e r : : g e r c e k _ e k r a n _ y a k a l a n i r 
+ 
+         p l a t f o r m : : m a s a u s t u : : t e s t l e r : : g e r c e k _ w g c _ y a k a l a n i r 
+ 
+ 
+ 
+ t e s t   r e s u l t :   F A I L E D .   1 1 1   p a s s e d ;   2   f a i l e d ;   0   i g n o r e d ;   0   m e a s u r e d ;   0   f i l t e r e d   o u t ;   f i n i s h e d   i n   3 8 . 5 0 s 
+ 
+ 
+ 
+ e r r o r :   t e s t   f a i l e d ,   t o   r e r u n   p a s s   ` - - l i b ` 
+ 
+ 
+```
+
+Explicit unfiltered integration tests:
+`cargo test --test google_drive --test google_guvenlik --test google_oauth --test google_depo_pin --test google_pin_kasa`
+Exit 0: 21 passed, 0 failed. Actual result lines:
+```text
+
+```
+
+`cargo check --locked` in app/kopru/: exit 0, including final check after formatting the adapter. Evidence: google-tamamla2-tur2-bridge-final.txt.
+
+Flutter `test --no-pub test/gercek_hesap_servisi_test.dart` could not start due to SDK Git dubious ownership. An offline pub attempt with a process-local safe.directory override (no persistent Git configuration change) then failed with access denied / Flutter failed to run "where aapt". app/.dart_tool/package_config.json is absent. No Flutter test, Android build or real two-device Google session has been verified. Production requires valid desktop/web OAuth client IDs at build time. Evidence: google-tamamla2-tur2-flutter.txt and google-tamamla2-tur2-pub.txt.
+
+`dart format --output=none --set-exit-if-changed app/lib app/test`: exit 1, 15 pre-existing untouched files need formatting. Initial formatter changes in those unrelated files were removed through file edits. New adapter/tests were formatted separately. Evidence: google-tamamla2-tur2-format-final.txt.
+
+The requested `rg -n "^(<<<<<<<|=======|>>>>>>>)" app rust` matches only existing LICENSE separators at app/rust_builder/cargokit/LICENSE:6 and :27. A stricter conflict-marker search returned no matches. Final git diff --check is verified after normalizing this report's line endings.
+
+Remaining: Flutter adapter/widget tests and Android compilation in an accessible SDK environment; full cargo test in an interactive Windows desktop; actual two-device same-account connection, different-account approval, revocation and disconnect checks; multicast test socket constraint. Completion is not claimed.
+
+### git diff --stat (snapshot before this block)
+
+```text
+ app/android/app/build.gradle.kts                   |   1 +
+ .../src/main/kotlin/com/afu/afudesk/GoogleHesap.kt |  59 ++-
+ .../main/kotlin/com/afu/afudesk/MainActivity.kt    |   1 +
+ app/kopru/Cargo.lock                               |  26 +-
+ app/kopru/Cargo.toml                               |   1 +
+ app/kopru/src/api/afudesk.rs                       |  22 +-
+ app/kopru/src/api/mod.rs                           |   1 +
+ app/kopru/src/frb_generated.rs                     |  87 ++-
+ app/lib/hesap/hesap_servisi.dart                   | 121 -----
+ app/lib/main.dart                                  |  61 ++-
+ app/lib/motor.dart                                 |  46 +-
+ app/lib/sayfalar/oturum.dart                       | 586 ++++++++++++++-------
+ app/lib/src/rust/api/afudesk.dart                  |   8 +
+ app/lib/src/rust/frb_generated.dart                |  83 ++-
+ app/test/hesap_test.dart                           |  17 +-
+ docs/GOOGLE_ESLESME_PLAN.md                        |   6 +
+ reports/GOOGLE_ESLESME_SONUC.md                    |  64 +++
+ rust/Cargo.lock                                    |   1 +
+ rust/Cargo.toml                                    |   1 +
+ rust/src/ag.rs                                     |   8 +-
+ rust/src/google.rs                                 |   8 +-
+ rust/src/google_drive.rs                           |  18 +-
+ rust/src/google_oauth.rs                           |   2 +-
+ rust/src/host.rs                                   |  10 +-
+ rust/tests/google_drive.rs                         |  77 +++
+ 25 files changed, 966 insertions(+), 349 deletions(-)
+```
+
+Untracked bridge/adapter/test files are not included in git diff --stat; inspect git status as well.

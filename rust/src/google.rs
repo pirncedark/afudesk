@@ -8,6 +8,12 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::{fmt, time::Duration};
 
+/// Iroh enables ring but does not install a process default for standalone OAuth.
+pub(crate) fn http_client() -> reqwest::ClientBuilder {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+    reqwest::Client::builder()
+}
+
 pub const JWKS_URL: &str = "https://www.googleapis.com/oauth2/v3/certs";
 /// Dağıtıcı gerçek istemci kimliklerini derleme yapılandırmasına koyar.
 /// Yer tutucuyla giriş ve onaysız erişim mümkün değildir.
@@ -143,7 +149,7 @@ impl Dogrulayici {
     /// Ağ hatası güvenlik denetimini atlatmaz; önceki key cache'iyle sınırsız
     /// çalışma yapılmaz. Çağıran katman kısa süreli cache ekleyebilir.
     pub async fn google_dan(istemciler: Vec<String>) -> Sonuc<Self> {
-        let client = reqwest::Client::builder()
+        let client = http_client()
             .https_only(true)
             .redirect(reqwest::redirect::Policy::none())
             .timeout(Duration::from_secs(10))

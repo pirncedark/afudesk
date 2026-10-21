@@ -195,3 +195,9 @@ bağlı değildir. Görev tamamlanmış değildir; çalışan Google uzak bağla
 3. Rust host/izleyici protokolü: Google kanıtını gerçek QUIC kimliğiyle denetle; eski onay yolunu koru.
 4. Hesap UI PIN akışını kaldır; gerçek köprü entegrasyonu için app/kopru kapsam izni bekleniyor.
 5. Cargo, Flutter ve işaret taraması çıktısını rapora yaz. Git işlemi/servis kurulumu yok.
+
+## Tamamla2 implementation plan
+1. Connect existing OAuth/JWKS/Drive core through FRB and the real HesapServisi; keep fake services in tests.
+2. Require same subject and registered QUIC node for automatic acceptance; retain approval for other accounts and a visible disconnect banner.
+3. Verify test loopback bindings, compare main screen/code tests and append actual evidence to the result report.
+No Git mutations, service/autostart/firewall changes or .tmp_main writes.

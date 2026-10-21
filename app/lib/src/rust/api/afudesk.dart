@@ -413,3 +413,11 @@ class KayitliCihaz {
           acik == other.acik &&
           sonGorulme == other.sonGorulme;
 }
+
+Stream<IzleyiciOlayi> izleyiciGoogleBaglan({
+  required String kimlik,
+  required String ad,
+}) => RustLib.instance.api.crateApiAfudeskIzleyiciGoogleBaglan(
+  kimlik: kimlik,
+  ad: ad,
+);

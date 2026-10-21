@@ -1,3 +1,5 @@
+import 'sahte_hesap_servisi.dart';
+import 'package:afudesk/hesap/gercek_hesap_servisi.dart';
 import 'package:afudesk/hesap/hesap_servisi.dart';
 import 'package:afudesk/main.dart';
 import 'package:flutter/material.dart';
@@ -95,10 +97,16 @@ void main() {
     expect(find.text('Çevrimdışı'), findsOneWidget);
   });
 
-  testWidgets('üretim yer tutucusu sahte giriş yapmaz ve kodla akışı korur', (
-    t,
-  ) async {
-    final servis = HazirDegilHesapServisi();
+  testWidgets('başarısız gerçek giriş kodla akışı korur', (t) async {
+    final servis = GercekHesapServisi(
+      islem: (_, _) async =>
+          throw const HesapHatasi('Google girişi tamamlanamadı, yeniden dene.'),
+      googleBaglan: (_) => const Stream.empty(),
+      kes: () async {},
+      hostOlaylari: const Stream.empty(),
+      platformGirisi: (_) async => {},
+      tarayiciAc: (_) async => false,
+    );
     addTearDown(servis.dispose);
     await t.pumpWidget(
       AfuDeskUygulama(motor: SahteMotor(), hesapServisi: servis),
@@ -107,7 +115,7 @@ void main() {
     await t.pumpAndSettle();
     expect(servis.hesap, isNull);
     expect(
-      find.text('Google ile giriş henüz hazır değil, kodla bağlantıyı kullan.'),
+      find.text('Google girişi tamamlanamadı, yeniden dene.'),
       findsOneWidget,
     );
     await t.tap(find.text('Kodla bağlantı'));

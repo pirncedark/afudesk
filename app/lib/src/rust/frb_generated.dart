@@ -66,7 +66,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -646713254;
+  int get rustContentHash => 1910899797;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -78,6 +78,15 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
+  Future<String> crateApiGoogleGoogleIslem({
+    required String islem,
+    required String veri,
+  });
+  Stream<IzleyiciOlayi> crateApiAfudeskIzleyiciGoogleBaglan({
+    required String kimlik,
+    required String ad,
+  });
+
   Future<List<String>> crateApiAfudeskCevrimiciKimlikler();
 
   String crateApiAfudeskCihazAdi();
@@ -729,6 +738,78 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         debugName: "izleyici_kayitli_baglan",
         argNames: ["kimlik", "ad", "olaylar"],
       );
+
+  @override
+  Stream<IzleyiciOlayi> crateApiAfudeskIzleyiciGoogleBaglan({
+    required String kimlik,
+    required String ad,
+  }) {
+    final olaylar = RustStreamSink<IzleyiciOlayi>();
+    unawaited(
+      handler.executeNormal(
+        NormalTask(
+          callFfi: (port_) {
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            sse_encode_String(kimlik, serializer);
+            sse_encode_String(ad, serializer);
+            sse_encode_StreamSink_izleyici_olayi_Sse(olaylar, serializer);
+            pdeCallFfi(
+              generalizedFrbRustBinding,
+              serializer,
+              funcId: 29,
+              port: port_,
+            );
+          },
+          codec: SseCodec(
+            decodeSuccessData: sse_decode_unit,
+            decodeErrorData: null,
+          ),
+          constMeta: kCrateApiAfudeskIzleyiciGoogleBaglanConstMeta,
+          argValues: [kimlik, ad, olaylar],
+          apiImpl: this,
+        ),
+      ),
+    );
+    return olaylar.stream;
+  }
+
+  TaskConstMeta get kCrateApiAfudeskIzleyiciGoogleBaglanConstMeta =>
+      const TaskConstMeta(
+        debugName: "izleyici_google_baglan",
+        argNames: ["kimlik", "ad", "olaylar"],
+      );
+
+  @override
+  Future<String> crateApiGoogleGoogleIslem({
+    required String islem,
+    required String veri,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(islem, serializer);
+          sse_encode_String(veri, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 30,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: const TaskConstMeta(
+          debugName: 'google_islem',
+          argNames: ['islem', 'veri'],
+        ),
+        argValues: [islem, veri],
+        apiImpl: this,
+      ),
+    );
+  }
 
   @override
   Future<void> crateApiAfudeskIzleyiciKol({

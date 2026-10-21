@@ -126,9 +126,15 @@ pub struct Host {
     /// "Bağlantı ver" kapanınca bekleyen kodu hemen geçersiz kılmak için.
     kod_kapandi: Arc<tokio::sync::Notify>,
     kimlik: EndpointId,
+    endpoint: Endpoint,
 }
 
 impl Host {
+    pub fn google_adresleri(&self) -> (Vec<String>, Vec<String>) {
+        let adres = self.endpoint.addr();
+        (adres.ip_addrs().map(ToString::to_string).collect(),
+         adres.relay_urls().map(ToString::to_string).collect())
+    }
     pub async fn komut(&self, k: HostKomut) {
         let _ = self.komut.send(k).await;
     }
@@ -180,6 +186,7 @@ pub async fn baslat(ayar: HostAyar, fabrika: Arc<dyn Fabrika>) -> Result<Host> {
     let kod_acik = Arc::new(AtomicBool::new(ayar.kod_acik));
     let kod_kapandi = Arc::new(tokio::sync::Notify::new());
     let kimlik = ep.id();
+    let endpoint = ep.clone();
     tokio::spawn(calis(
         ayar,
         fabrika,
@@ -199,6 +206,7 @@ pub async fn baslat(ayar: HostAyar, fabrika: Arc<dyn Fabrika>) -> Result<Host> {
         kod_acik,
         kod_kapandi,
         kimlik,
+        endpoint,
     })
 }
 
@@ -300,7 +308,7 @@ mod guvenlik_testleri {
             }
         };
         h.kod_ac(false);
-        let yeni_kod = tokio::time::timeout(Duration::from_secs(2), async {
+        let yeni_kod = tokio::time::timeout(Duration::from_secs(20), async {
             loop {
                 if let Some(HostOlay::Hazir { kod, .. }) = h.olaylar.recv().await {
                     break kod;

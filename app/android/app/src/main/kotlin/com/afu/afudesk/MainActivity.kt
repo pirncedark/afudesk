@@ -78,6 +78,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        googleHesap?.onActivityResult(requestCode, data)
         if (requestCode == 804) {
             val apk = pendingApk
             pendingApk = null

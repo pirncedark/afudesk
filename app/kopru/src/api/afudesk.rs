@@ -43,11 +43,31 @@ pub fn veri_klasoru_ayarla(yol: String) {
     *VERI.lock().unwrap() = Some(PathBuf::from(yol).join("AfuDesk"));
 }
 
-fn veri() -> Option<PathBuf> {
+pub(super) fn veri() -> Option<PathBuf> {
     VERI.lock()
         .unwrap()
         .clone()
         .or_else(guvenilen::varsayilan_klasor)
+}
+
+pub(super) fn host_adresleri() -> Option<(Vec<String>, Vec<String>)> {
+    HOST.lock().unwrap().as_ref().map(|(h, _)| h.google_adresleri())
+}
+
+pub fn izleyici_google_baglan(kimlik: String, ad: String, olaylar: StreamSink<IzleyiciOlayi>) {
+    izleyici_kapat();
+    IZLEYICI_KOL_IZNI.store(false, Ordering::SeqCst);
+    let sonuc = rt().block_on(async {
+        let g = super::google::etkin_hesap()?;
+        let v = veri().ok_or_else(|| anyhow::anyhow!("Cihaz kaydedilemedi, yeniden dene."))?;
+        #[cfg(not(target_os = "android"))]
+        let pano = afudesk_core::pano::ArboardPano::new().ok()
+            .map(|p| Box::new(p) as Box<dyn afudesk_core::pano::Pano>);
+        #[cfg(target_os = "android")]
+        let pano = None;
+        izleyici::google_baglan(&g, &kimlik, &v, &ad, pano).await
+    });
+    izleyici_pompala(sonuc, olaylar);
 }
 
 /// Kayıtlı/güvenilen cihaz (listede yalnız ad ve son görülme gösterilir).
