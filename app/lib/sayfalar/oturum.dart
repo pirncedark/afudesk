@@ -252,8 +252,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
       case 'pano':
         // Masaüstünde çekirdek panoya zaten yazdı; dokunmatik cihazda (Android) çekirdeğin
         // pano erişimi yok, metni arayüz yazar.
-        if (widget.motor.dokunmatik)
+        if (widget.motor.dokunmatik) {
           Clipboard.setData(ClipboardData(text: o.metin));
+        }
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(
@@ -612,10 +613,12 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
                               _zoom.tersine(e.localPosition),
                               alan,
                             );
-                            if (n != null)
+                            if (n != null) {
                               _gonder(_dokunma.bas(e.pointer, n.dx, n.dy, _ms));
-                            if (_zoom.yakinlastiriyor)
+                            }
+                            if (_zoom.yakinlastiriyor) {
                               _dokunma.yakinlastirmaBasladi();
+                            }
                           },
                           onPointerMove: (e) {
                             if (_kolAcik) return;
@@ -639,15 +642,17 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
                               _zoom.tersine(e.localPosition),
                               alan,
                             );
-                            if (n != null)
+                            if (n != null) {
                               _gonder(
                                 _dokunma.hareket(e.pointer, n.dx, n.dy, _ms),
                               );
+                            }
                           },
                           onPointerUp: (e) {
                             if (_kolAcik) return;
-                            if (_kontrol)
+                            if (_kontrol) {
                               _gonder(_dokunma.birak(e.pointer, _ms));
+                            }
                             _zoomBirak(e.pointer);
                           },
                           onPointerCancel: (e) {
@@ -1046,8 +1051,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
                       if (!_kontrol || e is! PointerScrollEvent) return;
                       final dy = e.scrollDelta.dy.sign.toInt(),
                           dx = e.scrollDelta.dx.sign.toInt();
-                      if (dx != 0 || dy != 0)
+                      if (dx != 0 || dy != 0) {
                         widget.motor.girdi(Girdi('kaydir', dx: dx, dy: dy));
+                      }
                     },
                     child: SizedBox.expand(
                       child: k == null

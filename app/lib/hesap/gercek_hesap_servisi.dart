@@ -68,8 +68,8 @@ class GercekHesapServisi extends HesapServisi {
   bool get uzaktanErisim => _hesap != null;
   @override
   List<Cihaz> get baglantilar => [
-    if (_gelen != null) _gelen!,
-    if (_giden != null) _giden!,
+    ?_gelen,
+    ?_giden,
   ];
   @override
   Stream<List<Cihaz>> get aktifBaglantilar => _akis.stream;

@@ -51,11 +51,12 @@ class _HesapSayfasiDurum extends State<HesapSayfasi> {
   Future<void> _yenile() async {
     final istek = ++_istek;
     if (servis.hesap == null) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _cihazlar = [];
           _ayarlar = false;
         });
+      }
       return;
     }
     try {
@@ -287,10 +288,11 @@ class _KesDugmesiDurum extends State<_KesDugmesi> {
                 try {
                   await widget.servis.baglantiyiKes();
                 } catch (_) {
-                  if (mounted)
+                  if (mounted) {
                     setState(
                       () => _hata = 'Bağlantı kesilemedi, yeniden dene.',
                     );
+                  }
                 } finally {
                   if (mounted) setState(() => _mesgul = false);
                 }
