@@ -58,7 +58,7 @@ pub fn izleyici_google_baglan(kimlik: String, ad: String, olaylar: StreamSink<Iz
     izleyici_kapat();
     IZLEYICI_KOL_IZNI.store(false, Ordering::SeqCst);
     let sonuc = rt().block_on(async {
-        let g = super::google::etkin_hesap()?;
+        let g = super::google::etkin_hesap().await?;
         let v = veri().ok_or_else(|| anyhow::anyhow!("Cihaz kaydedilemedi, yeniden dene."))?;
         #[cfg(not(target_os = "android"))]
         let pano = afudesk_core::pano::ArboardPano::new().ok()

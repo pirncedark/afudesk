@@ -352,65 +352,124 @@ pub async fn yenile(
 ) -> Result<(String, String, Option<String>), YenilemeHatasi> {
     use YenilemeHatasi::Ag;
     if refresh_token.is_empty() || refresh_token.len() > 16 * 1024 {
-        return Err(YenilemeHatasi::Iptal);
+        // Only an actual invalid_grant response may revoke the saved grant.
+        return Err(Ag);
     }
-    let client = crate::google::http_client().map_err(|_| Ag)?
+    let client = crate::google::http_client()
+        .map_err(|_| Ag)?
         .https_only(true)
         .redirect(reqwest::redirect::Policy::none())
-        .timeout(Duration::from_secs(20)).build().map_err(|_| Ag)?;
+        .timeout(Duration::from_secs(20))
+        .build()
+        .map_err(|_| Ag)?;
     let mut body = Url::parse("https://localhost/").map_err(|_| Ag)?;
     body.query_pairs_mut().extend_pairs([
-        ("client_id", client_id), ("client_secret", secret),
-        ("refresh_token", refresh_token), ("grant_type", "refresh_token"),
+        ("client_id", client_id),
+        ("client_secret", secret),
+        ("refresh_token", refresh_token),
+        ("grant_type", "refresh_token"),
     ]);
-    let mut response = client.post("https://oauth2.googleapis.com/token")
+    let mut response = client
+        .post("https://oauth2.googleapis.com/token")
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body(body.query().unwrap_or_default().to_owned())
-        .send().await.map_err(|_| Ag)?;
+        .send()
+        .await
+        .map_err(|_| Ag)?;
     let ok = response.status().is_success();
     let mut bytes = Vec::new();
     while let Some(chunk) = response.chunk().await.map_err(|_| Ag)? {
-        if bytes.len().saturating_add(chunk.len()) > 65536 { return Err(Ag); }
+        if bytes.len().saturating_add(chunk.len()) > 65536 {
+            return Err(Ag);
+        }
         bytes.extend_from_slice(&chunk);
     }
     yenileme_yaniti(ok, &bytes)
 }
 
-fn yenileme_yaniti(ok: bool, bytes: &[u8]) -> Result<(String, String, Option<String>), YenilemeHatasi> {
+fn yenileme_yaniti(
+    ok: bool,
+    bytes: &[u8],
+) -> Result<(String, String, Option<String>), YenilemeHatasi> {
     use YenilemeHatasi::{Ag, Iptal};
     let value: serde_json::Value = serde_json::from_slice(bytes).map_err(|_| Ag)?;
     if !ok {
-        return Err(if value["error"] == "invalid_grant" { Iptal } else { Ag });
+        return Err(if value["error"] == "invalid_grant" {
+            Iptal
+        } else {
+            Ag
+        });
     }
-    let id = value["id_token"].as_str().filter(|v| !v.is_empty() && v.len() <= 16384).ok_or(Ag)?;
-    let access = value["access_token"].as_str().filter(|v| !v.is_empty() && v.len() <= 16384).ok_or(Ag)?;
-    if !value["token_type"].as_str().is_some_and(|v| v.eq_ignore_ascii_case("Bearer")) { return Err(Ag); }
+    let id = value["id_token"]
+        .as_str()
+        .filter(|v| !v.is_empty() && v.len() <= 16384)
+        .ok_or(Ag)?;
+    let access = value["access_token"]
+        .as_str()
+        .filter(|v| !v.is_empty() && v.len() <= 16384)
+        .ok_or(Ag)?;
+    if !value["token_type"]
+        .as_str()
+        .is_some_and(|v| v.eq_ignore_ascii_case("Bearer"))
+    {
+        return Err(Ag);
+    }
     let refresh = value["refresh_token"].as_str().map(str::to_owned);
-    if refresh.as_ref().is_some_and(|v| v.is_empty() || v.len() > 16384) { return Err(Ag); }
+    if refresh
+        .as_ref()
+        .is_some_and(|v| v.is_empty() || v.len() > 16384)
+    {
+        return Err(Ag);
+    }
     Ok((id.into(), access.into(), refresh))
 }
 
 #[cfg(test)]
 mod yenileme_testleri {
     use super::*;
+    #[tokio::test]
+    async fn yerel_bozuk_kayit_google_iptali_sayilmaz() {
+        assert!(matches!(
+            yenile("test.apps.googleusercontent.com", "test", "").await,
+            Err(YenilemeHatasi::Ag)
+        ));
+    }
     #[test]
     fn ag_hatasi_oturumu_iptal_etmez() {
-        assert!(matches!(yenileme_yaniti(false, br#"{"error":"temporarily_unavailable"}"#), Err(YenilemeHatasi::Ag)));
-        assert!(matches!(yenileme_yaniti(false, br#"{"error":"invalid_grant"}"#), Err(YenilemeHatasi::Iptal)));
+        assert!(matches!(
+            yenileme_yaniti(false, br#"{"error":"temporarily_unavailable"}"#),
+            Err(YenilemeHatasi::Ag)
+        ));
+        assert!(matches!(
+            yenileme_yaniti(false, br#"{"error":"invalid_grant"}"#),
+            Err(YenilemeHatasi::Iptal)
+        ));
     }
     #[test]
     fn token_dondurme_istege_baglidir() {
-        let (_, access, refresh) = yenileme_yaniti(true,
-            br#"{"id_token":"id","access_token":"access","token_type":"Bearer"}"#).unwrap();
-        assert_eq!(access, "access"); assert!(refresh.is_none());
-        assert!(yenileme_yaniti(true, br#"{"id_token":"id","access_token":"","token_type":"Bearer"}"#).is_err());
+        let (_, access, refresh) = yenileme_yaniti(
+            true,
+            br#"{"id_token":"id","access_token":"access","token_type":"Bearer"}"#,
+        )
+        .unwrap();
+        assert_eq!(access, "access");
+        assert!(refresh.is_none());
+        assert!(yenileme_yaniti(
+            true,
+            br#"{"id_token":"id","access_token":"","token_type":"Bearer"}"#
+        )
+        .is_err());
     }
     #[test]
     fn ilk_giris_offline_onayi_ister() {
         let g = Giris::yeni("test.apps.googleusercontent.com", 1234, "host", "viewer").unwrap();
         let url = Url::parse(g.url()).unwrap();
-        assert!(url.query_pairs().any(|(k,v)| k == "access_type" && v == "offline"));
-        assert!(url.query_pairs().any(|(k,v)| k == "prompt" && v == "consent"));
+        assert!(url
+            .query_pairs()
+            .any(|(k, v)| k == "access_type" && v == "offline"));
+        assert!(url
+            .query_pairs()
+            .any(|(k, v)| k == "prompt" && v == "consent"));
     }
 }
 
