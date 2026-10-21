@@ -9,7 +9,7 @@ use crate::{
     host::{istemsiz_kopus, KOPUS_KODU},
     kimlik, kod,
     pano::{self, Esitleyici, Pano, PANO_ARALIGI},
-    protokol::{self, Girdi, Izinler, Kare, Kontrol},
+    protokol::{self, Girdi, Izinler, Kontrol},
     zaman,
 };
 use anyhow::Result;
@@ -48,6 +48,15 @@ pub enum IzleyiciOlay {
         yukseklik: u32,
         rgba: Vec<u8>,
     },
+    Parcalar {
+        genislik: u32,
+        yukseklik: u32,
+        tam: bool,
+        dosemeler: Vec<crate::goruntu::DosemeRgba>,
+        girdi_ms: u64,
+        host_girdi_ms: u64,
+    },
+    Imlec(crate::protokol::Imlec),
     /// Saniyede bir: bağlantı gidiş-dönüş süresi, ekrana gelen kare hızı ve kullanılan yol
     /// ("doğrudan" | "relay").
     Istatistik {
@@ -90,7 +99,8 @@ pub enum IzleyiciOlay {
 
 pub struct Izleyici {
     pub olaylar: mpsc::Receiver<IzleyiciOlay>,
-    girdi: mpsc::Sender<Girdi>,
+    girdi: mpsc::Sender<(Girdi, u64)>,
+    parcali: Arc<AtomicBool>,
     terminal: mpsc::Sender<(u64, Kontrol)>,
     terminal_nesli: Arc<AtomicU64>,
     terminal_hazir: Arc<AtomicBool>,
@@ -108,12 +118,16 @@ impl Izleyici {
         self.baglanti.lock().expect("kilit").clone()
     }
 
+    pub fn parcali_ayarla(&self, acik: bool) {
+        self.parcali.store(acik, Ordering::Release);
+    }
+
     /// Girdi kuyruğu doluysa (yavaş ağ) fare hareketleri düşürülür, diğerleri beklenir.
     pub async fn gonder(&self, g: Girdi) {
         if matches!(g, Girdi::FareKonum { .. }) {
-            let _ = self.girdi.try_send(g);
+            let _ = self.girdi.try_send((g, unix_ms()));
         } else {
-            let _ = self.girdi.send(g).await;
+            let _ = self.girdi.send((g, unix_ms())).await;
         }
     }
 
@@ -314,18 +328,48 @@ pub async fn kayitli_baglan(
 
 /// Same-account connection. The target and all routing hints come from Drive;
 /// QUIC authenticates the selected host key before sending the ID token.
-pub async fn google_baglan(g: &crate::google_baglanti::Erisim, host: &str,
-    veri: &Path, ad: &str, pano: Option<Box<dyn Pano>>) -> Result<Izleyici> {
-    anyhow::ensure!(g.hesap.gecerlilik_sonu() > kod::simdi(), "Google girişi sona erdi, yeniden giriş yap.");
+pub async fn google_baglan(
+    g: &crate::google_baglanti::Erisim,
+    host: &str,
+    veri: &Path,
+    ad: &str,
+    pano: Option<Box<dyn Pano>>,
+) -> Result<Izleyici> {
+    anyhow::ensure!(
+        g.hesap.gecerlilik_sonu() > kod::simdi(),
+        "Google girişi sona erdi, yeniden giriş yap."
+    );
     let liste = g.dizin.liste().await?;
-    let mut bulunan = liste.iter().filter(|k| k.host == host && k.erisim && k.guncel(g.hesap.sub(),kod::simdi()));
-    let k = bulunan.next().ok_or_else(|| anyhow::anyhow!("Bilgisayara ulaşılamadı, açık olduğunu kontrol et."))?;
-    anyhow::ensure!(bulunan.next().is_none(), "Cihaz kaydı doğrulanamadı, yeniden giriş yap.");
+    let mut bulunan = liste
+        .iter()
+        .filter(|k| k.host == host && k.erisim && k.guncel(g.hesap.sub(), kod::simdi()));
+    let k = bulunan
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("Bilgisayara ulaşılamadı, açık olduğunu kontrol et."))?;
+    anyhow::ensure!(
+        bulunan.next().is_none(),
+        "Cihaz kaydı doğrulanamadı, yeniden giriş yap."
+    );
     let kimlik = kimlik::yukle_veya_uret(&veri.join(kimlik::IZLEYICI_DOSYASI))?;
-    anyhow::ensure!(ag::kimlik_metni(kimlik.kimlik()) == g.cihaz.izleyici, "Cihaz kimliği değişti, yeniden giriş yap.");
-    let hedef = ag::hedef_adres(&k.host,&k.adresler,&k.relaylar)?;
-    oturum_ac(kurulum_sec(&k.adresler,&k.relaylar),hedef,
-        Kontrol::MerhabaGoogle {kanit:g.kanit(),ad:ad.into()},&k.ad,ad,pano,Some(veri),None).await
+    anyhow::ensure!(
+        ag::kimlik_metni(kimlik.kimlik()) == g.cihaz.izleyici,
+        "Cihaz kimliği değişti, yeniden giriş yap."
+    );
+    let hedef = ag::hedef_adres(&k.host, &k.adresler, &k.relaylar)?;
+    oturum_ac(
+        kurulum_sec(&k.adresler, &k.relaylar),
+        hedef,
+        Kontrol::MerhabaGoogle {
+            kanit: g.kanit(),
+            ad: ad.into(),
+        },
+        &k.ad,
+        ad,
+        pano,
+        Some(veri),
+        None,
+    )
+    .await
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -348,7 +392,8 @@ async fn oturum_ac(
     let (mut w, r) = c.open_bi().await?;
     protokol::yaz(&mut w, &ilk_mesaj).await?;
     let (olay_tx, olaylar) = mpsc::channel(4);
-    let (girdi, girdi_rx) = mpsc::channel::<Girdi>(256);
+    let (girdi, girdi_rx) = mpsc::channel::<(Girdi, u64)>(256);
+    let parcali = Arc::new(AtomicBool::new(false));
     let (terminal, terminal_rx) = mpsc::channel(16);
     let terminal_nesli = Arc::new(AtomicU64::new(0));
     let terminal_hazir = Arc::new(AtomicBool::new(false));
@@ -363,7 +408,15 @@ async fn oturum_ac(
     let (titresim_tx, titresim_rx) = std::sync::mpsc::channel::<(u8, u8)>();
     #[cfg(all(not(target_os = "android"), not(test)))]
     {
-        let tx = girdi.clone();
+        let (tx, mut rx) = mpsc::channel(256);
+        let gx = girdi.clone();
+        tokio::spawn(async move {
+            while let Some(g) = rx.recv().await {
+                if gx.send((g, unix_ms())).await.is_err() {
+                    break;
+                }
+            }
+        });
         std::thread::spawn(move || crate::kol::oku(tx, kol_olay_tx, titresim_rx));
     }
     #[cfg(any(target_os = "android", test))]
@@ -383,6 +436,7 @@ async fn oturum_ac(
         yeniden_iste: yeniden_iste.clone(),
         olay: olay_tx,
         girdi: girdi_rx,
+        parcali: parcali.clone(),
         terminal: terminal_rx,
         terminal_nesli: terminal_nesli.clone(),
         terminal_hazir: terminal_hazir.clone(),
@@ -401,6 +455,7 @@ async fn oturum_ac(
     Ok(Izleyici {
         olaylar,
         girdi,
+        parcali,
         terminal,
         terminal_nesli,
         terminal_hazir,
@@ -436,7 +491,8 @@ struct Gozetmen {
     kapatildi: Arc<AtomicBool>,
     yeniden_iste: Arc<AtomicBool>,
     olay: mpsc::Sender<IzleyiciOlay>,
-    girdi: mpsc::Receiver<Girdi>,
+    girdi: mpsc::Receiver<(Girdi, u64)>,
+    parcali: Arc<AtomicBool>,
     terminal: mpsc::Receiver<(u64, Kontrol)>,
     terminal_nesli: Arc<AtomicU64>,
     terminal_hazir: Arc<AtomicBool>,
@@ -587,6 +643,19 @@ impl Gozetmen {
             Err(_) => return "Karşı taraf yanıt vermedi.".into(),
             _ => return "Bağlantı koptu.".into(),
         };
+        // Eski host'un tanıdığı mesajla yokla; bilinmeyen enum gönderme.
+        if protokol::yaz(
+            w,
+            &Kontrol::SaatSor {
+                izleyici_ms: protokol::HIZ_SOR,
+            },
+        )
+        .await
+        .is_err()
+        {
+            return "Bağlantı koptu.".into();
+        }
+        let mut hiz = false;
         let (gelen_tx, mut gelen_rx) = mpsc::channel::<Kontrol>(16);
         let okuyucu = tokio::spawn(async move {
             while let Ok(Some(m)) = protokol::oku::<_, Kontrol>(&mut r).await {
@@ -599,8 +668,9 @@ impl Gozetmen {
         let olay2 = olay.clone();
         let fark2 = self.saat_farki.clone();
         let esit2 = self.saat_esitlendi.clone();
+        let parcali = self.parcali.clone();
         let mut goruntu = tokio::spawn(async move {
-            let (kare_tx, mut kare_rx) = mpsc::channel::<Kare>(8);
+            let (kare_tx, mut kare_rx) = mpsc::channel::<protokol::KarePaketi>(2);
             let c3 = c2.clone();
             let kabul = tokio::spawn(async move {
                 let akis_sayaci =
@@ -613,8 +683,10 @@ impl Gozetmen {
                     let tx = kare_tx.clone();
                     tokio::spawn(async move {
                         let _izin = izin;
-                        if let Ok(Some(k)) = protokol::oku::<_, Kare>(&mut akis).await {
-                            let _ = tx.send(k).await;
+                        while let Ok(Some(k)) = protokol::kare_oku(&mut akis).await {
+                            if tx.send(k).await.is_err() {
+                                break;
+                            }
                         }
                     });
                 }
@@ -624,8 +696,34 @@ impl Gozetmen {
             let mut sayac = 0u32;
             let mut son = std::time::Instant::now();
             let mut gecikmeler = VecDeque::<(std::time::Instant, u32)>::new();
-            while let Some(k) = kare_rx.recv().await {
-                b.uygula(&k)?;
+            while let Some(p) = kare_rx.recv().await {
+                let k = p.kare;
+                let olay = if parcali.load(Ordering::Acquire) {
+                    // Legacy uni streams may arrive out of order. A full frame at
+                    // the same size can contain older tiles filtered by parcalar;
+                    // resetting the UI would erase the retained newer tiles.
+                    let tam =
+                        (b.goruntu.genislik, b.goruntu.yukseklik) != (k.genislik, k.yukseklik);
+                    let dosemeler = b.parcalar(&k)?;
+                    if dosemeler.is_empty() {
+                        continue;
+                    }
+                    IzleyiciOlay::Parcalar {
+                        genislik: k.genislik,
+                        yukseklik: k.yukseklik,
+                        tam,
+                        dosemeler,
+                        girdi_ms: p.girdi_ms,
+                        host_girdi_ms: p.host_girdi_ms,
+                    }
+                } else {
+                    b.uygula(&k)?;
+                    IzleyiciOlay::Kare {
+                        genislik: b.goruntu.genislik,
+                        yukseklik: b.goruntu.yukseklik,
+                        rgba: b.goruntu.rgba.clone(),
+                    }
+                };
                 let simdi = std::time::Instant::now();
                 if esit2.load(Ordering::Relaxed) {
                     gecikmeler.push_back((
@@ -640,11 +738,10 @@ impl Gozetmen {
                     gecikmeler.pop_front();
                 }
                 sayac += 1;
-                let _ = olay2.try_send(IzleyiciOlay::Kare {
-                    genislik: b.goruntu.genislik,
-                    yukseklik: b.goruntu.yukseklik,
-                    rgba: b.goruntu.rgba.clone(),
-                });
+                // Delta düşürülemez: son durağan ekran da eksiksiz ulaşır.
+                if olay2.send(olay).await.is_err() {
+                    break;
+                }
                 if son.elapsed() >= Duration::from_secs(1) {
                     let fps = (sayac as f64 / son.elapsed().as_secs_f64()).round() as u32;
                     let (yol, rtt) = ag::secili_yol(&c2);
@@ -694,7 +791,7 @@ impl Gozetmen {
                 }
                 s = &mut goruntu => break match s { Ok(Err(e)) => format!("Görüntü akışı kesildi: {e}"), _ => KAPANDI.into() },
                 g = self.girdi.recv() => match g {
-                    Some(g) => {
+                    Some((g, izleyici_ms)) => {
                         if let Girdi::Kol(k) = &g {
                             if !izinler.oyun_kolu { continue; }
                             son_kol = Some(g.clone());
@@ -705,7 +802,8 @@ impl Gozetmen {
                             continue;
                         }
                         if !izinler.kontrol { continue; }
-                        if protokol::yaz(w, &Kontrol::Girdi(g)).await.is_err() { break KOPTU.into(); }
+                        let mesaj = if hiz { Kontrol::GirdiZamanli { girdi: g, izleyici_ms } } else { Kontrol::Girdi(g) };
+                        if protokol::yaz(w, &mesaj).await.is_err() { break KOPTU.into(); }
                     }
                     None => break KAPANDI.into(),
                 },
@@ -739,6 +837,12 @@ impl Gozetmen {
                             }
                         }
                     }
+                    Some(Kontrol::Yetenekler { surum }) if surum == protokol::HIZ_SURUM => {
+                        if protokol::yaz(w, &Kontrol::Yetenekler { surum }).await.is_err() { break KOPTU.into(); }
+                        hiz = true;
+                    }
+                    Some(Kontrol::Imlec(imlec)) => { let _ = olay.send(IzleyiciOlay::Imlec(imlec)).await; }
+                    Some(Kontrol::SaatCevap { izleyici_ms, .. }) if izleyici_ms == protokol::HIZ_SOR => {}
                     Some(Kontrol::SaatCevap { izleyici_ms, host_ms }) => {
                         let alim_ms = unix_ms();
                         self.saat_farki.store(zaman::saat_farki(izleyici_ms, host_ms, alim_ms), Ordering::Relaxed);

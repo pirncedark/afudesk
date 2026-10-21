@@ -6,6 +6,18 @@ use anyhow::Result;
 /// Send değil: bazı platform tutamaçları iş parçacığına bağlıdır; yakalayıcı
 /// kullanılacağı iş parçacığında oluşturulur.
 pub trait Yakalayici {
+    fn uyandirici_ayarla(
+        &mut self,
+        _bildirim: std::sync::Arc<(std::sync::Mutex<bool>, std::sync::Condvar)>,
+    ) {
+    }
+    fn alan_ayarla(&mut self, _alan: Option<crate::terminal::Alan>) {}
+    fn degisim_gudumlu(&self) -> bool {
+        false
+    }
+    fn kirpilmis(&self) -> bool {
+        false
+    }
     fn yakala(&mut self) -> Result<Goruntu>;
 
     /// Kareyle aynı ana ait host Unix zamanı (ms); yakalayıcılar bunu yakalama anında örtebilir.
@@ -22,6 +34,214 @@ fn unix_ms() -> u64 {
         .unwrap_or_default()
         .as_millis()
         .min(u64::MAX as u128) as u64
+}
+
+#[cfg(not(windows))]
+pub fn imlec() -> Option<crate::protokol::Imlec> {
+    None
+}
+
+#[cfg(windows)]
+pub fn imlec() -> Option<crate::protokol::Imlec> {
+    windows_imlec::oku()
+}
+
+/// Start each new viewer with a complete cursor shape, even on a reused worker thread.
+pub fn imlec_onbellegini_sifirla() {
+    #[cfg(windows)]
+    windows_imlec::sifirla();
+}
+
+#[cfg(windows)]
+mod windows_imlec {
+    use crate::protokol::Imlec;
+    use std::{
+        cell::RefCell,
+        mem::{size_of, zeroed},
+        ptr::null_mut,
+    };
+    use windows_sys::Win32::{Graphics::Gdi::*, UI::WindowsAndMessaging::*};
+
+    // Each capture/session thread owns its cache: a new viewer always gets its first shape.
+    thread_local! { static SON: RefCell<Option<(usize, Imlec)>> = const { RefCell::new(None) }; }
+    pub fn sifirla() {
+        SON.with(|son| *son.borrow_mut() = None);
+    }
+
+    struct BitEslemler(ICONINFO);
+    impl Drop for BitEslemler {
+        fn drop(&mut self) {
+            unsafe {
+                if !self.0.hbmColor.is_null() {
+                    DeleteObject(self.0.hbmColor);
+                }
+                if !self.0.hbmMask.is_null() {
+                    DeleteObject(self.0.hbmMask);
+                }
+            }
+        }
+    }
+    struct EkranDc(HDC);
+    impl Drop for EkranDc {
+        fn drop(&mut self) {
+            unsafe {
+                ReleaseDC(null_mut(), self.0);
+            }
+        }
+    }
+
+    fn bitmap(dc: HDC, kaynak: HBITMAP, en: u32, boy: u32) -> Option<Vec<u8>> {
+        let mut bilgi: BITMAPINFO = unsafe { zeroed() };
+        bilgi.bmiHeader.biSize = size_of::<BITMAPINFOHEADER>() as u32;
+        bilgi.bmiHeader.biWidth = en as i32;
+        bilgi.bmiHeader.biHeight = -(boy as i32);
+        bilgi.bmiHeader.biPlanes = 1;
+        bilgi.bmiHeader.biBitCount = 32;
+        bilgi.bmiHeader.biCompression = BI_RGB;
+        let mut veri = vec![0; en as usize * boy as usize * 4];
+        (unsafe {
+            GetDIBits(
+                dc,
+                kaynak,
+                0,
+                boy,
+                veri.as_mut_ptr().cast(),
+                &mut bilgi,
+                DIB_RGB_COLORS,
+            )
+        } == boy as i32)
+            .then_some(veri)
+    }
+
+    pub(super) fn rgba_yap(renk: &mut [u8], maske: &[u8]) {
+        let alfa_var = renk.chunks_exact(4).any(|p| p[3] != 0);
+        for (p, m) in renk.chunks_exact_mut(4).zip(maske.chunks_exact(4)) {
+            p.swap(0, 2);
+            if !alfa_var {
+                p[3] = if m[0] == 0 { 255 } else { 0 };
+            } else if p[3] > 0 && p[3] < 255 {
+                let a = p[3] as u32;
+                for kanal in &mut p[..3] {
+                    *kanal = ((*kanal as u32 * 255 + a / 2) / a).min(255) as u8;
+                }
+            }
+        }
+    }
+
+    fn sekil(handle: HCURSOR) -> Option<Imlec> {
+        let mut bilgi: ICONINFO = unsafe { zeroed() };
+        if unsafe { GetIconInfo(handle, &mut bilgi) } == 0 {
+            return None;
+        }
+        let bilgi = BitEslemler(bilgi);
+        let renkli = !bilgi.0.hbmColor.is_null();
+        let kaynak = if renkli {
+            bilgi.0.hbmColor
+        } else {
+            bilgi.0.hbmMask
+        };
+        let mut bm: BITMAP = unsafe { zeroed() };
+        if unsafe {
+            GetObjectW(
+                kaynak,
+                size_of::<BITMAP>() as i32,
+                (&mut bm as *mut BITMAP).cast(),
+            )
+        } == 0
+        {
+            return None;
+        }
+        let en = u32::try_from(bm.bmWidth).ok()?;
+        let boy = u32::try_from(bm.bmHeight).ok()? / if renkli { 1 } else { 2 };
+        // Bound allocations for malformed/custom cursor bitmaps.
+        if en == 0 || boy == 0 || en > 1024 || boy > 1024 {
+            return None;
+        }
+        let dc = EkranDc(unsafe { GetDC(null_mut()) });
+        if dc.0.is_null() {
+            return None;
+        }
+        let mut rgba;
+        if renkli {
+            rgba = bitmap(dc.0, kaynak, en, boy)?;
+            let maske = bitmap(dc.0, bilgi.0.hbmMask, en, boy)?;
+            rgba_yap(&mut rgba, &maske);
+        } else {
+            let maske = bitmap(dc.0, kaynak, en, boy * 2)?;
+            let (and, xor) = maske.split_at(en as usize * boy as usize * 4);
+            rgba = xor.to_vec();
+            for p in rgba.chunks_exact_mut(4) {
+                p[3] = 0;
+            }
+            rgba_yap(&mut rgba, and);
+            // XOR/inverted pixels have no exact alpha equivalent; show a visible white pixel.
+            for ((p, a), x) in rgba
+                .chunks_exact_mut(4)
+                .zip(and.chunks_exact(4))
+                .zip(xor.chunks_exact(4))
+            {
+                if a[0] != 0 && x[0] != 0 {
+                    p.copy_from_slice(&[255; 4]);
+                }
+            }
+        }
+        Some(Imlec {
+            x: 0.0,
+            y: 0.0,
+            gorunur: true,
+            gen: en,
+            yuk: boy,
+            sicak_x: bilgi.0.xHotspot,
+            sicak_y: bilgi.0.yHotspot,
+            rgba,
+        })
+    }
+
+    pub fn oku() -> Option<Imlec> {
+        let mut bilgi: CURSORINFO = unsafe { zeroed() };
+        bilgi.cbSize = size_of::<CURSORINFO>() as u32;
+        if unsafe { GetCursorInfo(&mut bilgi) } == 0 {
+            return None;
+        }
+        let gorunur = bilgi.flags & CURSOR_SHOWING != 0;
+        let en = unsafe { GetSystemMetrics(SM_CXSCREEN) }.max(2);
+        let boy = unsafe { GetSystemMetrics(SM_CYSCREEN) }.max(2);
+        SON.with(|son| {
+            let mut son = son.borrow_mut();
+            let mut sonuc = Imlec {
+                x: bilgi.ptScreenPos.x as f32 / (en - 1) as f32,
+                y: bilgi.ptScreenPos.y as f32 / (boy - 1) as f32,
+                gorunur,
+                gen: 0,
+                yuk: 0,
+                sicak_x: 0,
+                sicak_y: 0,
+                rgba: Vec::new(),
+            };
+            let handle = bilgi.hCursor as usize;
+            if gorunur && son.as_ref().map(|s| s.0) != Some(handle) {
+                let mut yeni = sekil(bilgi.hCursor)?;
+                yeni.x = sonuc.x;
+                yeni.y = sonuc.y;
+                sonuc = yeni.clone();
+                *son = Some((handle, yeni));
+            }
+            Some(sonuc)
+        })
+    }
+}
+
+#[cfg(all(test, windows))]
+mod imlec_testleri {
+    #[test]
+    fn renk_ve_maske_alfa_donusumu() {
+        let mut renk = vec![10, 20, 30, 0, 0, 0, 0, 0];
+        super::windows_imlec::rgba_yap(&mut renk, &[0, 0, 0, 0, 255, 255, 255, 0]);
+        assert_eq!(renk, [30, 20, 10, 255, 0, 0, 0, 0]);
+        let mut alfa = vec![25, 50, 100, 128];
+        super::windows_imlec::rgba_yap(&mut alfa, &[255; 4]);
+        assert_eq!(alfa, [199, 100, 50, 128]);
+    }
 }
 
 pub trait Enjektor: Send {
@@ -74,6 +294,9 @@ pub mod masaustu {
     #[cfg(windows)]
     pub struct WgcYakalayici {
         kare: std::sync::Arc<(std::sync::Mutex<Option<(Goruntu, u64)>>, std::sync::Condvar)>,
+        ayarlar: std::sync::Arc<std::sync::Mutex<WgcPaylasim>>,
+        son: Option<(Goruntu, u64)>,
+        alan_degisti: bool,
         _kontrol: windows_capture::capture::CaptureControl<WgcIsleyici, WgcHata>,
     }
 
@@ -81,19 +304,38 @@ pub mod masaustu {
     type WgcHata = Box<dyn std::error::Error + Send + Sync>;
 
     #[cfg(windows)]
+    #[derive(Default)]
+    struct WgcPaylasim {
+        alan: Option<crate::terminal::Alan>,
+        nesil: u64,
+        bildirim: Option<std::sync::Arc<(std::sync::Mutex<bool>, std::sync::Condvar)>>,
+    }
+
+    #[cfg(windows)]
     struct WgcIsleyici {
+        ayarlar: std::sync::Arc<std::sync::Mutex<WgcPaylasim>>,
+        onceki: Option<Goruntu>,
+        onceki_alan: Option<crate::terminal::Alan>,
         kare: std::sync::Arc<(std::sync::Mutex<Option<(Goruntu, u64)>>, std::sync::Condvar)>,
     }
 
     #[cfg(windows)]
     impl windows_capture::capture::GraphicsCaptureApiHandler for WgcIsleyici {
-        type Flags = std::sync::Arc<(std::sync::Mutex<Option<(Goruntu, u64)>>, std::sync::Condvar)>;
+        type Flags = (
+            std::sync::Arc<(std::sync::Mutex<Option<(Goruntu, u64)>>, std::sync::Condvar)>,
+            std::sync::Arc<std::sync::Mutex<WgcPaylasim>>,
+        );
         type Error = WgcHata;
 
         fn new(
             ctx: windows_capture::capture::Context<Self::Flags>,
         ) -> std::result::Result<Self, Self::Error> {
-            Ok(Self { kare: ctx.flags })
+            Ok(Self {
+                kare: ctx.flags.0,
+                ayarlar: ctx.flags.1,
+                onceki: None,
+                onceki_alan: None,
+            })
         }
 
         fn on_frame_arrived(
@@ -101,22 +343,90 @@ pub mod masaustu {
             frame: &mut windows_capture::frame::Frame,
             _kontrol: windows_capture::graphics_capture_api::InternalCaptureControl,
         ) -> std::result::Result<(), Self::Error> {
-            let genislik = frame.width();
-            let yukseklik = frame.height();
-            let yakalama_ms = unix_ms();
-            let tampon = frame.buffer()?;
+            let ayarlar = self.ayarlar.lock().unwrap();
+            let alan = ayarlar.alan;
+            let nesil = ayarlar.nesil;
+            let bildirim = ayarlar.bildirim.clone();
+            drop(ayarlar);
+            let tam = crate::terminal::Alan {
+                x: 0,
+                y: 0,
+                en: frame.width(),
+                boy: frame.height(),
+            };
+            let hedef =
+                crate::terminal::kesisim(alan.unwrap_or(tam), frame.width(), frame.height())?;
+            let yenile = self.onceki.as_ref().map(|g| (g.genislik, g.yukseklik))
+                != Some((hedef.en, hedef.boy))
+                || self.onceki_alan != Some(hedef);
+            let bolgeler = if yenile {
+                vec![hedef]
+            } else {
+                match frame.dirty_regions() {
+                    Ok(bolgeler) => bolgeler
+                        .into_iter()
+                        .filter_map(|r| {
+                            let x = r.x.max(hedef.x);
+                            let y = r.y.max(hedef.y);
+                            let sag =
+                                (r.x as i64 + r.width as i64).min(hedef.x as i64 + hedef.en as i64);
+                            let alt = (r.y as i64 + r.height as i64)
+                                .min(hedef.y as i64 + hedef.boy as i64);
+                            (sag > x as i64 && alt > y as i64).then_some(crate::terminal::Alan {
+                                x,
+                                y,
+                                en: (sag - x as i64) as u32,
+                                boy: (alt - y as i64) as u32,
+                            })
+                        })
+                        .collect(),
+                    // Older Windows has no DirtyRegions API: copy only the requested crop.
+                    Err(_) => vec![hedef],
+                }
+            };
+            if bolgeler.is_empty() {
+                return Ok(());
+            }
+            if yenile {
+                self.onceki = Some(Goruntu {
+                    genislik: hedef.en,
+                    yukseklik: hedef.boy,
+                    rgba: vec![0; hedef.en as usize * hedef.boy as usize * 4],
+                });
+            }
+            let goruntu = self.onceki.as_mut().unwrap();
             let mut duz = Vec::new();
-            let piksel = tampon.as_nopadding_buffer(&mut duz).to_vec();
+            for b in bolgeler {
+                let tampon = frame.buffer_crop(
+                    b.x as u32,
+                    b.y as u32,
+                    b.x as u32 + b.en,
+                    b.y as u32 + b.boy,
+                )?;
+                let piksel = tampon.as_nopadding_buffer(&mut duz);
+                let satir = b.en as usize * 4;
+                for y in 0..b.boy as usize {
+                    let bas = ((b.y - hedef.y) as usize + y) * hedef.en as usize * 4
+                        + (b.x - hedef.x) as usize * 4;
+                    goruntu.rgba[bas..bas + satir]
+                        .copy_from_slice(&piksel[y * satir..(y + 1) * satir]);
+                }
+            }
+            self.onceki_alan = Some(hedef);
+            // Area setters and publishers use the same lock order. An old-area callback
+            // must never publish into the newly selected area's queue.
+            let ayarlar = self.ayarlar.lock().unwrap();
+            if ayarlar.nesil != nesil {
+                return Ok(());
+            }
             let (kilit, kosul) = &*self.kare;
-            *kilit.lock().unwrap() = Some((
-                Goruntu {
-                    genislik,
-                    yukseklik,
-                    rgba: piksel,
-                },
-                yakalama_ms,
-            ));
+            *kilit.lock().unwrap() = Some((goruntu.clone(), unix_ms()));
+            drop(ayarlar);
             kosul.notify_all();
+            if let Some(bildirim) = bildirim {
+                *bildirim.0.lock().unwrap() = true;
+                bildirim.1.notify_all();
+            }
             Ok(())
         }
     }
@@ -134,19 +444,28 @@ pub mod masaustu {
             };
             let kare =
                 std::sync::Arc::new((std::sync::Mutex::new(None), std::sync::Condvar::new()));
+            let paylasim = std::sync::Arc::new(std::sync::Mutex::new(WgcPaylasim::default()));
+            let kirli = windows_capture::graphics_capture_api::GraphicsCaptureApi::is_dirty_region_supported().unwrap_or(false);
             let ayarlar = Settings::new(
                 Monitor::primary()?,
-                CursorCaptureSettings::Default,
+                CursorCaptureSettings::WithoutCursor,
                 DrawBorderSettings::Default,
                 SecondaryWindowSettings::Default,
                 MinimumUpdateIntervalSettings::Default,
-                DirtyRegionSettings::Default,
+                if kirli {
+                    DirtyRegionSettings::ReportOnly
+                } else {
+                    DirtyRegionSettings::Default
+                },
                 ColorFormat::Rgba8,
-                kare.clone(),
+                (kare.clone(), paylasim.clone()),
             );
             let kontrol = WgcIsleyici::start_free_threaded(ayarlar)?;
             Ok(Self {
                 kare,
+                ayarlar: paylasim,
+                son: None,
+                alan_degisti: false,
                 _kontrol: kontrol,
             })
         }
@@ -154,18 +473,65 @@ pub mod masaustu {
 
     #[cfg(windows)]
     impl Yakalayici for WgcYakalayici {
+        fn uyandirici_ayarla(
+            &mut self,
+            bildirim: std::sync::Arc<(std::sync::Mutex<bool>, std::sync::Condvar)>,
+        ) {
+            self.ayarlar.lock().unwrap().bildirim = Some(bildirim);
+        }
+        fn alan_ayarla(&mut self, alan: Option<crate::terminal::Alan>) {
+            let mut ayarlar = self.ayarlar.lock().unwrap();
+            if ayarlar.alan != alan {
+                ayarlar.alan = alan;
+                ayarlar.nesil = ayarlar.nesil.wrapping_add(1);
+                *self.kare.0.lock().unwrap() = None;
+                self.son = None;
+                self.alan_degisti = true;
+            }
+        }
+        fn degisim_gudumlu(&self) -> bool {
+            true
+        }
+        fn kirpilmis(&self) -> bool {
+            self.ayarlar.lock().unwrap().alan.is_some()
+        }
+
         fn yakala(&mut self) -> Result<Goruntu> {
             self.yakala_zamanli().map(|(goruntu, _)| goruntu)
         }
 
         fn yakala_zamanli(&mut self) -> Result<(Goruntu, u64)> {
             let (kilit, kosul) = &*self.kare;
-            let kare = kilit.lock().unwrap();
-            let (kare, _) = kosul
-                .wait_timeout_while(kare, std::time::Duration::from_millis(500), |v| v.is_none())
-                .unwrap();
-            kare.clone()
-                .ok_or_else(|| anyhow::anyhow!("WGC ilk kareyi 500 ms içinde vermedi"))
+            let mut kare = kilit.lock().unwrap();
+            if kare.is_none() && self.alan_degisti {
+                // A static desktop need not emit another WGC frame after a crop change.
+                // Seed that crop once; later WGC events replace it with the dirty-region buffer.
+                drop(kare);
+                let mut ekran = XcapYakalayici::new()?;
+                let g = ekran.yakala()?;
+                let alan = self.ayarlar.lock().unwrap().alan;
+                let g = match alan {
+                    Some(a) => crate::terminal::kirp(&g, a)?,
+                    None => g,
+                };
+                self.son = Some((g, unix_ms()));
+                kare = kilit.lock().unwrap();
+            }
+            self.alan_degisti = false;
+            if kare.is_none() && self.son.is_none() {
+                kare = kosul
+                    .wait_timeout_while(kare, std::time::Duration::from_millis(500), |v| {
+                        v.is_none()
+                    })
+                    .unwrap()
+                    .0;
+            }
+            if let Some(yeni) = kare.take() {
+                self.son = Some(yeni);
+            }
+            self.son
+                .clone()
+                .ok_or_else(|| anyhow::anyhow!("Ekran alınamadı. Yeniden bağlan."))
         }
     }
 
@@ -337,6 +703,44 @@ pub mod masaustu {
             fn SendInput(count: u32, inputs: *const Input, size: i32) -> u32;
         }
 
+        fn unicode_inputs(metin: &str) -> Vec<Input> {
+            metin
+                .encode_utf16()
+                .flat_map(|scan| {
+                    [0x0004, 0x0006].map(|flags| {
+                        let mut input: Input = unsafe { std::mem::zeroed() };
+                        input.kind = 1;
+                        input.data.keyboard = KeyboardInput {
+                            vk: 0,
+                            scan,
+                            flags,
+                            time: 0,
+                            extra: 0,
+                        };
+                        input
+                    })
+                })
+                .collect()
+        }
+        pub fn metin(metin: &str) -> anyhow::Result<()> {
+            let inputs = unicode_inputs(metin);
+            if inputs.is_empty() {
+                return Ok(());
+            }
+            let sent = unsafe {
+                SendInput(
+                    inputs.len() as u32,
+                    inputs.as_ptr(),
+                    std::mem::size_of::<Input>() as i32,
+                )
+            };
+            anyhow::ensure!(
+                sent as usize == inputs.len(),
+                "Metin gonderilemedi. Yeniden dene."
+            );
+            Ok(())
+        }
+
         pub fn send(pressed: bool) -> anyhow::Result<()> {
             // Sıfırla: INPUT union padding baytları da başlatılır.
             let mut input: Input = unsafe { std::mem::zeroed() };
@@ -356,6 +760,22 @@ pub mod masaustu {
                 std::io::Error::last_os_error()
             );
             Ok(())
+        }
+        #[cfg(test)]
+        #[test]
+        fn unicode_paketleri_surrogate_ve_tus_birakma() {
+            let paketler = unicode_inputs("\u{015f}\u{1f600}");
+            assert_eq!(paketler.len(), 6);
+            let beklenen = [0x015f, 0xd83d, 0xde00];
+            for (cift, birim) in paketler.chunks_exact(2).zip(beklenen) {
+                unsafe {
+                    assert_eq!(cift[0].data.keyboard.scan, birim);
+                    assert_eq!(cift[0].data.keyboard.vk, 0);
+                    assert_eq!(cift[0].data.keyboard.flags, 4);
+                    assert_eq!(cift[1].data.keyboard.flags, 6);
+                }
+            }
+            assert!(unicode_inputs("").is_empty());
         }
         #[cfg(test)]
         #[test]
@@ -514,6 +934,9 @@ pub mod masaustu {
                 }
                 Girdi::Metin(m) => {
                     if !m.is_empty() {
+                        #[cfg(windows)]
+                        numpad_enter::metin(m)?;
+                        #[cfg(not(windows))]
                         self.e.text(m)?;
                     }
                 }

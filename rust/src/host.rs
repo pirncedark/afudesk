@@ -30,9 +30,9 @@ pub const ONAY_SURESI: Duration = Duration::from_secs(60);
 pub const DEVAM_SURESI: Duration = Duration::from_secs(120);
 /// Kod üretmeden önce relay'e bağlanmak için beklenen en uzun süre.
 const CEVRIMICI_BEKLE: Duration = Duration::from_secs(8);
-pub const HEDEF_FPS: u64 = 15;
+pub const HEDEF_FPS: u64 = 60;
 /// Aynı anda yolda olabilecek kare sayısı; aşılırsa en eski kare iptal edilir.
-pub const AZAMI_UCUSTA: usize = 3;
+pub const AZAMI_UCUSTA: usize = 2;
 pub const AZAMI_PAROLA_DENEMESI: usize = 3;
 /// Uygulama kapanış kodu: "ağ değişti, geri döneceğim" — oturum devam bekler.
 pub const KOPUS_KODU: u32 = 2;
@@ -41,6 +41,60 @@ pub const KOPUS_KODU: u32 = 2;
 struct YayinAyari {
     kalite: std::sync::atomic::AtomicU8,
     fps: std::sync::atomic::AtomicU32,
+}
+
+type Uyandirici = Arc<(std::sync::Mutex<bool>, std::sync::Condvar)>;
+
+fn uyandir(u: &Uyandirici) {
+    *u.0.lock().unwrap_or_else(|e| e.into_inner()) = true;
+    u.1.notify_all();
+}
+
+/// Bir yazılan, bir bekleyen kare. Bekleyen deltalar döşeme bazında birleşir;
+/// son değişiklikten sonra yeni kare gelmese bile piksel kaybolmaz.
+#[derive(Default)]
+struct KareKuyrugu {
+    son: std::sync::Mutex<Option<(protokol::KarePaketi, u64)>>,
+    hazir: tokio::sync::Notify,
+    birlesen: std::sync::atomic::AtomicU32,
+}
+
+impl KareKuyrugu {
+    fn koy(&self, mut p: protokol::KarePaketi, nesil: u64) {
+        let mut son = self.son.lock().unwrap();
+        if let Some((eski, n)) = son.take() {
+            if n == nesil
+                && !p.kare.tam
+                && (eski.kare.genislik, eski.kare.yukseklik) == (p.kare.genislik, p.kare.yukseklik)
+            {
+                let mut harita: std::collections::BTreeMap<_, _> = eski
+                    .kare
+                    .dosemeler
+                    .into_iter()
+                    .map(|d| ((d.x, d.y), d))
+                    .collect();
+                for d in p.kare.dosemeler.drain(..) {
+                    harita.insert((d.x, d.y), d);
+                }
+                p.kare.dosemeler = harita.into_values().collect();
+                p.kare.tam |= eski.kare.tam;
+            }
+            self.birlesen.fetch_add(1, Ordering::Relaxed);
+        }
+        *son = Some((p, nesil));
+        drop(son);
+        self.hazir.notify_one();
+    }
+
+    async fn al(&self) -> (protokol::KarePaketi, u64) {
+        loop {
+            let hazir = self.hazir.notified();
+            if let Some(k) = self.son.lock().unwrap().take() {
+                return k;
+            }
+            hazir.await;
+        }
+    }
 }
 
 fn terminal_erisimi(kontrol: bool, destek: bool) -> Result<()> {
@@ -80,7 +134,7 @@ pub fn uyarla(kalite: u8, fps: u32, rtt_ms: u32, iptal: u32) -> (u8, u32) {
             fps.saturating_sub(3).max(8),
         )
     } else if rtt_ms < 80 {
-        ((kalite + 5).min(80), (fps + 2).min(24))
+        ((kalite + 5).min(80), (fps + 2).min(60))
     } else {
         (kalite, fps)
     }
@@ -787,20 +841,27 @@ async fn oturum(
     let terminal2 = terminal.clone();
     let (terminal_hata_tx, mut terminal_hata_rx) = mpsc::channel::<u64>(1);
     let terminal_girdi_hata = terminal_hata_tx.clone();
-    let (nesil_tx, mut nesil_rx) = tokio::sync::watch::channel(0u64);
-    let (kare_tx, mut kare_rx) = mpsc::channel(2);
+    let (nesil_tx, nesil_rx) = tokio::sync::watch::channel(0u64);
+    let kareler = Arc::new(KareKuyrugu::default());
+    let kare_tx = kareler.clone();
+    let uyari: Uyandirici = Arc::new((std::sync::Mutex::new(false), std::sync::Condvar::new()));
+    let uyari2 = uyari.clone();
+    let hiz = Arc::new(AtomicBool::new(false));
+    let hiz2 = hiz.clone();
+    let son_girdi = Arc::new(std::sync::Mutex::new((0u64, 0u64)));
+    let son_girdi2 = son_girdi.clone();
     let ayar = Arc::new(YayinAyari {
         kalite: std::sync::atomic::AtomicU8::new(70),
         fps: std::sync::atomic::AtomicU32::new(HEDEF_FPS as u32),
     });
     let ayar2 = ayar.clone();
-    let (iptal_tx, iptal_rx) = std::sync::mpsc::channel::<Vec<(u32, u32)>>();
     let (boyut_tx, boyut_rx) = oneshot::channel::<Result<(u32, u32), String>>();
     let yayin_dur = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let dur2 = yayin_dur.clone();
     let fab2 = fabrika.clone();
     std::thread::spawn(move || {
         let ilk = fab2.yakalayici().and_then(|mut y| {
+            y.uyandirici_ayarla(uyari2.clone());
             let (g, yakalama_ms) = y.yakala_zamanli()?;
             Ok((y, g, yakalama_ms))
         });
@@ -817,52 +878,80 @@ async fn oturum(
         let mut kodlayici = Kodlayici::new(70);
         let mut son_nesil = 0;
         let mut g = Some((ilk, ilk_yakalama_ms));
+        let mut son_yakalama = std::time::Instant::now() - Duration::from_secs(1);
         while !dur2.load(std::sync::atomic::Ordering::Relaxed) {
-            let t0 = std::time::Instant::now();
-            let fps = ayar2.fps.load(std::sync::atomic::Ordering::Relaxed).max(1) as u64;
-            let aralik = Duration::from_millis(1000 / fps);
-            kodlayici.kalite_ayarla(ayar2.kalite.load(std::sync::atomic::Ordering::Relaxed));
-            while let Ok(konumlar) = iptal_rx.try_recv() {
-                kodlayici.yeniden_gonder(konumlar);
+            let fps = ayar2.fps.load(Ordering::Relaxed).clamp(1, 60);
+            let aralik = Duration::from_secs_f64(1.0 / fps as f64);
+            if g.is_none() {
+                let mut bekliyor = uyari2.0.lock().unwrap();
+                while !*bekliyor && yakalayici.degisim_gudumlu() && !dur2.load(Ordering::Relaxed) {
+                    bekliyor = uyari2
+                        .1
+                        .wait_timeout(bekliyor, Duration::from_secs(1))
+                        .unwrap()
+                        .0;
+                }
+                if dur2.load(Ordering::Relaxed) {
+                    break;
+                }
+                while let Some(kalan) = aralik.checked_sub(son_yakalama.elapsed()) {
+                    bekliyor = uyari2.1.wait_timeout(bekliyor, kalan).unwrap().0;
+                }
+                *bekliyor = false;
             }
+            son_yakalama = std::time::Instant::now();
+            kodlayici.kalite_ayarla(ayar2.kalite.load(Ordering::Relaxed));
+            kodlayici.kayipsiz_ayarla(hiz2.load(Ordering::Acquire));
+            let (alan, nesil) = {
+                let mut t = terminal2.lock().unwrap();
+                let alan = t.oturum.as_ref().map(|o| {
+                    o.alan()
+                        .and_then(|a| crate::terminal::kesisim(a, t.ekran.0, t.ekran.1))
+                });
+                let alan = match alan {
+                    Some(Ok(a)) => Some(a),
+                    Some(Err(_)) => {
+                        t.alan = None;
+                        let _ = terminal_hata_tx.try_send(t.nesil);
+                        continue;
+                    }
+                    None => None,
+                };
+                (alan, t.nesil)
+            };
+            kodlayici.terminal_ayarla(alan.is_some());
+            yakalayici.alan_ayarla(alan);
             let (goruntu, yakalama_ms) = match g.take() {
                 Some(x) => x,
                 None => match yakalayici.yakala_zamanli() {
                     Ok((x, yakalama_ms)) => (x, yakalama_ms),
                     Err(_) => {
-                        std::thread::sleep(aralik);
                         continue;
                     }
                 },
             };
-            let hazir = {
+            let goruntu = {
                 let mut t = terminal2.lock().unwrap();
-                t.ekran = (goruntu.genislik, goruntu.yukseklik);
-                let nesil = t.nesil;
-                if let Some(o) = &t.oturum {
-                    match o.alan().and_then(|a| {
-                        let a = crate::terminal::kesisim(a, goruntu.genislik, goruntu.yukseklik)?;
-                        crate::terminal::kirp(&goruntu, a).map(|g| (g, a))
-                    }) {
-                        Ok((g, a)) => {
-                            t.alan = Some(a);
-                            Some((g, nesil))
-                        }
-                        Err(_) => {
-                            // Hata anında masaüstünü terminal karesi diye yayınlama.
-                            t.alan = None;
-                            let _ = terminal_hata_tx.try_send(nesil);
-                            None
+                if t.nesil != nesil {
+                    uyandir(&uyari2);
+                    continue;
+                }
+                if !yakalayici.kirpilmis() {
+                    t.ekran = (goruntu.genislik, goruntu.yukseklik);
+                }
+                t.alan = alan;
+                match alan {
+                    Some(a) if !yakalayici.kirpilmis() => {
+                        match crate::terminal::kirp(&goruntu, a) {
+                            Ok(g) => g,
+                            Err(_) => {
+                                let _ = terminal_hata_tx.try_send(nesil);
+                                continue;
+                            }
                         }
                     }
-                } else {
-                    t.alan = None;
-                    Some((goruntu, nesil))
+                    _ => goruntu,
                 }
-            };
-            let Some((goruntu, nesil)) = hazir else {
-                std::thread::sleep(aralik);
-                continue;
             };
             if nesil != son_nesil {
                 kodlayici.tam_kare_iste();
@@ -871,12 +960,20 @@ async fn oturum(
             let goruntu = crate::goruntu::yayin_boyutu(goruntu);
             if let Ok(Some(mut k)) = kodlayici.kodla(&goruntu) {
                 k.yakalama_ms = yakalama_ms;
-                if kare_tx.blocking_send((k, nesil)).is_err() {
-                    break;
-                }
-            }
-            if let Some(kalan) = aralik.checked_sub(t0.elapsed()) {
-                std::thread::sleep(kalan);
+                let (girdi_ms, host_girdi_ms) = *son_girdi2.lock().unwrap();
+                let (girdi_ms, host_girdi_ms) = if host_girdi_ms <= yakalama_ms {
+                    (girdi_ms, host_girdi_ms)
+                } else {
+                    (0, 0)
+                };
+                kare_tx.koy(
+                    protokol::KarePaketi {
+                        kare: k,
+                        girdi_ms,
+                        host_girdi_ms,
+                    },
+                    nesil,
+                );
             }
         }
     });
@@ -960,71 +1057,40 @@ async fn oturum(
         })
         .await;
 
-    // Her kare kendi tek yönlü akışında: bir karenin kaybı sonrakileri bekletmez.
-    // Yolda çok kare birikirse en eskisi iptal edilir, döşemeleri yeniden gönderilir.
+    // Bir kalıcı akış + bir birleşen bekleyen kare; yarım mesaj iptal edilmez.
     let c2 = c.clone();
+    let hiz3 = hiz.clone();
     let yayin = tokio::spawn(async move {
-        struct Ucusta {
-            nesil: u64,
-            konumlar: Vec<(u32, u32)>,
-            iptal: Option<oneshot::Sender<()>>,
-            gorev: tokio::task::JoinHandle<()>,
-        }
-        let mut ucusta: std::collections::VecDeque<Ucusta> = Default::default();
-        let mut iptal_sayisi = 0u32;
+        let mut akis: Option<GonderAkisi> = None;
         let mut olcum = tokio::time::interval(Duration::from_secs(1));
-        olcum.tick().await;
         loop {
             tokio::select! {
-                k = kare_rx.recv() => {
-                    let Some((k, nesil)) = k else { break };
+                (p, nesil) = kareler.al() => {
                     if nesil != *nesil_rx.borrow() { continue; }
-                    ucusta.retain(|u| !u.gorev.is_finished());
-                    while ucusta.len() >= AZAMI_UCUSTA {
-                        let mut eski = ucusta.pop_front().expect("dolu");
-                        if let Some(i) = eski.iptal.take() {
-                            let _ = i.send(());
-                        }
-                        iptal_sayisi += 1;
-                        let _ = iptal_tx.send(eski.konumlar);
+                    if hiz3.load(Ordering::Acquire) {
+                        let w = match akis.as_mut() {
+                            Some(w) => w,
+                            None => akis.insert(c2.open_uni().await?),
+                        };
+                        protokol::yaz(w, &p).await?;
+                    } else {
+                        let mut w = c2.open_uni().await?;
+                        protokol::yaz(&mut w, &p.kare).await?;
+                        w.finish()?;
                     }
-                    let konumlar = k.dosemeler.iter().map(|d| (d.x, d.y)).collect();
-                    let mut akis = c2.open_uni().await?;
-                    let (iptal, mut iptal_al) = oneshot::channel::<()>();
-                    let gorev = tokio::spawn(async move {
-                        tokio::select! {
-                            r = async { protokol::yaz(&mut akis, &k).await?; akis.finish()?; Ok::<_, anyhow::Error>(()) } => { let _ = r; }
-                            _ = &mut iptal_al => { let _ = akis.reset(0u32.into()); }
-                        }
-                    });
-                    ucusta.push_back(Ucusta { nesil, konumlar, iptal: Some(iptal), gorev });
-                }
-                degisti = nesil_rx.changed() => {
-                    if degisti.is_err() { break; }
-                    let simdiki = *nesil_rx.borrow_and_update();
-                    ucusta.retain_mut(|eski| {
-                        if eski.nesil == simdiki { return true; }
-                        if let Some(i) = eski.iptal.take() { let _ = i.send(()); }
-                        eski.gorev.abort();
-                        false
-                    });
                 }
                 _ = olcum.tick() => {
                     let rtt = ag::rtt(&c2).as_millis().min(u32::MAX as u128) as u32;
                     let (k, f) = uyarla(
-                        ayar.kalite.load(std::sync::atomic::Ordering::Relaxed),
-                        ayar.fps.load(std::sync::atomic::Ordering::Relaxed),
-                        rtt,
-                        iptal_sayisi,
+                        ayar.kalite.load(Ordering::Relaxed),
+                        ayar.fps.load(Ordering::Relaxed), rtt,
+                        kareler.birlesen.swap(0, Ordering::Relaxed),
                     );
-                    ayar.kalite.store(k, std::sync::atomic::Ordering::Relaxed);
-                    ayar.fps.store(f, std::sync::atomic::Ordering::Relaxed);
-                    iptal_sayisi = 0;
+                    ayar.kalite.store(k, Ordering::Relaxed);
+                    ayar.fps.store(f, Ordering::Relaxed);
                 }
+                _ = c2.closed() => break,
             }
-        }
-        for u in ucusta {
-            u.gorev.abort();
         }
         Ok::<_, anyhow::Error>(())
     });
@@ -1097,8 +1163,41 @@ async fn oturum(
     let mut yol_olcum = tokio::time::interval(Duration::from_secs(1));
     let mut son_yol = (String::new(), String::new());
     let mut google_denetim = tokio::time::interval(Duration::from_secs(30));
+    let (imlec_tx, mut imlec_rx) = mpsc::channel(1);
+    if fabrika.terminal_destegi() {
+        let dur = yayin_dur.clone();
+        let hazir = hiz.clone();
+        std::thread::spawn(move || {
+            crate::platform::imlec_onbellegini_sifirla();
+            let mut onceki = None;
+            while !dur.load(Ordering::Relaxed) {
+                if hazir.load(Ordering::Acquire) {
+                    if let Some(i) = crate::platform::imlec() {
+                        if onceki.as_ref() != Some(&i) {
+                            onceki = Some(i.clone());
+                            if imlec_tx.blocking_send(i).is_err() {
+                                break;
+                            }
+                        }
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(16));
+            }
+        });
+    }
     let sonuc = loop {
         tokio::select! {
+            Some(mut i) = imlec_rx.recv() => {
+                {
+                    let t = terminal.lock().unwrap();
+                    if let Some(a) = t.alan {
+                        i.x = (i.x * t.ekran.0 as f32 - a.x as f32) / a.en as f32;
+                        i.y = (i.y * t.ekran.1 as f32 - a.y as f32) / a.boy as f32;
+                        i.gorunur &= (0.0..=1.0).contains(&i.x) && (0.0..=1.0).contains(&i.y);
+                    }
+                }
+                if protokol::yaz(&mut w, &Kontrol::Imlec(i)).await.is_err() { break kopus("Bağlantı koptu."); }
+            }
             _ = &mut *durdur => { c.close(0u32.into(), b"durdu"); break Oturum::Durdur; }
             _ = google_denetim.tick(), if google_kanit.is_some() => {
                 let sonuc = match crate::google_baglanti::bul(yerel_kimlik) {
@@ -1149,11 +1248,17 @@ async fn oturum(
                         nesil_tx.send_replace(t.nesil);
                         Ok(())
                     };
+                    uyandir(&uyari);
                     let acik = terminal.lock().unwrap().oturum.is_some();
                     let mesaj = Kontrol::TerminalDurum { acik, hata: sonuc.err().map(|e| e.to_string()) };
                     if protokol::yaz(&mut w, &mesaj).await.is_err() { break kopus("Bağlantı koptu."); }
                 }
-                Some(Kontrol::Girdi(mut g)) => {
+                Some(Kontrol::Girdi(_)) | Some(Kontrol::GirdiZamanli { .. }) => {
+                    let (mut g, izleyici_ms) = match m.unwrap() {
+                        Kontrol::Girdi(g) => (g, 0),
+                        Kontrol::GirdiZamanli { girdi, izleyici_ms } => (girdi, izleyici_ms),
+                        _ => unreachable!(),
+                    };
                     if let protokol::Girdi::Kol(k) = &g {
                         if sanal_kol.is_none() || !sira_yeni(kol_siralari.get(&k.slot).copied(), k.sira) { continue; }
                         kol_siralari.insert(k.slot, k.sira);
@@ -1180,7 +1285,19 @@ async fn oturum(
                             }
                         }
                     }
-                    if let Some(e) = enjektor.as_mut() { let _ = tokio::task::block_in_place(|| e.uygula(&g)); }
+                    if let Some(e) = enjektor.as_mut() {
+                        if tokio::task::block_in_place(|| e.uygula(&g)).is_ok() {
+                            *son_girdi.lock().unwrap() = (izleyici_ms, unix_ms());
+                            if !matches!(g, protokol::Girdi::FareKonum { .. }) { uyandir(&uyari); }
+                        }
+                    }
+                }
+                Some(Kontrol::Yetenekler { surum }) if surum == protokol::HIZ_SURUM => {
+                    hiz.store(true, Ordering::Release);
+                    uyandir(&uyari);
+                }
+                Some(Kontrol::SaatSor { izleyici_ms }) if izleyici_ms == protokol::HIZ_SOR => {
+                    let _ = protokol::yaz(&mut w, &Kontrol::Yetenekler { surum: protokol::HIZ_SURUM }).await;
                 }
                 Some(Kontrol::SaatSor { izleyici_ms }) => {
                     let host_ms = unix_ms();
@@ -1202,6 +1319,7 @@ async fn oturum(
                     t.nesil += 1;
                     nesil_tx.send_replace(t.nesil);
                 }
+                uyandir(&uyari);
                 let mesaj = Kontrol::TerminalDurum {
                     acik: false, hata: Some("Terminal görüntülenemedi, yeniden seç.".into()),
                 };
@@ -1248,6 +1366,7 @@ async fn oturum(
     eprintln!("[host] oturum bitti: kapanis={:?}", c.close_reason());
     okuyucu.abort();
     yayin_dur.store(true, std::sync::atomic::Ordering::Relaxed);
+    uyandir(&uyari);
     yayin.abort();
     dosyalar.abort();
     if let Some(s) = sanal_kol.as_mut() {
@@ -1298,12 +1417,73 @@ mod uyarlama_testleri {
     #[test]
     fn iyi_agda_yukselir_ust_sinirda_durur() {
         assert_eq!(uyarla(70, 15, 20, 0), (75, 17));
-        assert_eq!(uyarla(79, 23, 20, 0), (80, 24));
-        assert_eq!(uyarla(80, 24, 20, 0), (80, 24));
+        assert_eq!(uyarla(79, 59, 20, 0), (80, 60));
+        assert_eq!(uyarla(80, 60, 20, 0), (80, 60));
     }
 
     #[test]
     fn orta_agda_sabit() {
         assert_eq!(uyarla(60, 12, 120, 0), (60, 12));
+    }
+}
+
+#[cfg(test)]
+mod kare_kuyrugu_testleri {
+    use super::*;
+
+    fn paket(sira: u64, tam: bool, konumlar: &[(u32, u8)]) -> protokol::KarePaketi {
+        protokol::KarePaketi {
+            kare: protokol::Kare {
+                sira,
+                genislik: 128,
+                yukseklik: 64,
+                tam,
+                dosemeler: konumlar
+                    .iter()
+                    .map(|&(x, v)| protokol::Doseme {
+                        x,
+                        y: 0,
+                        gen: 64,
+                        yuk: 64,
+                        jpeg: vec![v],
+                    })
+                    .collect(),
+                yakalama_ms: sira,
+            },
+            girdi_ms: sira,
+            host_girdi_ms: sira,
+        }
+    }
+
+    #[tokio::test]
+    async fn son_delta_bekleyen_tam_kareyle_birlesir() {
+        let q = KareKuyrugu::default();
+        q.koy(paket(1, true, &[(0, 1), (64, 2)]), 0);
+        q.koy(paket(2, false, &[(0, 3)]), 0);
+        let (p, n) = q.al().await;
+        assert_eq!(n, 0);
+        assert!(p.kare.tam);
+        assert_eq!(p.kare.sira, 2);
+        assert_eq!(p.girdi_ms, 2);
+        assert_eq!(
+            p.kare
+                .dosemeler
+                .iter()
+                .map(|d| (d.x, d.jpeg[0]))
+                .collect::<Vec<_>>(),
+            [(0, 3), (64, 2)]
+        );
+        assert!(q.son.lock().unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn yeni_terminal_nesli_eski_dosemeleri_tasimaz() {
+        let q = KareKuyrugu::default();
+        q.koy(paket(1, true, &[(64, 2)]), 0);
+        q.koy(paket(2, true, &[(0, 3)]), 1);
+        let (p, n) = q.al().await;
+        assert_eq!(n, 1);
+        assert_eq!(p.kare.dosemeler.len(), 1);
+        assert_eq!(p.kare.dosemeler[0].x, 0);
     }
 }

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 /// Aynı oturumun kırpılmış karelerini gösterir; yeni bağlantı oluşturmaz.
 class TerminalModu extends StatelessWidget {
   final ui.Image? kare;
+  final UzakGoruntu? goruntu;
   final Widget yaziAlani;
   final bool ctrl;
   final bool klavyeAcik;
@@ -17,7 +18,8 @@ class TerminalModu extends StatelessWidget {
 
   const TerminalModu({
     super.key,
-    required this.kare,
+    this.kare,
+    this.goruntu,
     required this.yaziAlani,
     required this.ctrl,
     required this.klavyeAcik,
@@ -64,14 +66,13 @@ class TerminalModu extends StatelessWidget {
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, c) {
-                    final k = kare;
-                    if (k == null) {
+                    final k = goruntu;
+                    final gen = k?.width ?? kare?.width;
+                    final yuk = k?.height ?? kare?.height;
+                    if (gen == null || yuk == null) {
                       return const Center(child: CircularProgressIndicator());
                     }
-                    final alan = Size(
-                      c.maxWidth,
-                      c.maxWidth * k.height / k.width,
-                    );
+                    final alan = Size(c.maxWidth, c.maxWidth * yuk / gen);
                     // reverse keeps the prompt visible when the software keyboard shrinks
                     // the viewport; the user can scroll back to earlier lines.
                     return SingleChildScrollView(
@@ -112,12 +113,16 @@ class TerminalModu extends StatelessWidget {
                           child: SizedBox(
                             width: alan.width,
                             height: alan.height,
-                            child: RawImage(
-                              key: const Key('terminal_kare'),
-                              image: k,
-                              fit: BoxFit.fill,
-                              filterQuality: FilterQuality.medium,
-                            ),
+                            child: k != null
+                                ? k.widget(
+                                    key: const Key('terminal_kare'),
+                                    fit: BoxFit.fill,
+                                  )
+                                : RawImage(
+                                    key: const Key('terminal_kare'),
+                                    image: kare,
+                                    fit: BoxFit.fill,
+                                  ),
                           ),
                         ),
                       ),
@@ -174,4 +179,70 @@ class TerminalModu extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Immutable tile snapshot. Only changed tiles are uploaded to the GPU.
+class UzakGoruntu {
+  final int width, height;
+  final Map<Offset, ui.Image> tiles;
+  final ui.Image? cursor;
+  final Offset cursorPosition, hotspot;
+  final bool cursorVisible;
+  const UzakGoruntu(
+    this.width,
+    this.height,
+    this.tiles, {
+    this.cursor,
+    this.cursorPosition = Offset.zero,
+    this.hotspot = Offset.zero,
+    this.cursorVisible = false,
+  });
+  Widget widget({Key? key, BoxFit fit = BoxFit.contain}) => CustomPaint(
+    key: key,
+    painter: _ParcaBoyaci(this, fit),
+    size: Size.infinite,
+  );
+  void dispose() {
+    for (final image in tiles.values.toSet()) {
+      image.dispose();
+    }
+  }
+}
+
+class _ParcaBoyaci extends CustomPainter {
+  final UzakGoruntu goruntu;
+  final BoxFit fit;
+  _ParcaBoyaci(this.goruntu, this.fit);
+  @override
+  void paint(Canvas canvas, Size size) {
+    final src = Size(goruntu.width.toDouble(), goruntu.height.toDouble());
+    if (src.isEmpty || size.isEmpty) return;
+    final fitted = applyBoxFit(fit, src, size);
+    final dst = Alignment.center.inscribe(
+      fitted.destination,
+      Offset.zero & size,
+    );
+    canvas.save();
+    canvas.clipRect(dst);
+    canvas.translate(dst.left, dst.top);
+    canvas.scale(dst.width / src.width, dst.height / src.height);
+    final paint = Paint()..filterQuality = FilterQuality.none;
+    for (final tile in goruntu.tiles.entries) {
+      canvas.drawImage(tile.value, tile.key, paint);
+    }
+    if (goruntu.cursorVisible && goruntu.cursor != null) {
+      canvas.drawImage(
+        goruntu.cursor!,
+        Offset(
+          goruntu.cursorPosition.dx * src.width - goruntu.hotspot.dx,
+          goruntu.cursorPosition.dy * src.height - goruntu.hotspot.dy,
+        ),
+        paint,
+      );
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _ParcaBoyaci oldDelegate) => true;
 }

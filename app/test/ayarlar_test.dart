@@ -1,5 +1,6 @@
 import 'package:afudesk/guncelleme.dart';
 import 'package:afudesk/main.dart';
+import 'package:afudesk/motor.dart';
 import 'package:afudesk/sayfalar/ayarlar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -28,6 +29,24 @@ class AyarlarGuncelleyici extends Guncelleyici {
 }
 
 void main() {
+  testWidgets('bağlantı ölçümü yalnız bilgi bölümü açılınca görünür', (
+    t,
+  ) async {
+    BaglantiOlcumu.ortalamaMs.value = 24;
+    addTearDown(() => BaglantiOlcumu.ortalamaMs.value = null);
+    await t.pumpWidget(
+      MaterialApp(home: AyarlarSayfasi(servis: AyarlarGuncelleyici())),
+    );
+    await t.pumpAndSettle();
+    expect(find.text('Tuş → ekran ortalaması: 24 ms'), findsNothing);
+    await t.tap(find.text('Bağlantı bilgisi'));
+    await t.pumpAndSettle();
+    expect(find.text('Tuş → ekran ortalaması: 24 ms'), findsOneWidget);
+    BaglantiOlcumu.ortalamaMs.value = 31;
+    await t.pump();
+    expect(find.text('Tuş → ekran ortalaması: 31 ms'), findsOneWidget);
+  });
+
   final yeni = Guncelleme(
     '1.9.2',
     Uri.parse('https://github.com/paket'),
