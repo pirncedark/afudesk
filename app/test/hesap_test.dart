@@ -77,7 +77,7 @@ void main() {
       cihazlar: [const Cihaz(id: 'ev', ad: 'Ev bilgisayarı', cevrimici: true)],
     );
     await ac(t, servis);
-    await t.tap(find.byTooltip('Ayarlar'));
+    await t.tap(find.byTooltip('Hesap cihazları'));
     await t.pumpAndSettle();
     await t.tap(find.text('Çıkar'));
     await t.pumpAndSettle();

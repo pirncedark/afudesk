@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../tema.dart';
+import '../bilesenler/guncelle_karti.dart';
 import 'hesap_servisi.dart';
 import 'google_hatasi.dart';
 
@@ -110,12 +111,13 @@ class _HesapSayfasiDurum extends State<HesapSayfasi> {
         actions: [
           if (hesap != null)
             IconButton(
-              tooltip: _ayarlar ? 'Bilgisayarlarım' : 'Ayarlar',
+              tooltip: _ayarlar ? 'Bilgisayarlarım' : 'Hesap cihazları',
               onPressed: _mesgul
                   ? null
                   : () => setState(() => _ayarlar = !_ayarlar),
-              icon: Icon(_ayarlar ? Icons.computer : Icons.settings_outlined),
+              icon: Icon(_ayarlar ? Icons.computer : Icons.manage_accounts_outlined),
             ),
+          const GuncelleKarti(ayarDugmesi: true),
         ],
       ),
       body: SafeArea(

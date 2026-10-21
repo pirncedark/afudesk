@@ -10,6 +10,7 @@ import 'hesap/gercek_hesap_servisi.dart';
 import 'sayfalar/oturum.dart';
 import 'hesap/hesap_sayfasi.dart';
 import 'sayfalar/ana.dart';
+import 'sayfalar/ayarlar.dart';
 import 'sayfalar/baglanti_ver.dart';
 import 'src/rust/api/afudesk.dart' as rust;
 import 'src/rust/frb_generated.dart';
@@ -127,6 +128,9 @@ class _AfuDeskUygulamaDurum extends State<AfuDeskUygulama> {
       title: 'AfuDesk',
       debugShowCheckedModeBanner: false,
       theme: afuTema(),
+      routes: {
+        '/ayarlar': (_) => AyarlarSayfasi(hesapServisi: widget.hesapServisi),
+      },
       builder: (context, child) => widget.hesapServisi == null
           ? child!
           : HesapBaglantiSeridi(servis: widget.hesapServisi!, child: child!),
