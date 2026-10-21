@@ -8,10 +8,32 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::{fmt, time::Duration};
 
-/// Iroh enables ring but does not install a process default for standalone OAuth.
-pub(crate) fn http_client() -> reqwest::ClientBuilder {
-    let _ = rustls::crypto::ring::default_provider().install_default();
-    reqwest::Client::builder()
+/// Android has no platform-verifier JNI context in this bridge. Use Mozilla's
+/// roots and an explicit provider instead; certificate/hostname checks stay on.
+#[cfg(any(target_os = "android", test))]
+fn android_http_client() -> Sonuc<reqwest::ClientBuilder> {
+    let roots = rustls::RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    let config = rustls::ClientConfig::builder_with_provider(std::sync::Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_safe_default_protocol_versions()
+    .map_err(|_| DogrulamaHatasi)?
+    .with_root_certificates(roots)
+    .with_no_client_auth();
+    Ok(reqwest::Client::builder().tls_backend_preconfigured(config))
+}
+
+pub(crate) fn http_client() -> Sonuc<reqwest::ClientBuilder> {
+    #[cfg(target_os = "android")]
+    {
+        android_http_client()
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        // Preserve native certificate verification on desktop.
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        Ok(reqwest::Client::builder())
+    }
 }
 
 pub const JWKS_URL: &str = "https://www.googleapis.com/oauth2/v3/certs";
@@ -149,7 +171,7 @@ impl Dogrulayici {
     /// Ağ hatası güvenlik denetimini atlatmaz; önceki key cache'iyle sınırsız
     /// çalışma yapılmaz. Çağıran katman kısa süreli cache ekleyebilir.
     pub async fn google_dan(istemciler: Vec<String>) -> Sonuc<Self> {
-        let client = http_client()
+        let client = http_client()?
             .https_only(true)
             .redirect(reqwest::redirect::Policy::none())
             .timeout(Duration::from_secs(10))
@@ -281,6 +303,17 @@ mod dizin_testleri {
     use super::*;
     use crate::google_dizin::Dizin;
     use iroh::SecretKey;
+
+    #[tokio::test]
+    async fn android_tls_istemcisi_jni_baslatmadan_kurulur() {
+        // Exercise the Android configuration on desktop too. The Android test
+        // target additionally catches accidental use of the JNI verifier.
+        let client = android_http_client().unwrap().build().unwrap();
+        assert_eq!(
+            client.get(JWKS_URL).build().unwrap().url().scheme(),
+            "https"
+        );
+    }
 
     fn hesap(nonce: &str, sub: &str) -> Dogrulanmis {
         Dogrulanmis {
