@@ -164,8 +164,9 @@ class GercekHesapServisi extends HesapServisi {
   }
 
   Future<void> geriYukle() async {
-    if (kasa == null || _mesgul || _hesap != null || _kapali || _duraklatildi)
+    if (kasa == null || _mesgul || _hesap != null || _kapali || _duraklatildi) {
       return;
+    }
     _mesgul = true;
     final nesil = _oturumNesli;
     var etkinlesti = false;
@@ -267,8 +268,9 @@ class GercekHesapServisi extends HesapServisi {
   }
 
   Future<void> _yenile() async {
-    if (_kapali || _duraklatildi || _yeniliyor || _mesgul || _hesap == null)
+    if (_kapali || _duraklatildi || _yeniliyor || _mesgul || _hesap == null) {
       return;
+    }
     _yeniliyor = true;
     final nesil = _oturumNesli;
     try {

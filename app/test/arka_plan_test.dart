@@ -68,11 +68,12 @@ void main() {
       await servis.geriYukle();
       expect(await kasa.oku(), kod == 'G6' ? isNull : 'paket');
       expect(servis.hesap, isNull);
-      if (kod == 'G6')
+      if (kod == 'G6') {
         expect(
           servis.durum,
           'Google izni sona erdi. Yeniden bağlanmak için dokun.',
         );
+      }
     }
   });
 
