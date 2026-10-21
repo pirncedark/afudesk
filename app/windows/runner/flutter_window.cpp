@@ -5,6 +5,7 @@
 #include <flutter/standard_method_codec.h>
 
 #include "flutter/generated_plugin_registrant.h"
+#include "google_secure_storage.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -27,6 +28,32 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  secure_channel_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+      flutter_controller_->engine()->messenger(), "afudesk/secure_storage",
+      &flutter::StandardMethodCodec::GetInstance());
+  secure_channel_->SetMethodCallHandler([](const auto& call, auto result) {
+    try {
+      const auto path = afudesk::GoogleSessionPath();
+      if (call.method_name() == "write") {
+        const auto* value = call.arguments() ? std::get_if<std::string>(call.arguments()) : nullptr;
+        if (!value) {
+          result->Error("secure_storage", "Oturum kaydedilemedi; yeniden giriş yap.");
+          return;
+        }
+        afudesk::WriteGoogleSession(path, *value);
+        result->Success();
+      } else if (call.method_name() == "read") {
+        const auto value = afudesk::ReadGoogleSession(path);
+        if (value) result->Success(flutter::EncodableValue(*value));
+        else result->Success();
+      } else if (call.method_name() == "clear") {
+        afudesk::ClearGoogleSession(path);
+        result->Success();
+      } else result->NotImplemented();
+    } catch (const std::exception&) {
+      result->Error("secure_storage", "Oturum kaydı açılamadı; yeniden giriş yap.");
+    }
+  });
   flutter::MethodChannel<flutter::EncodableValue> update_channel(
       flutter_controller_->engine()->messenger(), "afudesk/guncelle",
       &flutter::StandardMethodCodec::GetInstance());
@@ -52,6 +79,10 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  if (secure_channel_) {
+    secure_channel_->SetMethodCallHandler(nullptr);
+    secure_channel_.reset();
+  }
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }

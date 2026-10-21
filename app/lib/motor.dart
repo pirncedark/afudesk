@@ -295,6 +295,10 @@ class RustMotor implements Motor {
     required String ad,
   }) => rust.izleyiciKayitliBaglan(kimlik: kimlik, ad: ad).map(_izleyiciOlayi);
 
+  Stream<IzleyiciOlay> googleBaglan(String kimlik) => rust
+      .izleyiciGoogleBaglan(kimlik: kimlik, ad: cihazAdi())
+      .map(_izleyiciOlayi);
+
   static KayitliCihaz _kayitli(rust.KayitliCihaz k) => KayitliCihaz(
     k.kimlik,
     k.ad,
@@ -327,30 +331,30 @@ class RustMotor implements Motor {
   static IzleyiciOlay _izleyiciOlayi(rust.IzleyiciOlayi o) {
     if (o.tur == 'hata' &&
         (o.metin.contains('sürümleri uyuşmuyor') ||
-         o.metin.contains("versions don't match"))) {
+            o.metin.contains("versions don't match"))) {
       guncellemeKontrolIstegi.value += 1;
     }
     return IzleyiciOlay(
-    o.tur,
-    ad: o.ad,
-    metin: o.metin,
-    kontrol: o.kontrol,
-    pano: o.pano,
-    genislik: o.genislik,
-    yukseklik: o.yukseklik,
-    rttMs: o.rttMs,
-    fps: o.fps,
-    gecikmeMs: o.gecikmeMs,
-    dosya: o.dosya,
-    oyunKolu: o.oyunKolu,
-    gonderilen: o.gonderilen.toInt(),
-    toplam: o.toplam.toInt(),
-    bitti: o.bitti,
-    slot: o.slot,
-    buyuk: o.buyuk,
-    kucuk: o.kucuk,
-    rgba: o.rgba,
-  );
+      o.tur,
+      ad: o.ad,
+      metin: o.metin,
+      kontrol: o.kontrol,
+      pano: o.pano,
+      genislik: o.genislik,
+      yukseklik: o.yukseklik,
+      rttMs: o.rttMs,
+      fps: o.fps,
+      gecikmeMs: o.gecikmeMs,
+      dosya: o.dosya,
+      oyunKolu: o.oyunKolu,
+      gonderilen: o.gonderilen.toInt(),
+      toplam: o.toplam.toInt(),
+      bitti: o.bitti,
+      slot: o.slot,
+      buyuk: o.buyuk,
+      kucuk: o.kucuk,
+      rgba: o.rgba,
+    );
   }
 
   @override

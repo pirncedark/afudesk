@@ -201,7 +201,12 @@ pub mod masaustu {
         pub fn new() -> Result<Self> {
             let e = Enigo::new(&Settings::default())?;
             let boyut = e.main_display()?;
-            Ok(Self { e, boyut, #[cfg(windows)] numpad_enter_basili: false })
+            Ok(Self {
+                e,
+                boyut,
+                #[cfg(windows)]
+                numpad_enter_basili: false,
+            })
         }
     }
 
@@ -210,12 +215,19 @@ pub mod masaustu {
         let usage = hid & 0xffff;
         if hid >> 16 == 0x0c {
             return Some(match usage {
-                0xb5 => 0xb0, 0xb6 => 0xb1, 0xb7 => 0xb2, 0xcd => 0xb3,
-                0xe2 => 0xad, 0xe9 => 0xaf, 0xea => 0xae,
+                0xb5 => 0xb0,
+                0xb6 => 0xb1,
+                0xb7 => 0xb2,
+                0xcd => 0xb3,
+                0xe2 => 0xad,
+                0xe9 => 0xaf,
+                0xea => 0xae,
                 _ => return None,
             });
         }
-        if hid >> 16 != 0x07 { return None; }
+        if hid >> 16 != 0x07 {
+            return None;
+        }
         Some(match usage {
             0x04..=0x1d => (0x41 + usage - 0x04) as u16,
             0x1e..=0x26 => (0x31 + usage - 0x1e) as u16,
@@ -286,42 +298,78 @@ pub mod masaustu {
     mod numpad_enter {
         #[repr(C)]
         #[derive(Clone, Copy)]
-        struct KeyboardInput { vk: u16, scan: u16, flags: u32, time: u32, extra: usize }
+        struct KeyboardInput {
+            vk: u16,
+            scan: u16,
+            flags: u32,
+            time: u32,
+            extra: usize,
+        }
         #[repr(C)]
         #[derive(Clone, Copy)]
-        struct MouseInput { x: i32, y: i32, data: u32, flags: u32, time: u32, extra: usize }
+        struct MouseInput {
+            x: i32,
+            y: i32,
+            data: u32,
+            flags: u32,
+            time: u32,
+            extra: usize,
+        }
         #[repr(C)]
-        union InputData { keyboard: KeyboardInput, mouse: MouseInput }
+        union InputData {
+            keyboard: KeyboardInput,
+            mouse: MouseInput,
+        }
         #[repr(C)]
-        struct Input { kind: u32, data: InputData }
+        struct Input {
+            kind: u32,
+            data: InputData,
+        }
         #[link(name = "user32")]
-        extern "system" { fn SendInput(count: u32, inputs: *const Input, size: i32) -> u32; }
+        extern "system" {
+            fn SendInput(count: u32, inputs: *const Input, size: i32) -> u32;
+        }
 
         pub fn send(pressed: bool) -> anyhow::Result<()> {
             // Sıfırla: INPUT union padding baytları da başlatılır.
             let mut input: Input = unsafe { std::mem::zeroed() };
             input.kind = 1;
             input.data.keyboard = KeyboardInput {
-                vk: 0x0d, scan: 0x1c,
+                vk: 0x0d,
+                scan: 0x1c,
                 flags: 0x0001 | if pressed { 0 } else { 0x0002 },
-                time: 0, extra: 0,
+                time: 0,
+                extra: 0,
             };
             // repr(C) Win32 INPUT ABI ile aynı; input çağrı boyunca yaşar.
             let sent = unsafe { SendInput(1, &input, std::mem::size_of::<Input>() as i32) };
-            anyhow::ensure!(sent == 1, "Numpad Enter gönderilemedi: {}", std::io::Error::last_os_error());
+            anyhow::ensure!(
+                sent == 1,
+                "Numpad Enter gönderilemedi: {}",
+                std::io::Error::last_os_error()
+            );
             Ok(())
         }
         #[cfg(test)]
         #[test]
         fn input_abi_boyutu() {
-            assert_eq!(std::mem::size_of::<Input>(), if cfg!(target_pointer_width = "64") { 40 } else { 28 });
+            assert_eq!(
+                std::mem::size_of::<Input>(),
+                if cfg!(target_pointer_width = "64") {
+                    40
+                } else {
+                    28
+                }
+            );
         }
     }
 
     #[cfg(windows)]
     impl Drop for EnigoEnjektor {
         fn drop(&mut self) {
-            if self.numpad_enter_basili { let _ = numpad_enter::send(false); }
+            if self.numpad_enter_basili {
+                let _ = numpad_enter::send(false);
+            }
         }
     }
 
@@ -438,9 +486,14 @@ pub mod masaustu {
                         return Ok(());
                     }
                     #[cfg(windows)]
-                    let key = hid_vk(*hid).map(|vk| Key::Other(vk as u32)).or_else(|| tus_coz(ad));
+                    let key = hid_vk(*hid)
+                        .map(|vk| Key::Other(vk as u32))
+                        .or_else(|| tus_coz(ad));
                     #[cfg(not(windows))]
-                    let key = { let _ = hid; tus_coz(ad) };
+                    let key = {
+                        let _ = hid;
+                        tus_coz(ad)
+                    };
                     if let Some(k) = key {
                         self.e.key(
                             k,
@@ -484,15 +537,30 @@ pub mod masaustu {
         #[test]
         fn fiziksel_hid_vk() {
             for (hid, vk) in [
-                (0x70004, 0x41), (0x7001e, 0x31), (0x70027, 0x30),
-                (0x70062, 0x60), (0x70057, 0x6b), (0x70068, 0x7c),
-                (0x70073, 0x87), (0x70046, 0x2c), (0x700e4, 0xa3),
-                (0x700e6, 0xa5), (0x70058, 0x0d), (0x70054, 0x6f),
+                (0x70004, 0x41),
+                (0x7001e, 0x31),
+                (0x70027, 0x30),
+                (0x70062, 0x60),
+                (0x70057, 0x6b),
+                (0x70068, 0x7c),
+                (0x70073, 0x87),
+                (0x70046, 0x2c),
+                (0x700e4, 0xa3),
+                (0x700e6, 0xa5),
+                (0x70058, 0x0d),
+                (0x70054, 0x6f),
                 // Türkçe Q: ş, ğ, ü, ö, ç OEM; ı fiziksel I konumunda.
-                (0x70033, 0xba), (0x7002f, 0xdb), (0x70030, 0xdd),
-                (0x70036, 0xbc), (0x70037, 0xbe), (0x7000c, 0x49),
-                (0xc00cd, 0xb3), (0xc00e9, 0xaf),
-            ] { assert_eq!(hid_vk(hid), Some(vk), "HID {hid:x}"); }
+                (0x70033, 0xba),
+                (0x7002f, 0xdb),
+                (0x70030, 0xdd),
+                (0x70036, 0xbc),
+                (0x70037, 0xbe),
+                (0x7000c, 0x49),
+                (0xc00cd, 0xb3),
+                (0xc00e9, 0xaf),
+            ] {
+                assert_eq!(hid_vk(hid), Some(vk), "HID {hid:x}");
+            }
             assert_eq!(hid_vk(0), None);
             assert_eq!(hid_vk(0x80004), None);
             assert_eq!(hid_vk(0x7ffff), None);

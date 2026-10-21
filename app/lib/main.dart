@@ -5,6 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'motor.dart';
+import 'hesap/hesap_servisi.dart';
+import 'hesap/gercek_hesap_servisi.dart';
+import 'sayfalar/oturum.dart';
+import 'hesap/hesap_sayfasi.dart';
 import 'sayfalar/ana.dart';
 import 'sayfalar/baglanti_ver.dart';
 import 'src/rust/api/afudesk.dart' as rust;
@@ -18,20 +22,27 @@ Future<void> main() async {
   // (%LOCALAPPDATA%\AfuDesk); Android'de uygulamaya özel klasörü Kotlin verir.
   if (Platform.isAndroid) {
     try {
-      final yol = await const MethodChannel('afudesk/kol').invokeMethod<String>('veriKlasoru');
+      final yol = await const MethodChannel(
+        'afudesk/kol',
+      ).invokeMethod<String>('veriKlasoru');
       if (yol != null) rust.veriKlasoruAyarla(yol: yol);
     } catch (_) {
       // Klasör alınamazsa kayıtlı cihazlar olmadan çalışır (kodla bağlantı etkilenmez).
     }
   }
-  runApp(AfuDeskUygulama(motor: RustMotor()));
+  final motor = RustMotor();
+  runApp(
+    AfuDeskUygulama(motor: motor, hesapServisi: GercekHesapServisi.rust(motor)),
+  );
 }
 
 /// Uygulama kökü: bağlantı isteklerinin onay penceresini hangi ekranda olunursa olsun
 /// gösterir (kayıtlı cihazlar "Bağlantı ver" açık olmasa da bağlanmak isteyebilir).
 class AfuDeskUygulama extends StatefulWidget {
   final Motor motor;
-  const AfuDeskUygulama({super.key, required this.motor});
+  // Servisin yaşam süresini çağıran yönetir; null eski akışı korur.
+  final HesapServisi? hesapServisi;
+  const AfuDeskUygulama({super.key, required this.motor, this.hesapServisi});
 
   @override
   State<AfuDeskUygulama> createState() => _AfuDeskUygulamaDurum();
@@ -45,9 +56,22 @@ class _AfuDeskUygulamaDurum extends State<AfuDeskUygulama> {
   @override
   void initState() {
     super.initState();
+    final servis = widget.hesapServisi;
+    if (servis is GercekHesapServisi) {
+      servis.oturumAc = (cihaz, ac) {
+        _gezgin.currentState?.push(
+          MaterialPageRoute(
+            builder: (_) => OturumSayfasi(motor: widget.motor, baglantiAc: ac),
+          ),
+        );
+      };
+    }
     if (widget.motor.baglantiVerilebilir) {
       // Hataları "Bağlantı ver" ekranı gösterir; kökte yalnız istek/bağlantı izlenir.
-      _abonelik = widget.motor.hostOlaylari.listen(_hostOlay, onError: (Object _) {});
+      _abonelik = widget.motor.hostOlaylari.listen(
+        _hostOlay,
+        onError: (Object _) {},
+      );
       widget.motor.arkaPlanBaslat();
     }
   }
@@ -65,7 +89,11 @@ class _AfuDeskUygulamaDurum extends State<AfuDeskUygulama> {
       case 'baglandi':
         // Kayıtlı cihaz arka planda bağlandı: oturumu (ve Kes düğmesini) göster.
         if (!BaglantiVerSayfasi.acik) {
-          _gezgin.currentState?.push(MaterialPageRoute(builder: (_) => BaglantiVerSayfasi(motor: widget.motor)));
+          _gezgin.currentState?.push(
+            MaterialPageRoute(
+              builder: (_) => BaglantiVerSayfasi(motor: widget.motor),
+            ),
+          );
         }
     }
   }
@@ -83,7 +111,12 @@ class _AfuDeskUygulamaDurum extends State<AfuDeskUygulama> {
     if (sonuc == null) {
       await widget.motor.hostRed();
     } else {
-      await widget.motor.hostKabul(kontrol: sonuc.kontrol, pano: sonuc.pano, dosya: sonuc.dosya, oyunKolu: sonuc.oyunKolu);
+      await widget.motor.hostKabul(
+        kontrol: sonuc.kontrol,
+        pano: sonuc.pano,
+        dosya: sonuc.dosya,
+        oyunKolu: sonuc.oyunKolu,
+      );
     }
   }
 
@@ -94,7 +127,21 @@ class _AfuDeskUygulamaDurum extends State<AfuDeskUygulama> {
       title: 'AfuDesk',
       debugShowCheckedModeBanner: false,
       theme: afuTema(),
-      home: AnaSayfa(motor: widget.motor),
+      builder: (context, child) => widget.hesapServisi == null
+          ? child!
+          : HesapBaglantiSeridi(servis: widget.hesapServisi!, child: child!),
+      home: widget.hesapServisi == null
+          ? AnaSayfa(motor: widget.motor)
+          : HesapSayfasi(
+              servis: widget.hesapServisi!,
+              kodlaBaglan: () {
+                _gezgin.currentState?.push(
+                  MaterialPageRoute(
+                    builder: (_) => AnaSayfa(motor: widget.motor),
+                  ),
+                );
+              },
+            ),
     );
   }
 }

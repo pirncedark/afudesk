@@ -239,8 +239,17 @@ pub async fn baglan_ayarli(
         bilet: d.bilet.clone(),
         ad: ad.to_owned(),
     };
-    oturum_ac(kurulum_sec(&d.adresler, &d.relaylar), hedef, ilk, &d.ad, ad, pano, veri_klasoru, None)
-        .await
+    oturum_ac(
+        kurulum_sec(&d.adresler, &d.relaylar),
+        hedef,
+        ilk,
+        &d.ad,
+        ad,
+        pano,
+        veri_klasoru,
+        None,
+    )
+    .await
 }
 
 /// Kayıtlı host'a kod/parola olmadan bağlanır; host yine onay verir. Host bu cihazı
@@ -273,6 +282,22 @@ pub async fn kayitli_baglan(
         Some(kayit.host_kimlik),
     )
     .await
+}
+
+/// Same-account connection. The target and all routing hints come from Drive;
+/// QUIC authenticates the selected host key before sending the ID token.
+pub async fn google_baglan(g: &crate::google_baglanti::Erisim, host: &str,
+    veri: &Path, ad: &str, pano: Option<Box<dyn Pano>>) -> Result<Izleyici> {
+    anyhow::ensure!(g.hesap.gecerlilik_sonu() > kod::simdi(), "Google girişi sona erdi, yeniden giriş yap.");
+    let liste = g.dizin.liste().await?;
+    let mut bulunan = liste.iter().filter(|k| k.host == host && k.erisim && k.guncel(g.hesap.sub(),kod::simdi()));
+    let k = bulunan.next().ok_or_else(|| anyhow::anyhow!("Bilgisayara ulaşılamadı, açık olduğunu kontrol et."))?;
+    anyhow::ensure!(bulunan.next().is_none(), "Cihaz kaydı doğrulanamadı, yeniden giriş yap.");
+    let kimlik = kimlik::yukle_veya_uret(&veri.join(kimlik::IZLEYICI_DOSYASI))?;
+    anyhow::ensure!(ag::kimlik_metni(kimlik.kimlik()) == g.cihaz.izleyici, "Cihaz kimliği değişti, yeniden giriş yap.");
+    let hedef = ag::hedef_adres(&k.host,&k.adresler,&k.relaylar)?;
+    oturum_ac(kurulum_sec(&k.adresler,&k.relaylar),hedef,
+        Kontrol::MerhabaGoogle {kanit:g.kanit(),ad:ad.into()},&k.ad,ad,pano,Some(veri),None).await
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -412,7 +437,8 @@ impl Gozetmen {
         // Host bu cihazı kaldırdıysa ya da kayıt geçersizse kayıt artık işe yaramaz.
         if let (Some(v), Some(h)) = (&self.veri, &self.kayitli_host) {
             if sebep == guvenilen::KALDIRILDI || sebep == guvenilen::GECERSIZ {
-                let _ = guvenilen::guncelle(&guvenilen::kayit_yolu(v), |k| guvenilen::hostu_unut(k, h));
+                let _ =
+                    guvenilen::guncelle(&guvenilen::kayit_yolu(v), |k| guvenilen::hostu_unut(k, h));
             }
         }
         let _ = self.olay.send(IzleyiciOlay::Koptu { sebep }).await;
@@ -514,7 +540,8 @@ impl Gozetmen {
             let (kare_tx, mut kare_rx) = mpsc::channel::<Kare>(8);
             let c3 = c2.clone();
             let kabul = tokio::spawn(async move {
-                let akis_sayaci = Arc::new(tokio::sync::Semaphore::new(protokol::AZAMI_ESZAMANLI_AKIS));
+                let akis_sayaci =
+                    Arc::new(tokio::sync::Semaphore::new(protokol::AZAMI_ESZAMANLI_AKIS));
                 while let Ok(mut akis) = c3.accept_uni().await {
                     let Ok(izin) = akis_sayaci.clone().try_acquire_owned() else {
                         let _ = akis.stop(0u32.into());
@@ -591,7 +618,11 @@ impl Gozetmen {
         const KOPTU: &str = "Bağlantı koptu.";
         const KAPANDI: &str = "Bağlantı kapandı.";
         let sonuc: String = loop {
-            let pano = if izinler.pano { self.pano.es.as_mut() } else { None };
+            let pano = if izinler.pano {
+                self.pano.es.as_mut()
+            } else {
+                None
+            };
             let pano_var = pano.is_some();
             tokio::select! {
                 s = &mut goruntu => break match s { Ok(Err(e)) => format!("Görüntü akışı kesildi: {e}"), _ => KAPANDI.into() },
@@ -713,8 +744,14 @@ mod testler {
     #[test]
     fn yalniz_dongu_adresli_kod_disari_cikmaz() {
         assert_eq!(sec(&["127.0.0.1:5"], &[]), Kurulum::YalnizYerel);
-        assert_ne!(sec(&["127.0.0.1:5", "192.168.1.2:5"], &[]), Kurulum::YalnizYerel);
-        assert_ne!(sec(&["127.0.0.1:5"], &["https://r.example/"]), Kurulum::YalnizYerel);
+        assert_ne!(
+            sec(&["127.0.0.1:5", "192.168.1.2:5"], &[]),
+            Kurulum::YalnizYerel
+        );
+        assert_ne!(
+            sec(&["127.0.0.1:5"], &["https://r.example/"]),
+            Kurulum::YalnizYerel
+        );
         assert_ne!(sec(&[], &[]), Kurulum::YalnizYerel);
     }
 }

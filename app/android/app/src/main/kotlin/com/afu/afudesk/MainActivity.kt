@@ -21,9 +21,14 @@ class MainActivity : FlutterActivity() {
     private var axes = floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f)
     private var kolVibrator: Vibrator? = null
     private var pendingApk: File? = null
+    private var googleHesap: GoogleHesap? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        googleHesap = GoogleHesap(this)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "afudesk/google")
+            .setMethodCallHandler { call, result -> googleHesap!!.handle(call, result) }
+        GoogleSecureStorage(this, flutterEngine.dartExecutor.binaryMessenger)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "afudesk/guncelle").setMethodCallHandler { call, result ->
             try {
                 when (call.method) {
@@ -59,6 +64,11 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    override fun onDestroy() {
+        googleHesap?.close()
+        super.onDestroy()
+    }
+
     private fun installUpdate(apk: File) {
         val uri = FileProvider.getUriForFile(this, "$packageName.updates", apk)
         startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
@@ -68,6 +78,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        googleHesap?.onActivityResult(requestCode, data)
         if (requestCode == 804) {
             val apk = pendingApk
             pendingApk = null

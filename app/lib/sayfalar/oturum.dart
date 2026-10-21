@@ -21,7 +21,15 @@ class OturumSayfasi extends StatefulWidget {
 
   /// Doluysa kod/parola yerine bu kayıtlı bilgisayara bağlanılır.
   final String? kayitliKimlik;
-  const OturumSayfasi({super.key, required this.motor, this.kod = '', this.parola = '', this.kayitliKimlik});
+  final Stream<IzleyiciOlay> Function()? baglantiAc;
+  const OturumSayfasi({
+    super.key,
+    required this.motor,
+    this.kod = '',
+    this.parola = '',
+    this.kayitliKimlik,
+    this.baglantiAc,
+  });
 
   @override
   State<OturumSayfasi> createState() => _OturumDurum();
@@ -75,12 +83,24 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     _kolKanal.setMethodCallHandler(_androidKol);
     if (widget.motor.dokunmatik) {
       // Telefonda bilgisayar ekranı yatayda ve tam ekranda çok daha okunaklı.
-      SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     }
-    final akis = widget.kayitliKimlik != null
-        ? widget.motor.kayitliBaglan(kimlik: widget.kayitliKimlik!, ad: widget.motor.cihazAdi())
-        : widget.motor.baglan(kod: widget.kod, parola: widget.parola, ad: widget.motor.cihazAdi());
+    final akis = widget.baglantiAc != null
+        ? widget.baglantiAc!()
+        : widget.kayitliKimlik != null
+        ? widget.motor.kayitliBaglan(
+            kimlik: widget.kayitliKimlik!,
+            ad: widget.motor.cihazAdi(),
+          )
+        : widget.motor.baglan(
+            kod: widget.kod,
+            parola: widget.parola,
+            ad: widget.motor.cihazAdi(),
+          );
     _abonelik = akis.listen(
       _olay,
       onError: (Object e) => _bitir(hataMetni(e)),
@@ -92,14 +112,20 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
 
   Future<void> _androidKol(MethodCall call) async {
     if (call.method == 'kol' && call.arguments is Map) {
-      _kolDurumuDegisti(OyunKoluDurumu.android(Map<Object?, Object?>.from(call.arguments as Map)));
+      _kolDurumuDegisti(
+        OyunKoluDurumu.android(
+          Map<Object?, Object?>.from(call.arguments as Map),
+        ),
+      );
     }
   }
 
   void _kolDurumuDegisti(OyunKoluDurumu durum) {
     if (!_oyunKoluIzni || durum == _sonKol) return;
     _bekleyenKol = durum;
-    final kalan = const Duration(milliseconds: 4) - DateTime.now().difference(_kolSonGonderim);
+    final kalan =
+        const Duration(milliseconds: 4) -
+        DateTime.now().difference(_kolSonGonderim);
     if (kalan <= Duration.zero) {
       _kolGonderimBekle?.cancel();
       _kolGonderimBekle = null;
@@ -149,7 +175,10 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
         if (widget.motor.dokunmatik && o.kontrol) {
           // Uzun basışı zamanında yakalamak için düzenli yokla.
           _dokunmaSaat?.cancel();
-          _dokunmaSaat = Timer.periodic(const Duration(milliseconds: 100), (_) => _gonder(_dokunma.zaman(_ms)));
+          _dokunmaSaat = Timer.periodic(
+            const Duration(milliseconds: 100),
+            (_) => _gonder(_dokunma.zaman(_ms)),
+          );
         }
         if (widget.motor.dokunmatik && !_zoomIpucuGosterildi) {
           _zoomIpucuGosterildi = true;
@@ -165,28 +194,38 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
           _kolIpucuGosterildi = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('Kolu telefona Bluetooth ile bağla ya da ekrandaki kolu kullan.')));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Kolu telefona Bluetooth ile bağla ya da ekrandaki kolu kullan.',
+                  ),
+                ),
+              );
             }
           });
         }
       case 'kol':
         setState(() => _p2 = true);
       case 'kare':
-        ui.decodeImageFromPixels(o.rgba, o.genislik, o.yukseklik, ui.PixelFormat.rgba8888, (img) {
-          if (!mounted) {
-            img.dispose();
-            return;
-          }
-          final eski = _kare;
-          setState(() => _kare = img);
-          // Eski görüntü bu karede hâlâ çizim katmanında olabilir: kare çizildikten sonra bırak.
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            eski?.dispose();
-            widget.motor.kareCizildi();
-          });
-        });
+        ui.decodeImageFromPixels(
+          o.rgba,
+          o.genislik,
+          o.yukseklik,
+          ui.PixelFormat.rgba8888,
+          (img) {
+            if (!mounted) {
+              img.dispose();
+              return;
+            }
+            final eski = _kare;
+            setState(() => _kare = img);
+            // Eski görüntü bu karede hâlâ çizim katmanında olabilir: kare çizildikten sonra bırak.
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              eski?.dispose();
+              widget.motor.kareCizildi();
+            });
+          },
+        );
       case 'istatistik':
         setState(() {
           _rtt = o.rttMs;
@@ -204,17 +243,26 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
           ..showSnackBar(
             SnackBar(
               key: const Key('oturum_kaydedildi'),
-              content: Text('${o.ad} kaydedildi. Bir dahaki sefere kod ve parola gerekmez.'),
+              content: Text(
+                '${o.ad} kaydedildi. Bir dahaki sefere kod ve parola gerekmez.',
+              ),
               duration: const Duration(seconds: 3),
             ),
           );
       case 'pano':
         // Masaüstünde çekirdek panoya zaten yazdı; dokunmatik cihazda (Android) çekirdeğin
         // pano erişimi yok, metni arayüz yazar.
-        if (widget.motor.dokunmatik) Clipboard.setData(ClipboardData(text: o.metin));
+        if (widget.motor.dokunmatik) {
+          Clipboard.setData(ClipboardData(text: o.metin));
+        }
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
-          ..showSnackBar(const SnackBar(content: Text('Pano güncellendi'), duration: Duration(seconds: 1)));
+          ..showSnackBar(
+            const SnackBar(
+              content: Text('Pano güncellendi'),
+              duration: Duration(seconds: 1),
+            ),
+          );
       case 'dosya':
         _dosyaOlayi(o);
 
@@ -237,23 +285,37 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
 
   void _dosyaOlayi(IzleyiciOlay o) {
     if (!o.bitti) {
-      setState(() => _aktarim = _Aktarim(o.ad, gonderilen: o.gonderilen, toplam: o.toplam));
+      setState(
+        () => _aktarim = _Aktarim(
+          o.ad,
+          gonderilen: o.gonderilen,
+          toplam: o.toplam,
+        ),
+      );
       return;
     }
     setState(() => _aktarim = null);
     final basarili = o.metin.isEmpty;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        key: const Key('oturum_dosya_sonuc'),
-        content: Text(basarili ? '${o.ad} gönderildi.' : '${o.ad} gönderilemedi: ${o.metin}'),
-        backgroundColor: basarili ? null : Renk.tehlike,
-        duration: Duration(seconds: basarili ? 3 : 6),
-      ));
+      ..showSnackBar(
+        SnackBar(
+          key: const Key('oturum_dosya_sonuc'),
+          content: Text(
+            basarili
+                ? '${o.ad} gönderildi.'
+                : '${o.ad} gönderilemedi: ${o.metin}',
+          ),
+          backgroundColor: basarili ? null : Renk.tehlike,
+          duration: Duration(seconds: basarili ? 3 : 6),
+        ),
+      );
   }
 
   Widget _dosyaCubugu(_Aktarim a) {
-    final oran = a.toplam > 0 ? (a.gonderilen / a.toplam).clamp(0.0, 1.0) : null;
+    final oran = a.toplam > 0
+        ? (a.gonderilen / a.toplam).clamp(0.0, 1.0)
+        : null;
     final metin = oran == null
         ? '${a.ad} hazırlanıyor…'
         : '${a.ad} — %${(oran * 100).floor()} (${boyutMetni(a.gonderilen)} / ${boyutMetni(a.toplam)})';
@@ -263,20 +325,38 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              const Icon(Icons.upload_file_rounded, size: 18, color: Renk.soluk),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(metin,
-                    key: const Key('oturum_dosya_metin'),
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13, fontFeatures: [FontFeature.tabularFigures()])),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.upload_file_rounded,
+                    size: 18,
+                    color: Renk.soluk,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      metin,
+                      key: const Key('oturum_dosya_metin'),
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ]),
-            const SizedBox(height: 6),
-            LinearProgressIndicator(key: const Key('oturum_dosya_ilerleme'), value: oran),
-          ]),
+              const SizedBox(height: 6),
+              LinearProgressIndicator(
+                key: const Key('oturum_dosya_ilerleme'),
+                value: oran,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -334,7 +414,10 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     final olcek = (alan.width / k.width).clamp(0.0, alan.height / k.height);
     final g = k.width * olcek, y = k.height * olcek;
     final sol = (alan.width - g) / 2, ust = (alan.height - y) / 2;
-    return Offset(((yerel.dx - sol) / g).clamp(0.0, 1.0), ((yerel.dy - ust) / y).clamp(0.0, 1.0));
+    return Offset(
+      ((yerel.dx - sol) / g).clamp(0.0, 1.0),
+      ((yerel.dy - ust) / y).clamp(0.0, 1.0),
+    );
   }
 
   void _gonder(List<Girdi> g) {
@@ -356,7 +439,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   Future<void> _titresim(int buyuk, int kucuk) async {
     await HapticFeedback.mediumImpact();
     try {
-      await _kolKanal.invokeMethod<void>('vibrate', {'duration': 25 + (buyuk + kucuk) ~/ 12});
+      await _kolKanal.invokeMethod<void>('vibrate', {
+        'duration': 25 + (buyuk + kucuk) ~/ 12,
+      });
     } on PlatformException {
       // Sistem dokunsal geri bildirimi kullanılmaya devam eder.
     } on MissingPluginException {
@@ -373,10 +458,16 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
       final yeni = v.replaceAll(_gozcu, '');
       if (yeni.isNotEmpty) _gonder([Girdi('metin', metin: yeni)]);
     }
-    _yazi.value = const TextEditingValue(text: _gozcu, selection: TextSelection.collapsed(offset: 1));
+    _yazi.value = const TextEditingValue(
+      text: _gozcu,
+      selection: TextSelection.collapsed(offset: 1),
+    );
   }
 
-  void _ozelTus(String ad) => _gonder([Girdi('tus', ad: ad, basili: true), Girdi('tus', ad: ad, basili: false)]);
+  void _ozelTus(String ad) => _gonder([
+    Girdi('tus', ad: ad, basili: true),
+    Girdi('tus', ad: ad, basili: false),
+  ]);
 
   Widget _dokunmatikCubuk() {
     final dar = MediaQuery.sizeOf(context).width < 520;
@@ -384,7 +475,10 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
       padding: const EdgeInsets.symmetric(horizontal: 3),
       child: OutlinedButton(
         key: Key('ozel_$ad'),
-        style: OutlinedButton.styleFrom(minimumSize: const Size(44, 40), padding: const EdgeInsets.symmetric(horizontal: 10)),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(44, 40),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+        ),
         onPressed: () => _ozelTus(ad),
         child: simge != null ? Icon(simge, size: 18) : Text(etiket),
       ),
@@ -416,7 +510,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
           const SizedBox(width: 8),
           Tooltip(
             key: const Key('oturum_oyun_kolu_ipucu'),
-            message: _oyunKoluIzni ? 'Dokunmatik kolu aç' : 'Karşı taraf oyun kolu izni vermedi',
+            message: _oyunKoluIzni
+                ? 'Dokunmatik kolu aç'
+                : 'Karşı taraf oyun kolu izni vermedi',
             child: FilledButton(
               key: const Key('oturum_oyun_kolu'),
               style: FilledButton.styleFrom(
@@ -424,8 +520,12 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
                 padding: EdgeInsets.symmetric(horizontal: dar ? 8 : 16),
                 backgroundColor: _kolAcik ? Renk.vurgu : null,
               ),
-              onPressed: _oyunKoluIzni ? () => setState(() => _kolAcik = !_kolAcik) : null,
-              child: dar ? const Icon(Icons.sports_esports) : const Text('🎮 Oyun kolu'),
+              onPressed: _oyunKoluIzni
+                  ? () => setState(() => _kolAcik = !_kolAcik)
+                  : null,
+              child: dar
+                  ? const Icon(Icons.sports_esports)
+                  : const Text('🎮 Oyun kolu'),
             ),
           ),
           const SizedBox(width: 6),
@@ -481,96 +581,152 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
               child: LayoutBuilder(
                 builder: (context, c) {
                   final alan = Size(c.maxWidth, c.maxHeight);
-                  final goruntuOlcek = k == null ? 1.0 : (alan.width / k.width).clamp(0.0, alan.height / k.height);
-                  final goruntu = k == null ? (Offset.zero & alan) : Rect.fromCenter(
-                    center: Offset(alan.width / 2, alan.height / 2),
-                    width: k.width * goruntuOlcek, height: k.height * goruntuOlcek,
-                  );
+                  final goruntuOlcek = k == null
+                      ? 1.0
+                      : (alan.width / k.width).clamp(
+                          0.0,
+                          alan.height / k.height,
+                        );
+                  final goruntu = k == null
+                      ? (Offset.zero & alan)
+                      : Rect.fromCenter(
+                          center: Offset(alan.width / 2, alan.height / 2),
+                          width: k.width * goruntuOlcek,
+                          height: k.height * goruntuOlcek,
+                        );
                   final imlec = _imlecKonumu(alan);
-                  return Stack(children: [
-                    Positioned.fill(child: Listener(
-                    key: const Key('oturum_ekran'),
-                    onPointerDown: (e) {
-                      if (_kolAcik) return;
-                      if (k == null) return;
-                      _zoomParmaklar[e.pointer] = e.localPosition;
-                      if (_zoomParmaklar.length == 2) {
-                        final p = _zoomParmaklar.values.toList();
-                        _zoom.basla(p[0], p[1]);
-                      }
-                      if (!_kontrol) return;
-                      final n = _normalizeKirp(_zoom.tersine(e.localPosition), alan);
-                      if (n != null) _gonder(_dokunma.bas(e.pointer, n.dx, n.dy, _ms));
-                      if (_zoom.yakinlastiriyor) _dokunma.yakinlastirmaBasladi();
-                    },
-                    onPointerMove: (e) {
-                      if (_kolAcik) return;
-                      if (!_zoomParmaklar.containsKey(e.pointer)) return;
-                      _zoomParmaklar[e.pointer] = e.localPosition;
-                      if (_zoomParmaklar.length == 2) {
-                        final p = _zoomParmaklar.values.toList();
-                        _zoom.guncelle(p[0], p[1], alan, goruntu: goruntu);
-                        if (_zoom.yakinlastiriyor) {
-                          _dokunma.yakinlastirmaBasladi();
-                          setState(() {});
-                        }
-                      }
-                      if (!_kontrol) return;
-                      final n = _normalizeKirp(_zoom.tersine(e.localPosition), alan);
-                      if (n != null) _gonder(_dokunma.hareket(e.pointer, n.dx, n.dy, _ms));
-                    },
-                    onPointerUp: (e) {
-                      if (_kolAcik) return;
-                      if (_kontrol) _gonder(_dokunma.birak(e.pointer, _ms));
-                      _zoomBirak(e.pointer);
-                    },
-                    onPointerCancel: (e) {
-                      if (_kolAcik) return;
-                      if (_kontrol) _gonder(_dokunma.iptal(e.pointer));
-                      _zoomBirak(e.pointer);
-                    },
-                    child: ClipRect(child: Stack(
-                      children: [
-                        Positioned.fill(
-                          child: k == null
-                              ? const Center(child: CircularProgressIndicator())
-                              : Transform(
-                                  transform: _zoom.matris,
-                                  transformHitTests: false,
-                                  child: RawImage(key: const Key('oturum_kare'), image: k, fit: BoxFit.contain, filterQuality: FilterQuality.medium),
+                  return Stack(
+                    children: [
+                      Positioned.fill(
+                        child: Listener(
+                          key: const Key('oturum_ekran'),
+                          onPointerDown: (e) {
+                            if (_kolAcik) return;
+                            if (k == null) return;
+                            _zoomParmaklar[e.pointer] = e.localPosition;
+                            if (_zoomParmaklar.length == 2) {
+                              final p = _zoomParmaklar.values.toList();
+                              _zoom.basla(p[0], p[1]);
+                            }
+                            if (!_kontrol) return;
+                            final n = _normalizeKirp(
+                              _zoom.tersine(e.localPosition),
+                              alan,
+                            );
+                            if (n != null) {
+                              _gonder(_dokunma.bas(e.pointer, n.dx, n.dy, _ms));
+                            }
+                            if (_zoom.yakinlastiriyor) {
+                              _dokunma.yakinlastirmaBasladi();
+                            }
+                          },
+                          onPointerMove: (e) {
+                            if (_kolAcik) return;
+                            if (!_zoomParmaklar.containsKey(e.pointer)) return;
+                            _zoomParmaklar[e.pointer] = e.localPosition;
+                            if (_zoomParmaklar.length == 2) {
+                              final p = _zoomParmaklar.values.toList();
+                              _zoom.guncelle(
+                                p[0],
+                                p[1],
+                                alan,
+                                goruntu: goruntu,
+                              );
+                              if (_zoom.yakinlastiriyor) {
+                                _dokunma.yakinlastirmaBasladi();
+                                setState(() {});
+                              }
+                            }
+                            if (!_kontrol) return;
+                            final n = _normalizeKirp(
+                              _zoom.tersine(e.localPosition),
+                              alan,
+                            );
+                            if (n != null) {
+                              _gonder(
+                                _dokunma.hareket(e.pointer, n.dx, n.dy, _ms),
+                              );
+                            }
+                          },
+                          onPointerUp: (e) {
+                            if (_kolAcik) return;
+                            if (_kontrol) {
+                              _gonder(_dokunma.birak(e.pointer, _ms));
+                            }
+                            _zoomBirak(e.pointer);
+                          },
+                          onPointerCancel: (e) {
+                            if (_kolAcik) return;
+                            if (_kontrol) _gonder(_dokunma.iptal(e.pointer));
+                            _zoomBirak(e.pointer);
+                          },
+                          child: ClipRect(
+                            child: Stack(
+                              children: [
+                                Positioned.fill(
+                                  child: k == null
+                                      ? const Center(
+                                          child: CircularProgressIndicator(),
+                                        )
+                                      : Transform(
+                                          transform: _zoom.matris,
+                                          transformHitTests: false,
+                                          child: RawImage(
+                                            key: const Key('oturum_kare'),
+                                            image: k,
+                                            fit: BoxFit.contain,
+                                            filterQuality: FilterQuality.medium,
+                                          ),
+                                        ),
                                 ),
-                        ),
-                        if (imlec != null)
-                          Positioned(
-                            key: const Key('oturum_imlec'),
-                            left: imlec.dx - 9,
-                            top: imlec.dy - 9,
-                            child: IgnorePointer(
-                              child: Container(
-                                width: 18,
-                                height: 18,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 2),
-                                  color: Renk.vurgu.withValues(alpha: 0.5),
-                                ),
-                              ),
+                                if (imlec != null)
+                                  Positioned(
+                                    key: const Key('oturum_imlec'),
+                                    left: imlec.dx - 9,
+                                    top: imlec.dy - 9,
+                                    child: IgnorePointer(
+                                      child: Container(
+                                        width: 18,
+                                        height: 18,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: Colors.white,
+                                            width: 2,
+                                          ),
+                                          color: Renk.vurgu.withValues(
+                                            alpha: 0.5,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                if (_kolAcik)
+                                  Positioned.fill(
+                                    child: OyunKoluKatmani(
+                                      key: const Key(
+                                        'dokunmatik_oyun_kolu_katmani',
+                                      ),
+                                      onChanged: _kolDurumuDegisti,
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
-                        if (_kolAcik)
-                          Positioned.fill(
-                            child: OyunKoluKatmani(key: const Key('dokunmatik_oyun_kolu_katmani'), onChanged: _kolDurumuDegisti),
+                        ),
+                      ),
+                      if (_zoom.olcek > 1)
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: FilledButton(
+                            key: const Key('oturum_zoom_sifirla'),
+                            onPressed: () => setState(_zoom.sifirla),
+                            child: const Text('1x'),
                           ),
-                      ],
-                    )),
-                  )),
-                    if (_zoom.olcek > 1)
-                      Positioned(top: 8, right: 8, child: FilledButton(
-                        key: const Key('oturum_zoom_sifirla'),
-                        onPressed: () => setState(_zoom.sifirla),
-                        child: const Text('1x'),
-                      )),
-                  ]);
+                        ),
+                    ],
+                  );
                 },
               ),
             ),
@@ -586,7 +742,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     if (k == null || x == null || y == null) return null;
     final olcek = (alan.width / k.width).clamp(0.0, alan.height / k.height);
     final g = k.width * olcek, yy = k.height * olcek;
-    return _zoom.uygula(Offset((alan.width - g) / 2 + x * g, (alan.height - yy) / 2 + y * yy));
+    return _zoom.uygula(
+      Offset((alan.width - g) / 2 + x * g, (alan.height - yy) / 2 + y * yy),
+    );
   }
 
   void _zoomBirak(int id) {
@@ -600,7 +758,11 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   void _fareDugmeleri(int simdi) {
     final once = _sonDugme;
     _sonDugme = simdi;
-    for (final (bit, ad) in [(kPrimaryMouseButton, 'sol'), (kSecondaryMouseButton, 'sag'), (kMiddleMouseButton, 'orta')]) {
+    for (final (bit, ad) in [
+      (kPrimaryMouseButton, 'sol'),
+      (kSecondaryMouseButton, 'sag'),
+      (kMiddleMouseButton, 'orta'),
+    ]) {
       if ((once & bit) == (simdi & bit)) continue;
       _gonder([Girdi('fare', ad: ad, basili: simdi & bit != 0)]);
     }
@@ -608,7 +770,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
 
   void _tuslariBirak() {
     for (final hid in _basiliTuslar) {
-      widget.motor.girdi(Girdi('tus', hid: hid, ad: _tusAdlari[hid] ?? '', basili: false));
+      widget.motor.girdi(
+        Girdi('tus', hid: hid, ad: _tusAdlari[hid] ?? '', basili: false),
+      );
     }
     _basiliTuslar.clear();
     _tusAdlari.clear();
@@ -652,7 +816,8 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     if (e is KeyRepeatEvent) {
       if (!_basiliTuslar.contains(hid)) return KeyEventResult.handled;
       final once = _sonTekrar[hid];
-      if (once != null && e.timeStamp - once < const Duration(milliseconds: 34)) {
+      if (once != null &&
+          e.timeStamp - once < const Duration(milliseconds: 34)) {
         return KeyEventResult.handled;
       }
     }
@@ -680,17 +845,32 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: widget.motor.dokunmatik ? 44 : null,
-        title: Row(mainAxisSize: MainAxisSize.min, children: [
-          Flexible(child: Text(_karsiAd.isEmpty ? 'Uzak ekran' : _karsiAd, overflow: TextOverflow.ellipsis)),
-          if (_asama == _Asama.bagli && _p2) const Padding(padding: EdgeInsets.only(left: 8), child: Chip(key: Key('oturum_p2'), label: Text('🎮 P2'))),
-        ]),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                _karsiAd.isEmpty ? 'Uzak ekran' : _karsiAd,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (_asama == _Asama.bagli && _p2)
+              const Padding(
+                padding: EdgeInsets.only(left: 8),
+                child: Chip(key: Key('oturum_p2'), label: Text('🎮 P2')),
+              ),
+          ],
+        ),
         actions: [
           if (_asama == _Asama.bagli && _yeniden != null)
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: Center(
-                child: Text(_yeniden!,
-                    key: const Key('oturum_yeniden'), style: const TextStyle(fontSize: 12, color: Renk.tehlike)),
+                child: Text(
+                  _yeniden!,
+                  key: const Key('oturum_yeniden'),
+                  style: const TextStyle(fontSize: 12, color: Renk.tehlike),
+                ),
               ),
             )
           else if (_asama == _Asama.bagli && _rtt >= 0)
@@ -700,14 +880,21 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
                 message: _aktarmali
                     ? 'Doğrudan bağlantı kurulamadı; görüntü aktarma sunucusu üzerinden geliyor'
                     : 'Ekran yakalamadan sende görünene kadar geçen süre',
-                child: Text('${_gecikme > 0 ? _gecikme : _rtt} ms · $_fps fps${_aktarmali ? ' · aktarmalı' : ''}',
-                    key: const Key('oturum_istatistik'),
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                        color: _gecikme > 0
-                            ? (_gecikme < 100 ? Renk.basari : (_gecikme < 250 ? Renk.soluk : Renk.tehlike))
-                            : (_rtt < 80 ? Renk.basari : (_rtt < 200 ? Renk.soluk : Renk.tehlike)))),
+                child: Text(
+                  '${_gecikme > 0 ? _gecikme : _rtt} ms · $_fps fps${_aktarmali ? ' · aktarmalı' : ''}',
+                  key: const Key('oturum_istatistik'),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                    color: _gecikme > 0
+                        ? (_gecikme < 100
+                              ? Renk.basari
+                              : (_gecikme < 250 ? Renk.soluk : Renk.tehlike))
+                        : (_rtt < 80
+                              ? Renk.basari
+                              : (_rtt < 200 ? Renk.soluk : Renk.tehlike)),
+                  ),
+                ),
               ),
             ),
           if (_asama == _Asama.bagli && !widget.motor.dokunmatik)
@@ -715,18 +902,26 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
               padding: const EdgeInsets.only(right: 8),
               child: Tooltip(
                 message: _dosyaIzni
-                    ? (_aktarim == null ? 'Karşı tarafa dosya gönder' : 'Bir dosya gönderiliyor')
+                    ? (_aktarim == null
+                          ? 'Karşı tarafa dosya gönder'
+                          : 'Bir dosya gönderiliyor')
                     : 'Karşı taraf dosya almaya izin vermedi',
                 child: dar
                     ? IconButton(
                         key: const Key('oturum_dosya_gonder'),
-                        onPressed: _dosyaIzni && _aktarim == null ? _dosyaGonder : null,
+                        onPressed: _dosyaIzni && _aktarim == null
+                            ? _dosyaGonder
+                            : null,
                         icon: const Icon(Icons.upload_file_rounded),
                       )
                     : OutlinedButton.icon(
                         key: const Key('oturum_dosya_gonder'),
-                        style: OutlinedButton.styleFrom(minimumSize: const Size(0, 38)),
-                        onPressed: _dosyaIzni && _aktarim == null ? _dosyaGonder : null,
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 38),
+                        ),
+                        onPressed: _dosyaIzni && _aktarim == null
+                            ? _dosyaGonder
+                            : null,
                         icon: const Icon(Icons.upload_file_rounded, size: 18),
                         label: const Text('Dosya gönder'),
                       ),
@@ -736,8 +931,18 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: dar
-                  ? Tooltip(message: izinMetni, child: Chip(key: const Key('oturum_kontrol'), label: izinSimge))
-                  : Chip(key: const Key('oturum_kontrol'), avatar: izinSimge, label: Text(izinMetni)),
+                  ? Tooltip(
+                      message: izinMetni,
+                      child: Chip(
+                        key: const Key('oturum_kontrol'),
+                        label: izinSimge,
+                      ),
+                    )
+                  : Chip(
+                      key: const Key('oturum_kontrol'),
+                      avatar: izinSimge,
+                      label: Text(izinMetni),
+                    ),
             ),
           if (_asama != _Asama.bitti)
             Padding(
@@ -746,13 +951,18 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
                   ? IconButton.filled(
                       key: const Key('oturum_kes'),
                       tooltip: 'Bağlantıyı kes',
-                      style: IconButton.styleFrom(backgroundColor: Renk.tehlike),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Renk.tehlike,
+                      ),
                       onPressed: () => Navigator.pop(context),
                       icon: const Icon(Icons.link_off, size: 18),
                     )
                   : FilledButton.icon(
                       key: const Key('oturum_kes'),
-                      style: FilledButton.styleFrom(backgroundColor: Renk.tehlike, minimumSize: const Size(0, 38)),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Renk.tehlike,
+                        minimumSize: const Size(0, 38),
+                      ),
                       onPressed: () => Navigator.pop(context),
                       icon: const Icon(Icons.link_off, size: 18),
                       label: const Text('Kes'),
@@ -761,19 +971,26 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
         ],
       ),
       body: _govde(),
-      bottomNavigationBar: _asama == _Asama.bagli && _aktarim != null ? _dosyaCubugu(_aktarim!) : null,
+      bottomNavigationBar: _asama == _Asama.bagli && _aktarim != null
+          ? _dosyaCubugu(_aktarim!)
+          : null,
     );
   }
 
   Widget _govde() {
     switch (_asama) {
       case _Asama.baglaniyor:
-        return const _Bilgi(anahtar: Key('oturum_baglaniyor'), yukleniyor: true, metin: 'Bağlanılıyor…');
+        return const _Bilgi(
+          anahtar: Key('oturum_baglaniyor'),
+          yukleniyor: true,
+          metin: 'Bağlanılıyor…',
+        );
       case _Asama.onayBekleniyor:
         return _Bilgi(
           anahtar: const Key('oturum_onay'),
           yukleniyor: true,
-          metin: '$_karsiAd onayı bekleniyor…\nKarşı tarafın ekranında “Kabul et”e basması gerekiyor.',
+          metin:
+              '$_karsiAd onayı bekleniyor…\nKarşı tarafın ekranında “Kabul et”e basması gerekiyor.',
         );
       case _Asama.bitti:
         return Center(
@@ -784,10 +1001,17 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
               const SizedBox(height: 12),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Text(_mesaj, key: const Key('oturum_mesaj'), textAlign: TextAlign.center),
+                child: Text(
+                  _mesaj,
+                  key: const Key('oturum_mesaj'),
+                  textAlign: TextAlign.center,
+                ),
               ),
               const SizedBox(height: 16),
-              FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Geri dön')),
+              FilledButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Geri dön'),
+              ),
             ],
           ),
         );
@@ -801,7 +1025,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
               final alan = Size(c.maxWidth, c.maxHeight);
               return _klavyeOdak(
                 MouseRegion(
-                  cursor: _kontrol ? SystemMouseCursors.precise : SystemMouseCursors.basic,
+                  cursor: _kontrol
+                      ? SystemMouseCursors.precise
+                      : SystemMouseCursors.basic,
                   child: Listener(
                     key: const Key('oturum_ekran'),
                     onPointerHover: (e) => _konum(e.localPosition, alan),
@@ -823,13 +1049,21 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
                     onPointerCancel: (_) => _fareDugmeleri(0),
                     onPointerSignal: (e) {
                       if (!_kontrol || e is! PointerScrollEvent) return;
-                      final dy = e.scrollDelta.dy.sign.toInt(), dx = e.scrollDelta.dx.sign.toInt();
-                      if (dx != 0 || dy != 0) widget.motor.girdi(Girdi('kaydir', dx: dx, dy: dy));
+                      final dy = e.scrollDelta.dy.sign.toInt(),
+                          dx = e.scrollDelta.dx.sign.toInt();
+                      if (dx != 0 || dy != 0) {
+                        widget.motor.girdi(Girdi('kaydir', dx: dx, dy: dy));
+                      }
                     },
                     child: SizedBox.expand(
                       child: k == null
                           ? const Center(child: CircularProgressIndicator())
-                          : RawImage(key: const Key('oturum_kare'), image: k, fit: BoxFit.contain, filterQuality: FilterQuality.medium),
+                          : RawImage(
+                              key: const Key('oturum_kare'),
+                              image: k,
+                              fit: BoxFit.contain,
+                              filterQuality: FilterQuality.medium,
+                            ),
                     ),
                   ),
                 ),
@@ -852,7 +1086,11 @@ class _Bilgi extends StatelessWidget {
   final Key anahtar;
   final bool yukleniyor;
   final String metin;
-  const _Bilgi({required this.anahtar, required this.yukleniyor, required this.metin});
+  const _Bilgi({
+    required this.anahtar,
+    required this.yukleniyor,
+    required this.metin,
+  });
 
   @override
   Widget build(BuildContext context) => Center(

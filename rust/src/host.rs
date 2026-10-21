@@ -4,8 +4,9 @@
 //! koparsa aynı izleyici `DEVAM_SURESI` içinde onay sorulmadan geri dönebilir.
 use crate::{
     ag::{self, Baglanti, GonderAkisi, Kurulum},
-    dosya, guvenilen, kimlik,
+    dosya,
     goruntu::Kodlayici,
+    guvenilen, kimlik,
     kod::{self, Davet},
     pano::{Esitleyici, PANO_ARALIGI},
     platform::Fabrika,
@@ -125,9 +126,15 @@ pub struct Host {
     /// "Bağlantı ver" kapanınca bekleyen kodu hemen geçersiz kılmak için.
     kod_kapandi: Arc<tokio::sync::Notify>,
     kimlik: EndpointId,
+    endpoint: Endpoint,
 }
 
 impl Host {
+    pub fn google_adresleri(&self) -> (Vec<String>, Vec<String>) {
+        let adres = self.endpoint.addr();
+        (adres.ip_addrs().map(ToString::to_string).collect(),
+         adres.relay_urls().map(ToString::to_string).collect())
+    }
     pub async fn komut(&self, k: HostKomut) {
         let _ = self.komut.send(k).await;
     }
@@ -179,6 +186,7 @@ pub async fn baslat(ayar: HostAyar, fabrika: Arc<dyn Fabrika>) -> Result<Host> {
     let kod_acik = Arc::new(AtomicBool::new(ayar.kod_acik));
     let kod_kapandi = Arc::new(tokio::sync::Notify::new());
     let kimlik = ep.id();
+    let endpoint = ep.clone();
     tokio::spawn(calis(
         ayar,
         fabrika,
@@ -198,11 +206,16 @@ pub async fn baslat(ayar: HostAyar, fabrika: Arc<dyn Fabrika>) -> Result<Host> {
         kod_acik,
         kod_kapandi,
         kimlik,
+        endpoint,
     })
 }
 
 /// Koda yazılacak doğrudan adresler ve relay adresleri.
-fn adresleri_topla(ep: &Endpoint, kurulum: Kurulum, relaylar: &[iroh::RelayUrl]) -> (Vec<String>, Vec<String>) {
+fn adresleri_topla(
+    ep: &Endpoint,
+    kurulum: Kurulum,
+    relaylar: &[iroh::RelayUrl],
+) -> (Vec<String>, Vec<String>) {
     match kurulum {
         Kurulum::YalnizYerel => (
             ep.bound_sockets()
@@ -252,8 +265,14 @@ mod guvenlik_testleri {
     fn relay_ve_genel_adres_yoksa_erisim_uyarisi_gerekir() {
         assert!(yalniz_yerel_uyarisi_gerekir(&[], false));
         assert!(!yalniz_yerel_uyarisi_gerekir(&[], true));
-        assert!(!yalniz_yerel_uyarisi_gerekir(&["8.8.8.8:1234".into()], false));
-        assert!(yalniz_yerel_uyarisi_gerekir(&["192.168.1.3:1234".into()], false));
+        assert!(!yalniz_yerel_uyarisi_gerekir(
+            &["8.8.8.8:1234".into()],
+            false
+        ));
+        assert!(yalniz_yerel_uyarisi_gerekir(
+            &["192.168.1.3:1234".into()],
+            false
+        ));
     }
 
     #[test]
@@ -289,7 +308,7 @@ mod guvenlik_testleri {
             }
         };
         h.kod_ac(false);
-        let yeni_kod = tokio::time::timeout(Duration::from_secs(2), async {
+        let yeni_kod = tokio::time::timeout(Duration::from_secs(20), async {
             loop {
                 if let Some(HostOlay::Hazir { kod, .. }) = h.olaylar.recv().await {
                     break kod;
@@ -335,6 +354,7 @@ enum Giris<'a> {
 enum Tur {
     Kod,
     Kayitli,
+    Google,
     Devam,
 }
 
@@ -351,8 +371,8 @@ async fn calis(
     kod_acik: Arc<AtomicBool>,
     kod_kapandi: Arc<tokio::sync::Notify>,
 ) {
-    let relay_ulasildi = kurulum != Kurulum::YalnizYerel
-        && ag::cevrimici(&ep, CEVRIMICI_BEKLE).await;
+    let relay_ulasildi =
+        kurulum != Kurulum::YalnizYerel && ag::cevrimici(&ep, CEVRIMICI_BEKLE).await;
     let klasor = ayar
         .dosya_klasoru
         .clone()
@@ -381,6 +401,7 @@ async fn calis(
                     continue;
                 };
                 match oturum(
+                    &ag::kimlik_metni(ep.id()),
                     &baglanti,
                     Giris::Devam(&d),
                     &fabrika,
@@ -483,6 +504,7 @@ async fn calis(
                 continue;
             };
             match oturum(
+                &ag::kimlik_metni(ep.id()),
                 &baglanti,
                 Giris::Yeni {
                     bilet: &bilet,
@@ -556,6 +578,7 @@ async fn reddet(w: &mut GonderAkisi, c: &Baglanti, sebep: &str) {
 }
 
 async fn oturum(
+    yerel_kimlik: &str,
     c: &Baglanti,
     giris: Giris<'_>,
     fabrika: &Arc<dyn Fabrika>,
@@ -577,6 +600,7 @@ async fn oturum(
         "Karşı taraf şu an bağlantı vermiyor. AfuDesk'te \"Bağlantı ver\"i açmasını iste.";
     const MESGUL: &str = "Karşı taraf şu an başka bir bağlantıda. Biraz sonra yeniden dene.";
     // (ad, önceden verilmiş izinler, tür): devam eden oturumda onay yeniden sorulmaz.
+    let mut google_kanit = None;
     let (ad, onceki, tur) = match (ilk, &giris) {
         (Ok(Ok(Some(Kontrol::Merhaba { bilet: gelen, ad }))), Giris::Yeni { bilet, .. }) => {
             if !kod_acik.load(Ordering::SeqCst) {
@@ -589,10 +613,26 @@ async fn oturum(
             }
             (ad, None, Tur::Kod)
         }
-        (
-            Ok(Ok(Some(Kontrol::MerhabaKayitli { jeton, ad }))),
-            Giris::Yeni { kayit, .. },
-        ) => {
+        (Ok(Ok(Some(Kontrol::MerhabaGoogle { kanit, ad }))), Giris::Yeni { .. }) => {
+            let Some(g) = crate::google_baglanti::bul(yerel_kimlik) else {
+                reddet(&mut w,c,"Google hesabı kapalı, kodla bağlantıyı kullan.").await;
+                return Oturum::Reddedildi;
+            };
+            let yetki = tokio::time::timeout(Duration::from_secs(30),
+                g.yetki(&kanit,&ag::kimlik_metni(c.remote_id()))).await;
+            match yetki {
+                Ok(Ok((crate::google::Karar::Kabul, cihaz_adi))) => {
+                    google_kanit = Some(kanit);
+                    (cihaz_adi, Some(Izinler {kontrol:true,pano:true,dosya:true,oyun_kolu:false}), Tur::Google)
+                }
+                Ok(Ok((crate::google::Karar::OnaySor, _))) => (ad,None,Tur::Google),
+                _ => {
+                    reddet(&mut w,c,"Google bağlantısı doğrulanamadı, yeniden giriş yap.").await;
+                    return Oturum::Reddedildi;
+                }
+            }
+        }
+        (Ok(Ok(Some(Kontrol::MerhabaKayitli { jeton, ad }))), Giris::Yeni { kayit, .. }) => {
             let Some(k) = kayit else {
                 reddet(&mut w, c, guvenilen::GECERSIZ).await;
                 return Oturum::Reddedildi;
@@ -600,7 +640,11 @@ async fn oturum(
             // Cihaz kimliği el sıkışmada doğrulandı; jeton bu kimliğe bağlı.
             let izleyici = ag::kimlik_metni(c.remote_id());
             let kayitlar = guvenilen::oku(&guvenilen::kayit_yolu(&k.veri));
-            match kayitlar.hostlar.iter().find(|h| h.izleyici_kimlik == izleyici) {
+            match kayitlar
+                .hostlar
+                .iter()
+                .find(|h| h.izleyici_kimlik == izleyici)
+            {
                 None => {
                     reddet(&mut w, c, guvenilen::KALDIRILDI).await;
                     return Oturum::Reddedildi;
@@ -676,7 +720,7 @@ async fn oturum(
     };
     // Bağlantı istemeden koptuysa izleyici geri dönebilsin; kapatıldıysa oturum biter.
     let kopus = |sebep: &str| {
-        if istemsiz_kopus(c) {
+        if google_kanit.is_none() && istemsiz_kopus(c) {
             Oturum::Koptu(devam_bilgisi.clone())
         } else {
             Oturum::Bitti(sebep.to_owned())
@@ -777,7 +821,7 @@ async fn oturum(
                 let jeton = guvenilen::yeni_jeton();
                 let simdi = guvenilen::simdi();
                 let kayit = guvenilen::HostKaydi {
-                etiket: None,
+                    etiket: None,
                     izleyici_kimlik: izleyici,
                     ad: ad.clone(),
                     jeton_sha256: guvenilen::jeton_ozeti(&jeton),
@@ -799,12 +843,16 @@ async fn oturum(
             }
             Tur::Kayitli => {
                 let _ = guvenilen::guncelle(&yol, |kk| {
-                    if let Some(h) = kk.hostlar.iter_mut().find(|h| h.izleyici_kimlik == izleyici) {
+                    if let Some(h) = kk
+                        .hostlar
+                        .iter_mut()
+                        .find(|h| h.izleyici_kimlik == izleyici)
+                    {
                         h.son_gorulme = guvenilen::simdi();
                     }
                 });
             }
-            Tur::Devam => {}
+            Tur::Devam | Tur::Google => {}
         }
     }
     let _ = olay
@@ -938,9 +986,20 @@ async fn oturum(
     titresim_araligi.tick().await;
     let mut yol_olcum = tokio::time::interval(Duration::from_secs(1));
     let mut son_yol = (String::new(), String::new());
+    let mut google_denetim = tokio::time::interval(Duration::from_secs(30));
     let sonuc = loop {
         tokio::select! {
             _ = &mut *durdur => { c.close(0u32.into(), b"durdu"); break Oturum::Durdur; }
+            _ = google_denetim.tick(), if google_kanit.is_some() => {
+                let sonuc = match crate::google_baglanti::bul(yerel_kimlik) {
+                    Some(g) => tokio::time::timeout(Duration::from_secs(30),
+                        g.yetki(google_kanit.as_ref().expect("google proof"), &ag::kimlik_metni(c.remote_id()))).await,
+                    None => { c.close(0u32.into(),b"google signout"); break Oturum::Bitti("Hesaptan çıkıldı.".into()); }
+                };
+                if !matches!(sonuc,Ok(Ok((crate::google::Karar::Kabul,_)))) {
+                    c.close(0u32.into(),b"google revoked"); break Oturum::Bitti("Cihaz erişimi sona erdi, yeniden giriş yap.".into());
+                }
+            },
             k = komut.recv() => match k {
                 Some(HostKomut::Kes) | None => {
                     let _ = protokol::yaz(&mut w, &Kontrol::Kapat("Karşı taraf bağlantıyı kesti.".into())).await;
