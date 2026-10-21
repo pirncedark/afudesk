@@ -393,10 +393,9 @@ class GercekHesapServisi extends HesapServisi {
   @override
   Future<void> baglantiyiKes() async {
     _baglantiNesli++;
-    await kes();
-    // The host's actual disconnect event clears the incoming banner.
     _giden = null;
     _yayinla();
+    await kes();
   }
 
   @override
