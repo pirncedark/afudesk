@@ -120,11 +120,8 @@ class GercekHesapServisi extends HesapServisi {
       _yayinla();
     } catch (hata) {
       final tani = GoogleHatasi.cevir(hata, asama: asama);
-      try {
-        await taniYaz(tani);
-      } catch (_) {
-        /* Storage cannot hide sign-in failure. */
-      }
+      // Diagnostics must not delay cancellation or keep the UI busy on failure.
+      unawaited(_taniKaydet(tani));
       try {
         await _cagir('iptal');
       } catch (_) {
@@ -134,6 +131,14 @@ class GercekHesapServisi extends HesapServisi {
       throw tani;
     } finally {
       _mesgul = false;
+    }
+  }
+
+  Future<void> _taniKaydet(GoogleHatasi tani) async {
+    try {
+      await taniYaz(tani);
+    } catch (_) {
+      /* Storage cannot hide sign-in failure. */
     }
   }
 

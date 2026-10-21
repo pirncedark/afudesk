@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'sahte_hesap_servisi.dart';
 import 'package:afudesk/hesap/gercek_hesap_servisi.dart';
 import 'package:afudesk/hesap/hesap_servisi.dart';
@@ -122,6 +124,58 @@ void main() {
     await t.pumpAndSettle();
     expect(find.byKey(const Key('secenek_ver')), findsOneWidget);
     await t.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('bekleyen tanı kaydı hata ve yeniden denemeyi engellemez', (
+    t,
+  ) async {
+    final kayit = Completer<void>();
+    var girisSayisi = 0;
+    final servis = GercekHesapServisi(
+      islem: (op, _) async {
+        if (op == 'baslat') {
+          girisSayisi++;
+          throw StateError('Google (G3)');
+        }
+        return '{}';
+      },
+      googleBaglan: (_) => const Stream.empty(),
+      kes: () async {},
+      hostOlaylari: const Stream.empty(),
+      platformGirisi: (_) async => {},
+      tarayiciAc: (_) async => false,
+      taniYaz: (_) => kayit.future,
+    );
+    addTearDown(servis.dispose);
+    addTearDown(() async => t.pumpWidget(const SizedBox.shrink()));
+    await t.pumpWidget(
+      AfuDeskUygulama(motor: SahteMotor(), hesapServisi: servis),
+    );
+    await t.tap(find.text('Google ile giriş yap'));
+    await t.pumpAndSettle();
+    expect(kayit.isCompleted, isFalse);
+    expect(servis.hesap, isNull);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(
+      find.text(
+        'Drive erişimi tamamlanamadı (G3), yeniden giriş yapıp izin ver.',
+      ),
+      findsOneWidget,
+    );
+    await t.tap(find.text('Ayrıntı'));
+    await t.pumpAndSettle();
+    expect(find.text('G3 | baslat | StateError |  | '), findsOneWidget);
+    await t.tap(find.text('Google ile giriş yap'));
+    await t.pumpAndSettle();
+    expect(girisSayisi, 2);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    // A late storage failure must not escape into the UI either.
+    kayit.completeError(StateError('disk full'));
+    await t.pumpAndSettle();
+    expect(t.takeException(), isNull);
+    await t.tap(find.text('Kodla bağlantı'));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('secenek_ver')), findsOneWidget);
   });
 
   test('çıkış açık bağlantıyı ve hesap listesini temizler', () async {
