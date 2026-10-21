@@ -786,7 +786,6 @@ async fn oturum(
     let _terminal_koruma = TerminalKoruma(terminal.clone());
     let terminal2 = terminal.clone();
     let (terminal_hata_tx, mut terminal_hata_rx) = mpsc::channel::<u64>(1);
-    let terminal_girdi_hata = terminal_hata_tx.clone();
     let (nesil_tx, mut nesil_rx) = tokio::sync::watch::channel(0u64);
     let (kare_tx, mut kare_rx) = mpsc::channel(2);
     let ayar = Arc::new(YayinAyari {
@@ -1092,6 +1091,11 @@ async fn oturum(
         None
     };
     let mut kol_siralari = std::collections::HashMap::<u8, u32>::new();
+    // Yakalama/odak hatası terminal girdisini masaüstüne düşürmemeli.
+    // Kilit yalnız açık bir TerminalModu { ac: None } komutuyla kalkar.
+    let mut terminal_secili = false;
+    let mut terminal_uyari_zamani: Option<std::time::Instant> = None;
+    let mut bekleyen_birakmalar = Vec::new();
     let mut titresim_araligi = tokio::time::interval(Duration::from_millis(50));
     titresim_araligi.tick().await;
     let mut yol_olcum = tokio::time::interval(Duration::from_secs(1));
@@ -1131,6 +1135,8 @@ async fn oturum(
                     if protokol::yaz(&mut w, &mesaj).await.is_err() { break kopus("Bağlantı koptu."); }
                 }
                 Some(Kontrol::TerminalModu { ac, en, boy }) => {
+                    terminal_secili = ac.is_some();
+                    terminal_uyari_zamani = None;
                     let sonuc = if let Some(id) = ac {
                         terminal_erisimi(izinler.kontrol, fabrika.terminal_destegi()).and_then(|_| {
                             let mut t = terminal.lock().unwrap();
@@ -1155,6 +1161,7 @@ async fn oturum(
                 }
                 Some(Kontrol::Girdi(mut g)) => {
                     if let protokol::Girdi::Kol(k) = &g {
+                        if terminal_secili { continue; }
                         if sanal_kol.is_none() || !sira_yeni(kol_siralari.get(&k.slot).copied(), k.sira) { continue; }
                         kol_siralari.insert(k.slot, k.sira);
                         let surucu_hatasi = sanal_kol.as_mut().is_some_and(|s| s.guncelle(k).is_err());
@@ -1164,23 +1171,42 @@ async fn oturum(
                         }
                         continue;
                     }
-                    {
+                    let sonuc = {
                         let t = terminal.lock().unwrap();
-                        let birakma = matches!(&g,
-                            protokol::Girdi::Tus { basili: false, .. } |
-                            protokol::Girdi::FareTus { basili: false, .. });
-                        if let Some(o) = &t.oturum {
-                            if !birakma && o.odakla().is_err() {
-                                let _ = terminal_girdi_hata.try_send(t.nesil);
-                                continue;
-                            }
-                            if let protokol::Girdi::FareKonum { x, y } = &mut g {
-                                let Some(a) = t.alan else { continue; };
-                                (*x, *y) = crate::terminal::fare_cevir(*x, *y, a, t.ekran.0, t.ekran.1);
-                            }
+                        tokio::task::block_in_place(|| crate::terminal::korumali_girdi(
+                            terminal_secili,
+                            || match &t.oturum {
+                                Some(o) => o.odakla(),
+                                None => anyhow::bail!("Terminal kapanmış, yeniden seç."),
+                            },
+                            || {
+                                if terminal_secili {
+                                    if let protokol::Girdi::FareKonum { x, y } = &mut g {
+                                        let a = t.alan.ok_or_else(|| anyhow::anyhow!("Terminal hazır değil, yeniden dene."))?;
+                                        (*x, *y) = crate::terminal::fare_cevir(*x, *y, a, t.ekran.0, t.ekran.1);
+                                    }
+                                }
+                                if let Some(e) = enjektor.as_mut() {
+                                    for birak in bekleyen_birakmalar.drain(..) { e.uygula(&birak)?; }
+                                    e.uygula(&g)?;
+                                }
+                                Ok(())
+                            },
+                        ))
+                    };
+                    if sonuc.is_err() && terminal_secili {
+                        if matches!(&g, protokol::Girdi::Tus { basili: false, .. } |
+                            protokol::Girdi::FareTus { basili: false, .. })
+                            && !bekleyen_birakmalar.contains(&g) {
+                            bekleyen_birakmalar.push(g);
+                        }
+                        if terminal_uyari_zamani.is_none_or(|z| z.elapsed() >= Duration::from_secs(2)) {
+                            terminal_uyari_zamani = Some(std::time::Instant::now());
+                            let mesaj = Kontrol::TerminalDurum { acik: true,
+                                hata: Some("Terminale yazılamadı, bilgisayarda terminali seçip yeniden dene.".into()) };
+                            if protokol::yaz(&mut w, &mesaj).await.is_err() { break kopus("Bağlantı koptu."); }
                         }
                     }
-                    if let Some(e) = enjektor.as_mut() { let _ = tokio::task::block_in_place(|| e.uygula(&g)); }
                 }
                 Some(Kontrol::SaatSor { izleyici_ms }) => {
                     let host_ms = unix_ms();

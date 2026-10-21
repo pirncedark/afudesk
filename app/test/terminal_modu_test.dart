@@ -1,6 +1,7 @@
 import 'package:afudesk/motor.dart';
 import 'package:afudesk/sayfalar/oturum.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'sahte_motor.dart';
@@ -87,6 +88,94 @@ void main() {
     expect(m.girdiler.last.tur, 'terminal_kapat');
     expect(find.byKey(const Key('terminal_modu')), findsNothing);
     expect(m.cagrilar.where((s) => s == 'baglan').length, 1);
+    await t.pumpWidget(const SizedBox.shrink());
+  });
+
+  Future<SahteMotor> terminalAc(WidgetTester t) async {
+    final m = await baglan(t);
+    await t.tap(find.byKey(const Key('oturum_terminal')));
+    m.izleyici.add(
+      IzleyiciOlay(
+        'terminal_liste',
+        metin: '[{"id":42,"baslik":"Kod","uygulama":"PowerShell"}]',
+      ),
+    );
+    await t.pump();
+    m.izleyici.add(IzleyiciOlay('terminal_durum', metin: 'acik'));
+    await t.pump();
+    await t.pump(const Duration(seconds: 4));
+    m.girdiler.clear();
+    return m;
+  }
+
+  testWidgets('IME composing commit ve Turkce duzeltme kaybolmaz', (t) async {
+    final m = await terminalAc(t);
+    await t.tap(find.byKey(const Key('terminal_klavye')));
+    await t.pump();
+    await t.showKeyboard(find.byKey(const Key('terminal_yazi')));
+    void ime(String text, {bool composing = false}) {
+      t.testTextInput.updateEditingValue(
+        TextEditingValue(
+          text: text,
+          selection: TextSelection.collapsed(offset: text.length),
+          composing: composing
+              ? TextRange(start: 0, end: text.length)
+              : TextRange.empty,
+        ),
+      );
+    }
+
+    ime('cag', composing: true);
+    ime('çağrı', composing: true);
+    ime('çağrı');
+    ime('çağ');
+    ime('çağ İstanbul');
+    var host = '';
+    for (final g in m.girdiler) {
+      if (g.tur == 'metin') host += g.metin;
+      if (g.ad == 'Backspace' && g.basili) {
+        host = String.fromCharCodes(host.runes.take(host.runes.length - 1));
+      }
+    }
+    expect(host, 'çağ İstanbul');
+    expect(
+      m.girdiler.where((g) => g.ad == 'Backspace' && g.basili),
+      isNotEmpty,
+    );
+    await t.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('Space kisa basista bosluk uzun basista tek down up', (t) async {
+    final m = await terminalAc(t);
+    await t.sendKeyDownEvent(LogicalKeyboardKey.space);
+    expect(m.girdiler, isEmpty);
+    await t.pump(const Duration(milliseconds: 100));
+    await t.sendKeyUpEvent(LogicalKeyboardKey.space);
+    expect(m.girdiler.map((g) => g.basili), [true, false]);
+    m.girdiler.clear();
+    await t.sendKeyDownEvent(LogicalKeyboardKey.space);
+    await t.pump(const Duration(milliseconds: 401));
+    await t.sendKeyRepeatEvent(LogicalKeyboardKey.space);
+    await t.pump(const Duration(seconds: 1));
+    expect(m.girdiler.map((g) => g.basili), [true]);
+    await t.sendKeyUpEvent(LogicalKeyboardKey.space);
+    expect(m.girdiler.map((g) => g.basili), [true, false]);
+    expect(m.girdiler.every((g) => g.ad == 'Space'), isTrue);
+    await t.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('Bas konus birakma ve iptalde Space serbest kalir', (t) async {
+    final m = await terminalAc(t);
+    final b = find.byKey(const Key('terminal_bas_konus'));
+    final gesture = await t.startGesture(t.getCenter(b));
+    await t.pump(const Duration(seconds: 1));
+    expect(m.girdiler.map((g) => g.basili), [true]);
+    await gesture.cancel();
+    expect(m.girdiler.map((g) => g.basili), [true, false]);
+    m.girdiler.clear();
+    final g2 = await t.startGesture(t.getCenter(b));
+    await g2.up();
+    expect(m.girdiler.map((g) => g.basili), [true, false]);
     await t.pumpWidget(const SizedBox.shrink());
   });
 

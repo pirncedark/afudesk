@@ -10,9 +10,14 @@ class SahteKasa implements OturumKasasi {
   @override
   Future<String?> oku() async => sifreli;
   @override
-  Future<void> yaz(String veri) async { sifreli = veri; }
+  Future<void> yaz(String veri) async {
+    sifreli = veri;
+  }
+
   @override
-  Future<void> sil() async { sifreli = null; }
+  Future<void> sil() async {
+    sifreli = null;
+  }
 }
 
 void main() {
@@ -23,9 +28,11 @@ void main() {
     Future<void> Function(Duration)? bekle,
   }) {
     final servis = GercekHesapServisi(
-      islem: islem, kasa: kasa,
+      islem: islem,
+      kasa: kasa,
       googleBaglan: baglan ?? (_) => const Stream<IzleyiciOlay>.empty(),
-      kes: () async {}, hostOlaylari: const Stream<HostOlay>.empty(),
+      kes: () async {},
+      hostOlaylari: const Stream<HostOlay>.empty(),
       platformGirisi: (_) async => throw StateError('Sessiz yükleme'),
       tarayiciAc: (_) async => throw StateError('Tarayıcı açılmamalı'),
       bekle: bekle ?? (sure) => Future<void>.delayed(sure),
@@ -36,10 +43,14 @@ void main() {
 
   test('sessiz yükleme kasayı okur ve yenilenen paketi saklar', () async {
     final kasa = SahteKasa()..sifreli = 'eski';
-    final servis = servisOlustur(kasa: kasa, islem: (op, veri) async {
-      expect(op, 'geriYukle'); expect(veri, 'eski');
-      return '{"ad":"Google hesabın","oturum":"yeni"}';
-    });
+    final servis = servisOlustur(
+      kasa: kasa,
+      islem: (op, veri) async {
+        expect(op, 'geriYukle');
+        expect(veri, 'eski');
+        return '{"ad":"Google hesabın","oturum":"yeni"}';
+      },
+    );
     await servis.geriYukle();
     expect(servis.hesap, isNotNull);
     expect(await kasa.oku(), 'yeni');
@@ -48,22 +59,33 @@ void main() {
   test('ağ kesintisi kasayı korur, geçersiz token silinir', () async {
     for (final kod in ['G5', 'G6']) {
       final kasa = SahteKasa()..sifreli = 'paket';
-      final servis = servisOlustur(kasa: kasa, islem: (_, _) async {
-        throw StateError('Google işlemi tamamlanamadı ($kod)');
-      });
+      final servis = servisOlustur(
+        kasa: kasa,
+        islem: (_, _) async {
+          throw StateError('Google işlemi tamamlanamadı ($kod)');
+        },
+      );
       await servis.geriYukle();
       expect(await kasa.oku(), kod == 'G6' ? isNull : 'paket');
       expect(servis.hesap, isNull);
-      if (kod == 'G6') expect(servis.durum, 'Google ile yeniden giriş yap');
+      if (kod == 'G6') {
+        expect(
+          servis.durum,
+          'Google izni sona erdi. Yeniden bağlanmak için dokun.',
+        );
+      }
     }
   });
 
   test('durdurma hatasında hesap temizlenir, kasa korunur', () async {
     final kasa = SahteKasa()..sifreli = 'paket';
-    final servis = servisOlustur(kasa: kasa, islem: (op, _) async {
-      if (op == 'duraklat') throw StateError('çevrimdışı');
-      return '{"ad":"Google hesabın"}';
-    });
+    final servis = servisOlustur(
+      kasa: kasa,
+      islem: (op, _) async {
+        if (op == 'duraklat') throw StateError('çevrimdışı');
+        return '{"ad":"Google hesabın"}';
+      },
+    );
     await servis.geriYukle();
     await expectLater(servis.duraklat(), throwsStateError);
     expect(servis.hesap, isNull);
@@ -76,12 +98,17 @@ void main() {
     final beklemeler = <Duration>[];
     final servis = servisOlustur(
       islem: (_, _) async => '[{"id":"ev","ad":"Ev","cevrimici":true}]',
-      bekle: (sure) async { beklemeler.add(sure); },
+      bekle: (sure) async {
+        beklemeler.add(sure);
+      },
       baglan: (_) async* {
         acilis++;
         if (acilis == 1) {
-          yield IzleyiciOlay('kabul'); yield IzleyiciOlay('yeniden');
-        } else { yield IzleyiciOlay('hata'); }
+          yield IzleyiciOlay('kabul');
+          yield IzleyiciOlay('yeniden');
+        } else {
+          yield IzleyiciOlay('hata');
+        }
       },
     );
     late Future<List<IzleyiciOlay>> olaylar;
@@ -91,8 +118,11 @@ void main() {
     await servis.baglan('ev');
     final sonuc = await olaylar;
     expect(acilis, 4);
-    expect(beklemeler, [const Duration(seconds: 1),
-      const Duration(seconds: 2), const Duration(seconds: 4)]);
+    expect(beklemeler, [
+      const Duration(seconds: 1),
+      const Duration(seconds: 2),
+      const Duration(seconds: 4),
+    ]);
     expect(sonuc.where((o) => o.tur == 'yeniden').length, 3);
     expect(sonuc.last.tur, 'koptu');
     expect(servis.sonBaglanmaSuresi, isNotNull);
@@ -100,10 +130,78 @@ void main() {
   });
 
   test('Run komutu boşluk ve Unicode içeren exe yolunu tırnaklar', () {
-    expect(baslangicKomutu(r'C:\Kullanıcı Dosyaları\AfuDesk.exe'),
-        '"C:\\Kullanıcı Dosyaları\\AfuDesk.exe" --arka-plan');
+    expect(
+      baslangicKomutu(r'C:\Kullanıcı Dosyaları\AfuDesk.exe'),
+      '"C:\\Kullanıcı Dosyaları\\AfuDesk.exe" --arka-plan',
+    );
     expect(() => baslangicKomutu('a"b.exe'), throwsArgumentError);
     expect(() => baslangicKomutu(''), throwsArgumentError);
+  });
+
+  test('eski akış yeni bağlantının durumunu temizlemez', () async {
+    final eski = StreamController<IzleyiciOlay>();
+    final yeni = StreamController<IzleyiciOlay>();
+    var deneme = 0;
+    final servis = servisOlustur(
+      islem: (_, _) async => '[{"id":"ev","ad":"Ev","cevrimici":true}]',
+      baglan: (_) => ++deneme == 1 ? eski.stream : yeni.stream,
+    );
+    final aboneler = <StreamSubscription<IzleyiciOlay>>[];
+    final olaylar = <IzleyiciOlay>[];
+    servis.oturumAc = (_, ac, {required terminalleBasla}) {
+      aboneler.add(ac().listen(olaylar.add));
+    };
+    await servis.baglan('ev');
+    await Future<void>.delayed(Duration.zero);
+    await servis.baglan('ev');
+    yeni.add(IzleyiciOlay('kabul'));
+    await Future<void>.delayed(Duration.zero);
+    expect(servis.baglantilar, hasLength(1));
+    eski.add(IzleyiciOlay('koptu'));
+    await Future<void>.delayed(Duration.zero);
+    expect(olaylar.where((o) => o.tur == 'koptu'), isEmpty);
+    expect(servis.baglantilar, hasLength(1));
+    await eski.close();
+    await yeni.close();
+    for (final abone in aboneler) {
+      await abone.cancel();
+    }
+  });
+
+  test('üç bağlan kes döngüsü Google girişini tekrar istemez', () async {
+    final kasa = SahteKasa()..sifreli = 'kayitli';
+    var giris = 0;
+    var baglanti = 0;
+    final servis = servisOlustur(
+      kasa: kasa,
+      islem: (op, _) async {
+        if (op == 'geriYukle') {
+          giris++;
+          return '{"ad":"Google hesabın","oturum":"kayitli"}';
+        }
+        expect(op, 'liste');
+        return '[{"id":"ev","ad":"Ev","cevrimici":true}]';
+      },
+      baglan: (_) async* {
+        baglanti++;
+        yield IzleyiciOlay('kabul');
+      },
+    );
+    late Future<List<IzleyiciOlay>> sonuc;
+    servis.oturumAc = (_, ac, {required terminalleBasla}) {
+      expect(terminalleBasla, isTrue);
+      sonuc = ac().toList();
+    };
+    await servis.geriYukle();
+    for (var i = 0; i < 3; i++) {
+      await servis.baglan('ev', terminalleBasla: true);
+      expect((await sonuc).single.tur, 'kabul');
+      await servis.baglantiyiKes();
+      expect(servis.hesap, isNotNull);
+      expect(await kasa.oku(), 'kayitli');
+    }
+    expect(giris, 1);
+    expect(baglanti, 3);
   });
   test('yalnız arka plan açıkken X tepsiye gizler', () {
     expect(tepsiyeGizle(arkaPlan: true, cikiliyor: false), isTrue);
@@ -111,9 +209,15 @@ void main() {
     expect(tepsiyeGizle(arkaPlan: true, cikiliyor: true), isFalse);
   });
   test('yeniden bağlantı üç kez 1, 2, 4 saniye bekler', () {
-    expect([for (var i = 0; i < 4; i++) yenidenBaglanmaBeklemesi(i)],
-        [const Duration(seconds: 1), const Duration(seconds: 2),
-         const Duration(seconds: 4), null]);
+    expect(
+      [for (var i = 0; i < 4; i++) yenidenBaglanmaBeklemesi(i)],
+      [
+        const Duration(seconds: 1),
+        const Duration(seconds: 2),
+        const Duration(seconds: 4),
+        null,
+      ],
+    );
   });
   test('oturum kasası yenileme paketini yükler, değiştirir ve siler', () async {
     final kasa = SahteKasa();

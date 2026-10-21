@@ -10,6 +10,36 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 
 const SURE: Duration = Duration::from_secs(20);
 
+#[tokio::test(flavor = "multi_thread")]
+async fn terminal_hatasi_oturumu_kapatmaz_uc_baglanti_tekrarlanir() {
+    // The fake capture backend deliberately has no terminal support. Both
+    // list and open errors must be replies, not transport disconnects.
+    let fab = Arc::new(SahteFabrika::new(64, 48));
+    let mut h = host::baslat(ayar("123456"), fab).await.unwrap();
+    for _ in 0..3 {
+        let (kod, parola) = hazir(&mut h).await;
+        let mut i = izleyici::baglan(&kod, &parola, "Veli").await.unwrap();
+        olay_bekle(&mut h, |o| matches!(o, HostOlay::Istek { .. })).await;
+        h.komut(HostKomut::Kabul(izinler_kontrollu())).await;
+        iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Kabul { .. })).await;
+        for _ in 0..2 {
+            for komut in [
+                crate::protokol::Kontrol::TerminalListesi,
+                crate::protokol::Kontrol::TerminalModu { ac: Some(42), en: 360, boy: 800 },
+            ] {
+                i.terminal_komut(komut).await.unwrap();
+                let sonuc = iz_bekle(&mut i, |o| matches!(o,
+                    IzleyiciOlay::TerminalDurum { .. } | IzleyiciOlay::Koptu { .. })).await;
+                assert!(matches!(sonuc, IzleyiciOlay::TerminalDurum { acik: false, hata: Some(_) }));
+            }
+        }
+        iz_bekle(&mut i, |o| matches!(o, IzleyiciOlay::Kare { .. })).await;
+        i.kapat();
+        olay_bekle(&mut h, |o| matches!(o, HostOlay::Koptu { .. })).await;
+    }
+    h.durdur();
+}
+
 fn ayar(parola: &str) -> HostAyar {
     HostAyar {
         ad: "Ali PC".into(),

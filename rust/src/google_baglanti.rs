@@ -32,10 +32,35 @@ impl Erisim {
         id_token: String,
         access_token: String,
         istemciler: Vec<String>,
-        mut cihaz: CihazKaydi,
+        cihaz: CihazKaydi,
     ) -> Result<Arc<Self>, DogrulamaHatasi> {
         let d = Dogrulayici::google_dan(istemciler.clone()).await?;
         let hesap = d.dogrula(&id_token, crate::kod::simdi())?;
+        Self::kur(id_token, access_token, istemciler, cihaz, hesap)
+    }
+
+    /// The stored subject/nonce comes only from the encrypted local grant.
+    /// This path is never used to verify an incoming peer's token.
+    pub async fn yenilenmis(
+        id_token: String,
+        access_token: String,
+        istemciler: Vec<String>,
+        cihaz: CihazKaydi,
+        sub: &str,
+        nonce: &str,
+    ) -> Result<Arc<Self>, DogrulamaHatasi> {
+        let d = Dogrulayici::google_dan(istemciler.clone()).await?;
+        let hesap = d.dogrula_yenileme(&id_token, crate::kod::simdi(), sub, nonce)?;
+        Self::kur(id_token, access_token, istemciler, cihaz, hesap)
+    }
+
+    fn kur(
+        id_token: String,
+        access_token: String,
+        istemciler: Vec<String>,
+        mut cihaz: CihazKaydi,
+        hesap: Dogrulanmis,
+    ) -> Result<Arc<Self>, DogrulamaHatasi> {
         let bag = anahtar_nonce(&cihaz.host, &cihaz.izleyici);
         if !hesap.nonce().starts_with(&format!("{bag}.")) {
             return Err(DogrulamaHatasi);

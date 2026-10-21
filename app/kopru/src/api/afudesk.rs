@@ -58,7 +58,7 @@ pub fn izleyici_google_baglan(kimlik: String, ad: String, olaylar: StreamSink<Iz
     izleyici_kapat();
     IZLEYICI_KOL_IZNI.store(false, Ordering::SeqCst);
     let sonuc = rt().block_on(async {
-        let g = super::google::etkin_hesap()?;
+        let g = super::google::etkin_hesap().await?;
         let v = veri().ok_or_else(|| anyhow::anyhow!("Cihaz kaydedilemedi, yeniden dene."))?;
         #[cfg(not(target_os = "android"))]
         let pano = afudesk_core::pano::ArboardPano::new().ok()
@@ -531,7 +531,7 @@ fn izleyici_pompala(sonuc: anyhow::Result<izleyici::Izleyici>, olaylar: StreamSi
                     ..Default::default()
                 },
                 IzleyiciOlay::TerminalDurum { acik, hata } => IzleyiciOlayi {
-                    tur: "terminal_durum".into(),
+                    tur: if acik && hata.is_some() { "terminal_uyari" } else { "terminal_durum" }.into(),
                     metin: hata.unwrap_or_else(|| if acik { "acik" } else { "kapali" }.into()),
                     ..Default::default()
                 },

@@ -90,6 +90,9 @@ class GercekHesapServisi extends HesapServisi {
   int _oturumNesli = 0;
   int _baglantiNesli = 0;
   Timer? _geriYukleme;
+  int _yenidenDeneme = 0;
+  static const _yenidenGiris =
+      'Google izni sona erdi. Yeniden bağlanmak için dokun.';
   GoogleOturumAc? oturumAc;
   late final StreamSubscription<HostOlay> _host;
   final _akis = StreamController<List<Cihaz>>.broadcast();
@@ -116,8 +119,27 @@ class GercekHesapServisi extends HesapServisi {
       jsonDecode(await islem(op, data));
 
   void _saatBaslat() {
+    _geriYukleme?.cancel();
+    _yenidenDeneme = 0;
     _heartbeat?.cancel();
     _heartbeat = Timer.periodic(const Duration(seconds: 60), (_) => _yenile());
+  }
+
+  void _sessizTekrar() {
+    _heartbeat?.cancel();
+    _geriYukleme?.cancel();
+    // One retry owner for both startup and heartbeat; cap the exponential wait.
+    final saniye = (5 * (1 << _yenidenDeneme)).clamp(5, 300);
+    if (_yenidenDeneme < 6) _yenidenDeneme++;
+    durum = 'Bağlanıyor…';
+    _geriYukleme = Timer(Duration(seconds: saniye), () {
+      if (_kapali || _duraklatildi) return;
+      if (_hesap == null) {
+        unawaited(geriYukle());
+      } else {
+        unawaited(_yenile());
+      }
+    });
   }
 
   Future<void> _kasada(Future<void> Function() islem) {
@@ -142,7 +164,9 @@ class GercekHesapServisi extends HesapServisi {
   }
 
   Future<void> geriYukle() async {
-    if (kasa == null || _mesgul || _hesap != null || _kapali || _duraklatildi) return;
+    if (kasa == null || _mesgul || _hesap != null || _kapali || _duraklatildi) {
+      return;
+    }
     _mesgul = true;
     final nesil = _oturumNesli;
     var etkinlesti = false;
@@ -158,18 +182,20 @@ class GercekHesapServisi extends HesapServisi {
       // Persistence can fail after native authorisation succeeded. Revoke that
       // invisible identity before retrying, but retain the encrypted grant.
       if (etkinlesti) {
-        try { await _cagir('duraklat'); } catch (_) {}
+        try {
+          await _cagir('duraklat');
+        } catch (_) {}
       }
       if ('$e'.contains('(G6)')) {
         await _kasada(() => kasa!.sil());
-        durum = 'Google ile yeniden giriş yap';
+        durum = _yenidenGiris;
       } else {
-        durum = 'Bilgisayar hazır olamadı, internet bağlantını kontrol et.';
-        _geriYukleme?.cancel();
-        _geriYukleme = Timer(const Duration(seconds: 30), geriYukle);
+        _sessizTekrar();
       }
       _yayinla();
-    } finally { _mesgul = false; }
+    } finally {
+      _mesgul = false;
+    }
   }
 
   Future<void> duraklat() async {
@@ -187,7 +213,8 @@ class GercekHesapServisi extends HesapServisi {
         _hesap = null;
         _gelen = null;
         _giden = null;
-        durum = 'Bağlantılar durduruldu; devam etmek için uygulamayı yeniden aç.';
+        durum =
+            'Bağlantılar durduruldu; devam etmek için uygulamayı yeniden aç.';
         _yayinla();
       }
     }
@@ -241,7 +268,9 @@ class GercekHesapServisi extends HesapServisi {
   }
 
   Future<void> _yenile() async {
-    if (_yeniliyor || _mesgul || _hesap == null) return;
+    if (_kapali || _duraklatildi || _yeniliyor || _mesgul || _hesap == null) {
+      return;
+    }
     _yeniliyor = true;
     final nesil = _oturumNesli;
     try {
@@ -249,17 +278,22 @@ class GercekHesapServisi extends HesapServisi {
       if (_kapali || nesil != _oturumNesli) return;
       if (identity is Map && identity['ad'] is String) {
         await _kimligiAl(identity);
-      } else if (durum != null) {
+      } else {
         durum = null;
+        _saatBaslat();
         _yayinla();
       }
     } catch (e) {
       if (_kapali || nesil != _oturumNesli) return;
       if ('$e'.contains('(G6)')) {
-        await cikisYap();
-        durum = 'Google ile yeniden giriş yap';
+        try {
+          await cikisYap();
+        } catch (_) {
+          // Revocation has already happened locally, even if Drive is offline.
+        }
+        durum = _yenidenGiris;
       } else {
-        durum = 'Bağlantı yenilenemedi, internet bağlantını kontrol et.';
+        _sessizTekrar();
       }
       if (!_kapali) _yayinla();
     } finally {
@@ -299,7 +333,7 @@ class GercekHesapServisi extends HesapServisi {
           try {
             await for (final o in googleBaglan(cihaz.id)) {
               if (nesil != _baglantiNesli || _kapali) {
-                yield o;
+                if (_giden == null) yield o;
                 return;
               }
               if (o.tur == 'yeniden') {
@@ -334,15 +368,24 @@ class GercekHesapServisi extends HesapServisi {
           _yayinla();
           final gecikme = yenidenBaglanmaBeklemesi(deneme++);
           if (gecikme == null) {
-            yield IzleyiciOlay('koptu', metin: 'Bağlantı kurulamadı, bilgisayarın açık olduğunu kontrol et.');
+            yield IzleyiciOlay(
+              'koptu',
+              metin:
+                  'Bağlantı kurulamadı, bilgisayarın açık olduğunu kontrol et.',
+            );
             return;
           }
-          yield IzleyiciOlay('yeniden', metin: 'Bağlantı koptu, yeniden bağlanılıyor… ($deneme/3)');
+          yield IzleyiciOlay(
+            'yeniden',
+            metin: 'Bağlantı koptu, yeniden bağlanılıyor… ($deneme/3)',
+          );
           await bekle(gecikme);
         }
       } finally {
-        _giden = null;
-        _yayinla();
+        if (nesil == _baglantiNesli) {
+          _giden = null;
+          _yayinla();
+        }
       }
     }, terminalleBasla: terminalleBasla);
   }
@@ -350,10 +393,9 @@ class GercekHesapServisi extends HesapServisi {
   @override
   Future<void> baglantiyiKes() async {
     _baglantiNesli++;
-    await kes();
-    // The host's actual disconnect event clears the incoming banner.
     _giden = null;
     _yayinla();
+    await kes();
   }
 
   @override
@@ -367,7 +409,9 @@ class GercekHesapServisi extends HesapServisi {
     durum = null;
     try {
       try {
-        await _kasada(() async { await kasa?.sil(); });
+        await _kasada(() async {
+          await kasa?.sil();
+        });
       } finally {
         // Local revocation must run even if deleting the encrypted file fails.
         await _cagir('cikis');
@@ -395,6 +439,7 @@ class GercekHesapServisi extends HesapServisi {
 
   @override
   void dispose() {
+    if (_kapali) return;
     _oturumNesli++;
     _kapali = true;
     _baglantiNesli++;
