@@ -19,6 +19,7 @@ pub mod kod;
 pub mod kol;
 pub mod pano;
 pub mod platform;
+pub mod terminal;
 pub mod protokol;
 pub mod sanal_kol;
 pub mod zaman;

@@ -85,6 +85,10 @@ impl Giris {
             ("nonce", nonce.as_str()),
             ("code_challenge", challenge.as_str()),
             ("code_challenge_method", "S256"),
+            ("access_type", "offline"),
+            // This URL is only built for explicit first/re-authorisation.
+            // Restoring an existing session uses the token endpoint directly.
+            ("prompt", "consent"),
         ]);
         Ok(Self {
             client_id: client_id.into(),
@@ -288,6 +292,7 @@ impl Kod {
             id_token: String,
             access_token: String,
             token_type: String,
+            refresh_token: Option<String>,
         }
         let token: Token = serde_json::from_slice(&bytes).map_err(|_| DogrulamaHatasi)?;
         if token.access_token.is_empty()
@@ -296,7 +301,8 @@ impl Kod {
         {
             return Err(DogrulamaHatasi);
         }
-        let verifier = Dogrulayici::google_dan(vec![self.giris.client_id]).await?;
+        let client_id = self.giris.client_id;
+        let verifier = Dogrulayici::google_dan(vec![client_id.clone()]).await?;
         let simdi = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(|_| DogrulamaHatasi)?
@@ -311,6 +317,8 @@ impl Kod {
             hesap,
             id_token: token.id_token,
             access_token: token.access_token,
+            refresh_token: token.refresh_token,
+            client_id,
         })
     }
 }
@@ -319,10 +327,90 @@ pub struct GoogleOturumu {
     pub hesap: Dogrulanmis,
     pub id_token: String,
     pub access_token: String,
+    pub refresh_token: Option<String>,
+    pub client_id: String,
 }
 impl fmt::Debug for GoogleOturumu {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("GoogleOturumu([gizli])")
+    }
+}
+
+#[derive(Clone, Copy, Debug, thiserror::Error)]
+pub enum YenilemeHatasi {
+    #[error("G6")]
+    Iptal,
+    #[error("G5")]
+    Ag,
+}
+
+/// Refresh credentials never enter URLs, logs, Debug or error payloads.
+pub async fn yenile(
+    client_id: &str,
+    secret: &str,
+    refresh_token: &str,
+) -> Result<(String, String, Option<String>), YenilemeHatasi> {
+    use YenilemeHatasi::Ag;
+    if refresh_token.is_empty() || refresh_token.len() > 16 * 1024 {
+        return Err(YenilemeHatasi::Iptal);
+    }
+    let client = crate::google::http_client().map_err(|_| Ag)?
+        .https_only(true)
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(20)).build().map_err(|_| Ag)?;
+    let mut body = Url::parse("https://localhost/").map_err(|_| Ag)?;
+    body.query_pairs_mut().extend_pairs([
+        ("client_id", client_id), ("client_secret", secret),
+        ("refresh_token", refresh_token), ("grant_type", "refresh_token"),
+    ]);
+    let mut response = client.post("https://oauth2.googleapis.com/token")
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(body.query().unwrap_or_default().to_owned())
+        .send().await.map_err(|_| Ag)?;
+    let ok = response.status().is_success();
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(|_| Ag)? {
+        if bytes.len().saturating_add(chunk.len()) > 65536 { return Err(Ag); }
+        bytes.extend_from_slice(&chunk);
+    }
+    yenileme_yaniti(ok, &bytes)
+}
+
+fn yenileme_yaniti(ok: bool, bytes: &[u8]) -> Result<(String, String, Option<String>), YenilemeHatasi> {
+    use YenilemeHatasi::{Ag, Iptal};
+    let value: serde_json::Value = serde_json::from_slice(bytes).map_err(|_| Ag)?;
+    if !ok {
+        return Err(if value["error"] == "invalid_grant" { Iptal } else { Ag });
+    }
+    let id = value["id_token"].as_str().filter(|v| !v.is_empty() && v.len() <= 16384).ok_or(Ag)?;
+    let access = value["access_token"].as_str().filter(|v| !v.is_empty() && v.len() <= 16384).ok_or(Ag)?;
+    if !value["token_type"].as_str().is_some_and(|v| v.eq_ignore_ascii_case("Bearer")) { return Err(Ag); }
+    let refresh = value["refresh_token"].as_str().map(str::to_owned);
+    if refresh.as_ref().is_some_and(|v| v.is_empty() || v.len() > 16384) { return Err(Ag); }
+    Ok((id.into(), access.into(), refresh))
+}
+
+#[cfg(test)]
+mod yenileme_testleri {
+    use super::*;
+    #[test]
+    fn ag_hatasi_oturumu_iptal_etmez() {
+        assert!(matches!(yenileme_yaniti(false, br#"{"error":"temporarily_unavailable"}"#), Err(YenilemeHatasi::Ag)));
+        assert!(matches!(yenileme_yaniti(false, br#"{"error":"invalid_grant"}"#), Err(YenilemeHatasi::Iptal)));
+    }
+    #[test]
+    fn token_dondurme_istege_baglidir() {
+        let (_, access, refresh) = yenileme_yaniti(true,
+            br#"{"id_token":"id","access_token":"access","token_type":"Bearer"}"#).unwrap();
+        assert_eq!(access, "access"); assert!(refresh.is_none());
+        assert!(yenileme_yaniti(true, br#"{"id_token":"id","access_token":"","token_type":"Bearer"}"#).is_err());
+    }
+    #[test]
+    fn ilk_giris_offline_onayi_ister() {
+        let g = Giris::yeni("test.apps.googleusercontent.com", 1234, "host", "viewer").unwrap();
+        let url = Url::parse(g.url()).unwrap();
+        assert!(url.query_pairs().any(|(k,v)| k == "access_type" && v == "offline"));
+        assert!(url.query_pairs().any(|(k,v)| k == "prompt" && v == "consent"));
     }
 }
 

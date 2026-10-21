@@ -20,6 +20,7 @@ class GoogleHatasi extends HesapHatasi {
     'G4' => 'Google hesabı doğrulanamadı ($kod), yeniden giriş yap.',
     'G5' =>
       'Google’a ulaşılamadı ($kod), internetini kontrol edip yeniden dene.',
+    'G6' => 'Google ile yeniden giriş yap',
     _ => 'Google girişi tamamlanamadı (G9), yeniden dene.',
   };
 
@@ -30,7 +31,7 @@ class GoogleHatasi extends HesapHatasi {
     String mesaj = '';
     String durum = '';
     if (hata is PlatformException) {
-      if (RegExp(r'^G[123459]$').hasMatch(hata.code)) {
+      if (RegExp(r'^G[1234569]$').hasMatch(hata.code)) {
         kod = hata.code;
       } else if (hata.code == '10' || hata.code == 'DEVELOPER_ERROR') {
         kod = 'G2';
@@ -50,8 +51,8 @@ class GoogleHatasi extends HesapHatasi {
     } else if (hata is SocketException || hata is HttpException) {
       kod = 'G5';
     } else {
-      // Rust emits fixed stage and rule markers; never copy raw error text.
-      kod = RegExp(r'\bG[123459]\b').firstMatch('$hata')?.group(0) ?? kod;
+      // Rust emits only these stage and rule markers; never copy raw error text.
+      kod = RegExp(r'\bG[1234569]\b').firstMatch('$hata')?.group(0) ?? kod;
     }
     final neden = kod == 'G4'
         ? RegExp(

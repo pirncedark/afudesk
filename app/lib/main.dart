@@ -15,6 +15,7 @@ import 'sayfalar/baglanti_ver.dart';
 import 'src/rust/api/afudesk.dart' as rust;
 import 'src/rust/frb_generated.dart';
 import 'tema.dart';
+import 'arka_plan/arka_plan.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,8 +33,22 @@ Future<void> main() async {
     }
   }
   final motor = RustMotor();
+  final hesap = GercekHesapServisi.rust(motor);
+  // Restore after the UI/host starts; an offline PC must still open immediately.
+  unawaited(hesap.geriYukle());
+  if (Platform.isWindows) {
+    ArkaPlan.kanal.setMethodCallHandler((call) async {
+      if (call.method == 'durdur' || call.method == 'cik') {
+        try {
+          await hesap.duraklat();
+        } finally {
+          if (call.method == 'cik') await ArkaPlan.kanal.invokeMethod<void>('kapat');
+        }
+      }
+    });
+  }
   runApp(
-    AfuDeskUygulama(motor: motor, hesapServisi: GercekHesapServisi.rust(motor)),
+    AfuDeskUygulama(motor: motor, hesapServisi: hesap),
   );
 }
 
@@ -59,10 +74,14 @@ class _AfuDeskUygulamaDurum extends State<AfuDeskUygulama> {
     super.initState();
     final servis = widget.hesapServisi;
     if (servis is GercekHesapServisi) {
-      servis.oturumAc = (cihaz, ac) {
+      servis.oturumAc = (cihaz, ac, {required terminalleBasla}) {
         _gezgin.currentState?.push(
           MaterialPageRoute(
-            builder: (_) => OturumSayfasi(motor: widget.motor, baglantiAc: ac),
+            builder: (_) => OturumSayfasi(
+              motor: widget.motor,
+              baglantiAc: ac,
+              terminalleBasla: terminalleBasla,
+            ),
           ),
         );
       };

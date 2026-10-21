@@ -30,6 +30,10 @@ pub trait Enjektor: Send {
 
 /// Her oturum için yeni yakalayıcı/enjektör üretir (ikisi de iş parçacığına bağlı olabilir).
 pub trait Fabrika: Send + Sync {
+    /// Sahte/headless fabrikalar hiçbir gerçek pencereye erişmez.
+    fn terminal_destegi(&self) -> bool {
+        false
+    }
     fn yakalayici(&self) -> Result<Box<dyn Yakalayici>>;
     fn enjektor(&self) -> Result<Box<dyn Enjektor>>;
     fn pano(&self) -> Result<Box<dyn Pano>>;
@@ -44,6 +48,9 @@ pub mod masaustu {
     pub struct Gercek;
 
     impl Fabrika for Gercek {
+        fn terminal_destegi(&self) -> bool {
+            cfg!(windows)
+        }
         fn yakalayici(&self) -> Result<Box<dyn Yakalayici>> {
             #[cfg(windows)]
             if let Ok(mut yakalayici) = WgcYakalayici::new() {

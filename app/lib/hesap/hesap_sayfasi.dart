@@ -6,6 +6,7 @@ import '../tema.dart';
 import '../bilesenler/guncelle_karti.dart';
 import 'hesap_servisi.dart';
 import 'google_hatasi.dart';
+import 'gercek_hesap_servisi.dart';
 
 /// Eski kodla bağlantı akışı [kodlaBaglan] üzerinden aynen erişilebilir.
 class HesapSayfasi extends StatefulWidget {
@@ -93,7 +94,8 @@ class _HesapSayfasiDurum extends State<HesapSayfasi> {
     }
   }
 
-  Future<void> _baglan(Cihaz cihaz) => servis.baglan(cihaz.id);
+  Future<void> _baglan(Cihaz cihaz, {bool terminalleBasla = false}) =>
+      servis.baglan(cihaz.id, terminalleBasla: terminalleBasla);
   Future<void> _erisim(bool acik) => servis.uzaktanErisimAyarla(acik);
 
   @override
@@ -115,7 +117,9 @@ class _HesapSayfasiDurum extends State<HesapSayfasi> {
               onPressed: _mesgul
                   ? null
                   : () => setState(() => _ayarlar = !_ayarlar),
-              icon: Icon(_ayarlar ? Icons.computer : Icons.manage_accounts_outlined),
+              icon: Icon(
+                _ayarlar ? Icons.computer : Icons.manage_accounts_outlined,
+              ),
             ),
           const GuncelleKarti(ayarDugmesi: true),
         ],
@@ -127,6 +131,9 @@ class _HesapSayfasiDurum extends State<HesapSayfasi> {
             child: ListView(
               padding: const EdgeInsets.all(24),
               children: [
+                if (servis is GercekHesapServisi && (servis as GercekHesapServisi).durum != null)
+                  Semantics(liveRegion: true,
+                    child: Text((servis as GercekHesapServisi).durum!)),
                 if (_hata != null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 16),
@@ -206,6 +213,14 @@ class _HesapSayfasiDurum extends State<HesapSayfasi> {
                           cihaz.cevrimici ? 'Çevrimiçi' : 'Çevrimdışı',
                         ),
                         enabled: cihaz.cevrimici && !_mesgul,
+                        trailing: TextButton(
+                          onPressed: cihaz.cevrimici && !_mesgul
+                              ? () => _yap(
+                                  () => _baglan(cihaz, terminalleBasla: true),
+                                )
+                              : null,
+                          child: const Text('Terminal'),
+                        ),
                         onTap: cihaz.cevrimici && !_mesgul
                             ? () => _yap(() => _baglan(cihaz))
                             : null,
@@ -264,6 +279,8 @@ class HesapBaglantiSeridi extends StatelessWidget {
                     Expanded(
                       child: Text(
                         'Uzaktan bağlı: ${snapshot.data!.map((c) => c.ad).join(', ')}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     _KesDugmesi(servis: servis),
