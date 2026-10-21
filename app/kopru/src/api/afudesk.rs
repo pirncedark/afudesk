@@ -531,7 +531,7 @@ fn izleyici_pompala(sonuc: anyhow::Result<izleyici::Izleyici>, olaylar: StreamSi
                     ..Default::default()
                 },
                 IzleyiciOlay::TerminalDurum { acik, hata } => IzleyiciOlayi {
-                    tur: "terminal_durum".into(),
+                    tur: if acik && hata.is_some() { "terminal_uyari" } else { "terminal_durum" }.into(),
                     metin: hata.unwrap_or_else(|| if acik { "acik" } else { "kapali" }.into()),
                     ..Default::default()
                 },

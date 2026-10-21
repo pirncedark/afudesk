@@ -3,6 +3,18 @@ use crate::goruntu::Goruntu;
 use anyhow::{ensure, Result};
 use serde::{Deserialize, Serialize};
 
+/// Aynı kontrol yolu metin, fare, yapıştırma ve tuş bırakma için de kullanılır.
+pub(crate) fn korumali_girdi(
+    terminal_modu: bool,
+    odakla: impl FnOnce() -> Result<()>,
+    uygula: impl FnOnce() -> Result<()>,
+) -> Result<()> {
+    if terminal_modu {
+        odakla()?;
+    }
+    uygula()
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Pencere {
     pub id: u64,
@@ -204,7 +216,8 @@ mod win {
         Foundation::{CloseHandle, HWND, LPARAM, POINT, RECT},
         Graphics::Gdi::{GetMonitorInfoW, MonitorFromPoint, MONITORINFO, MONITOR_DEFAULTTOPRIMARY},
         System::Threading::{
-            OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
+            AttachThreadInput, GetCurrentThreadId, OpenProcess, QueryFullProcessImageNameW,
+            PROCESS_QUERY_LIMITED_INFORMATION,
         },
         UI::{
             HiDpi::{SetThreadDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2},
@@ -378,6 +391,24 @@ mod win {
             if GetForegroundWindow() != hwnd {
                 SetForegroundWindow(hwnd);
             }
+            if GetForegroundWindow() != hwnd {
+                // Windows ön plan kilidi: yalnız bu deneme boyunca girdi kuyruklarını bağla.
+                // Pencerenin konumunu, boyutunu veya küçültülmüş durumunu değiştirme.
+                let simdiki = GetCurrentThreadId();
+                let on = GetWindowThreadProcessId(GetForegroundWindow(), std::ptr::null_mut());
+                let hedef = GetWindowThreadProcessId(hwnd, std::ptr::null_mut());
+                let on_bagli = on != 0 && on != simdiki
+                    && AttachThreadInput(simdiki, on, 1) != 0;
+                let hedef_bagli = hedef != 0 && hedef != simdiki && hedef != on
+                    && AttachThreadInput(simdiki, hedef, 1) != 0;
+                SetForegroundWindow(hwnd);
+                if hedef_bagli {
+                    AttachThreadInput(simdiki, hedef, 0);
+                }
+                if on_bagli {
+                    AttachThreadInput(simdiki, on, 0);
+                }
+            }
             ensure!(
                 GetForegroundWindow() == hwnd,
                 "Terminal öne getirilemedi. Bilgisayarda terminali seçip yeniden dene."
@@ -417,6 +448,26 @@ mod win {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn terminal_girdisi_odak_onayindan_once_asla_uygulanmaz() {
+        use std::cell::RefCell;
+        let sira = RefCell::new(Vec::new());
+        assert!(korumali_girdi(true, || {
+            sira.borrow_mut().push("odak");
+            anyhow::bail!("hedef onde degil")
+        }, || { sira.borrow_mut().push("girdi"); Ok(()) }).is_err());
+        assert_eq!(*sira.borrow(), ["odak"]);
+        sira.borrow_mut().clear();
+        korumali_girdi(true, || {
+            sira.borrow_mut().push("odak"); Ok(())
+        }, || { sira.borrow_mut().push("girdi"); Ok(()) }).unwrap();
+        assert_eq!(*sira.borrow(), ["odak", "girdi"]);
+        sira.borrow_mut().clear();
+        korumali_girdi(false, || panic!("masaustu odagi degismemeli"),
+            || { sira.borrow_mut().push("girdi"); Ok(()) }).unwrap();
+        assert_eq!(*sira.borrow(), ["girdi"]);
+    }
 
     #[test]
     fn terminal_siniflandirma() {
