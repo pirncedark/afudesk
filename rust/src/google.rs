@@ -46,7 +46,25 @@ const AZAMI_JWKS: usize = 128 * 1024;
 /// Sır, token veya claim içermeyen hata. UI doğrudan bu tek cümleyi kullanabilir.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 #[error("Google girişi doğrulanamadı. Yeniden giriş yap.")]
-pub struct DogrulamaHatasi;
+pub struct DogrulamaHatasi {
+    neden: &'static str,
+}
+
+// Preserve the existing credential-free default error at other call sites.
+#[allow(non_upper_case_globals)]
+pub const DogrulamaHatasi: DogrulamaHatasi = DogrulamaHatasi { neden: "diger" };
+
+impl DogrulamaHatasi {
+    pub const NONCE: Self = Self { neden: "nonce" };
+
+    pub fn nedeni(&self) -> &'static str {
+        self.neden
+    }
+
+    fn nedenli(neden: &'static str) -> Self {
+        Self { neden }
+    }
+}
 
 type Sonuc<T> = Result<T, DogrulamaHatasi>;
 
@@ -98,6 +116,23 @@ impl Audience {
             Self::Cok(a) => a,
         }
     }
+}
+
+/// Only well-formed Google client IDs can establish a shared project.
+fn istemci_projesi(id: &str) -> Option<&str> {
+    let (proje, istemci) = id
+        .strip_suffix(".apps.googleusercontent.com")?
+        .split_once('-')?;
+    if proje.is_empty()
+        || !proje.bytes().all(|b| b.is_ascii_digit())
+        || istemci.is_empty()
+        || !istemci
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+    {
+        return None;
+    }
+    Some(proje)
 }
 
 #[derive(Deserialize)]
@@ -198,24 +233,25 @@ impl Dogrulayici {
 
     pub fn dogrula(&self, token: &str, simdi: i64) -> Sonuc<Dogrulanmis> {
         if token.len() > AZAMI_TOKEN || simdi < 0 {
-            return Err(DogrulamaHatasi);
+            return Err(DogrulamaHatasi::nedenli("imza"));
         }
         let bolumler: Vec<_> = token.split('.').collect();
         let [h, p, s] = bolumler.as_slice() else {
-            return Err(DogrulamaHatasi);
+            return Err(DogrulamaHatasi::nedenli("imza"));
         };
-        let baslik: Baslik = serde_json::from_slice(&coz(h)?).map_err(|_| DogrulamaHatasi)?;
+        let baslik: Baslik =
+            serde_json::from_slice(&coz(h)?).map_err(|_| DogrulamaHatasi::nedenli("imza"))?;
         if baslik.alg != "RS256" || !baslik.crit.is_empty() {
-            return Err(DogrulamaHatasi);
+            return Err(DogrulamaHatasi::nedenli("imza"));
         }
         let mut uygun = self.anahtarlar.keys.iter().filter(|k| k.kid == baslik.kid);
-        let key = uygun.next().ok_or(DogrulamaHatasi)?;
+        let key = uygun.next().ok_or(DogrulamaHatasi::nedenli("imza"))?;
         if uygun.next().is_some()
             || key.kty != "RSA"
             || key.alg.as_deref().is_some_and(|a| a != "RS256")
             || key.kullanim.as_deref().is_some_and(|a| a != "sig")
         {
-            return Err(DogrulamaHatasi);
+            return Err(DogrulamaHatasi::nedenli("imza"));
         }
         let (n, e) = (coz(&key.n)?, coz(&key.e)?);
         RsaPublicKeyComponents { n: &n, e: &e }
@@ -224,30 +260,44 @@ impl Dogrulayici {
                 format!("{h}.{p}").as_bytes(),
                 &coz(s)?,
             )
-            .map_err(|_| DogrulamaHatasi)?;
+            .map_err(|_| DogrulamaHatasi::nedenli("imza"))?;
         // Claim'ler yalnız imza doğrulandıktan sonra yetki için işlenir.
-        let c: Claims = serde_json::from_slice(&coz(p)?).map_err(|_| DogrulamaHatasi)?;
+        let c: Claims =
+            serde_json::from_slice(&coz(p)?).map_err(|_| DogrulamaHatasi::nedenli("claim"))?;
         let aud = c.aud.degerler();
-        if !matches!(
+        let neden = if !matches!(
             c.iss.as_str(),
             "https://accounts.google.com" | "accounts.google.com"
-        ) || c.sub.is_empty()
-            || c.sub.len() > 255
-            || c.sub.chars().any(char::is_control)
-            || c.nonce.is_empty()
-            || c.nonce.len() > 256
-            || c.exp <= simdi
-            || c.iat < 0
-            || c.iat > simdi
-            || c.exp <= c.iat
-            || c.exp.saturating_sub(c.iat) > 7200
-            || !aud.iter().any(|a| self.istemciler.contains(a))
-            || (aud.len() > 1 && c.azp.is_none())
-            || c.azp
-                .as_ref()
-                .is_some_and(|a| !self.istemciler.contains(a) || !aud.contains(a))
+        ) {
+            Some("iss")
+        } else if c.sub.is_empty() || c.sub.len() > 255 || c.sub.chars().any(char::is_control) {
+            Some("sub")
+        } else if c.nonce.is_empty() || c.nonce.len() > 256 {
+            Some("nonce")
+        } else if c.exp <= simdi {
+            Some("exp")
+        } else if c.iat < 0 || c.iat > simdi.saturating_add(300) {
+            Some("iat")
+        } else if c.exp <= c.iat || c.exp.saturating_sub(c.iat) > 7200 {
+            Some("exp")
+        } else if !aud.iter().any(|a| self.istemciler.contains(a)) {
+            Some("aud")
+        } else if (aud.len() > 1 && c.azp.is_none())
+            || c.azp.as_ref().is_some_and(|azp| {
+                !self.istemciler.contains(azp)
+                    && !istemci_projesi(azp).is_some_and(|proje| {
+                        aud.iter().any(|a| {
+                            self.istemciler.contains(a) && istemci_projesi(a) == Some(proje)
+                        })
+                    })
+            })
         {
-            return Err(DogrulamaHatasi);
+            Some("azp")
+        } else {
+            None
+        };
+        if let Some(neden) = neden {
+            return Err(DogrulamaHatasi::nedenli(neden));
         }
         Ok(Dogrulanmis {
             sub: c.sub,
@@ -313,6 +363,151 @@ mod dizin_testleri {
             client.get(JWKS_URL).build().unwrap().url().scheme(),
             "https"
         );
+    }
+
+    // Ephemeral test-only RSA key; no production credentials.
+    const TEST_KEY: &str = "MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDr7-Tg9GQeazhH-qgLsgHQ-wg-KAoI1Azfs28NfaqqwrYWcMBMjFxQnKexWbynqtN-MSlu_bVazyvGT7c04A20dbOM-SElVQr3Y_tILWmxGi1xXKq1QYHfIaMBEeBVeqYbJpsk74T5LbQtAa-75p2R-DIcD5XswkIflnY6tQuB1Lb6tGPa3X-DusHhff_7Ei1B8zBazt3L6hBLXW21WmmH5wR-aHVBsb8F31TpJ2gbDEu5KUDbjOBIuACDzTnSmMov2E97mfKwbCl4HaUVakwX17U6ZfCIqTQxffy8sqXxkAfIxukAI74GjZIFmf55v4PqvM2LfnZrkMO2vPZ0GuBLAgMBAAECggEALL3VXYN66PnUNnImI_GhvoucSI03Oe1cc5-HU7uc_bzm4uKG1P1ZFEBg3JTz3afba3bPMKkUFyBqYLUFPRWwA6S-Y-Fqk7XI2pkvMcTK4jbgnzq_dJfzlOjADJfjPtJ_ZW6wxRRW1xn_rPlA5hUZlHDIr-GUwM0l1O-nhAKJKBldUIwT6HTkdo79_Ufpik6qdjm3pFrOtJKmwqnUHbxsEaVXRPeA-ZNiujddfECYG1sH7U_pzf8th0DDh_TpLWUoQ3WGmBZefsvrI-pY-xzwLfTKE4RTQZksJOeRfjDRtzqEsKyBSQ_lxAtR2JSa4jzHe548f5JZemp-N3gGVHkvoQKBgQD5tSSYuoDfed4Oc27waTO5pqnog3XeWJihfEcQMd0IQIhred5lVancxYXmOwd9LCpQYrMwRo1lcmfB2uRVFPatt5ITDHAhtsc6Ab-hR20QYfSzjd10PuM5auKeqMjGwJ5lCYkd-zJPrZ2nFoTpd-yDmse5RrnkCFPmy0Y7HZm1ZQKBgQDx4er-scWTsM4F-9Ic9FOEue7wDFv7wWZ1CzkpM7iAi891n3dmqUijw2VivaeIJJ8sr15FW4x3fcZCRTQDl1qkFCDJYM6NYzlz9M_yuAhe_4cNsn-ctkc4h2qKXq4jP4XdgtJPZSfV6ypL6haTgbUjkaw9bb3gUTGk7vXpd_d77wKBgQCVW-Qn9mZfRWWs_x68bjCiOy4mBXvbIuMotE1NQoYTCYaPwrVjp3mStBMDQwuXs3Mb4e2MUqcApw2oxmUM_x0Ni1-0RRxNDibca29T6IUz52OWgqSTg4omLeifPhXZzBzyEmIRrM7LGe3So4WcoD63-Ty9dbB61QBaa_v2IB5wgQKBgHa-TqvcP79iY7HCTwLR2xJkaO1FU_7CkfbRnK0ia-gHOsBmmao3XqaubN5Ndqo6OD4qlV_9MncSsrqj2IYOznuQOgxCTwRP-st3GoLwX4Orc_SAdW9MeKhCqkXldx1suN3mtDIv2Z-FxAzijVS6r18Xy3OYpUcy9OkgOm7z6vXXAoGBAJ1RaTMv5B87GqkeJwXgoLsJXFnQ_tKrk93ZvbXMK5xMLQ0mcMJ6Z9GVW5oiPKZ_BTTC4uCzBgOmTJcF15ocQEZqkkZc6gCf--06LELJjxuA9bJmEZbt5Sz23IKgrr5nMKKyRIRQ9U9uFPu3p7ixGYG62D0e6WykqOWCCT1sASAi";
+    const TEST_JWKS: &str = r#"{"keys": [{"kid": "android-test", "kty": "RSA", "alg": "RS256", "n": "6-_k4PRkHms4R_qoC7IB0PsIPigKCNQM37NvDX2qqsK2FnDATIxcUJynsVm8p6rTfjEpbv21Ws8rxk-3NOANtHWzjPkhJVUK92P7SC1psRotcVyqtUGB3yGjARHgVXqmGyabJO-E-S20LQGvu-adkfgyHA-V7MJCH5Z2OrULgdS2-rRj2t1_g7rB4X3_-xItQfMwWs7dy-oQS11ttVpph-cEfmh1QbG_Bd9U6SdoGwxLuSlA24zgSLgAg8050pjKL9hPe5nysGwpeB2lFWpMF9e1OmXwiKk0MX38vLKl8ZAHyMbpACO-Bo2SBZn-eb-D6rzNi352a5DDtrz2dBrgSw", "e": "AQAB"}]}"#;
+    const WEB: &str = "319814222024-web.apps.googleusercontent.com";
+    const ANDROID: &str = "319814222024-android.apps.googleusercontent.com";
+    const NOW: i64 = 1_700_000_100;
+
+    fn signed_claims(change: impl FnOnce(&mut serde_json::Value)) -> String {
+        use ring::{
+            rand::SystemRandom,
+            signature::{RsaKeyPair, RSA_PKCS1_SHA256},
+        };
+        let key = RsaKeyPair::from_pkcs8(&coz(TEST_KEY).unwrap()).unwrap();
+        let mut claims = serde_json::json!({
+            "sub":"test-account", "iss":"https://accounts.google.com",
+            "aud":WEB, "azp":ANDROID, "iat":NOW, "exp":NOW+3600, "nonce":"test-nonce"
+        });
+        change(&mut claims);
+        let header = URL_SAFE_NO_PAD.encode(br#"{"alg":"RS256","kid":"android-test"}"#);
+        let payload = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&claims).unwrap());
+        let input = format!("{header}.{payload}");
+        let mut signature = vec![0; key.public().modulus_len()];
+        key.sign(
+            &RSA_PKCS1_SHA256,
+            &SystemRandom::new(),
+            input.as_bytes(),
+            &mut signature,
+        )
+        .unwrap();
+        format!("{input}.{}", URL_SAFE_NO_PAD.encode(signature))
+    }
+
+    #[test]
+    fn android_azp_ayni_projeden_kabul_edilir() {
+        let d = Dogrulayici::yeni(vec![WEB.into()], TEST_JWKS).unwrap();
+        assert!(d.dogrula(&signed_claims(|_| {}), NOW).is_ok());
+    }
+
+    #[test]
+    fn android_azp_yabanci_ve_bozuk_projeden_reddedilir() {
+        let d = Dogrulayici::yeni(vec![WEB.into()], TEST_JWKS).unwrap();
+        for azp in [
+            "999-android.apps.googleusercontent.com",
+            "319814222024-.apps.googleusercontent.com",
+            "319814222024-android.evil",
+            "319814222024x-android.apps.googleusercontent.com",
+        ] {
+            assert!(
+                d.dogrula(&signed_claims(|c| c["azp"] = azp.into()), NOW)
+                    .is_err(),
+                "{azp}"
+            );
+        }
+    }
+
+    #[test]
+    fn android_iat_300_saniye_toleransi() {
+        let d = Dogrulayici::yeni(vec![WEB.into()], TEST_JWKS).unwrap();
+        for offset in [120, 300, 301, 600] {
+            let token = signed_claims(|c| {
+                c["azp"] = WEB.into();
+                c["iat"] = (NOW + offset).into();
+            });
+            assert_eq!(d.dogrula(&token, NOW).is_ok(), offset <= 300, "{offset}");
+        }
+    }
+
+    #[test]
+    fn android_aud_ve_coklu_aud_azp_zorunlulugu_korunur() {
+        let d = Dogrulayici::yeni(vec![WEB.into()], TEST_JWKS).unwrap();
+        assert!(d
+            .dogrula(&signed_claims(|c| c["aud"] = ANDROID.into()), NOW)
+            .is_err());
+        assert!(d
+            .dogrula(
+                &signed_claims(|c| {
+                    c["aud"] = serde_json::json!([WEB, ANDROID]);
+                    c.as_object_mut().unwrap().remove("azp");
+                }),
+                NOW
+            )
+            .is_err());
+        assert!(d
+            .dogrula(
+                &signed_claims(|c| {
+                    c.as_object_mut().unwrap().remove("azp");
+                }),
+                NOW
+            )
+            .is_ok());
+    }
+
+    #[test]
+    fn android_izinli_azp_aud_disinda_da_kabul_edilir() {
+        let other = "999-desktop.apps.googleusercontent.com";
+        let d = Dogrulayici::yeni(vec![WEB.into(), other.into()], TEST_JWKS).unwrap();
+        assert!(d
+            .dogrula(&signed_claims(|c| c["azp"] = other.into()), NOW)
+            .is_ok());
+    }
+
+    #[test]
+    fn android_hata_nedeni_claim_degerlerini_aciga_cikarmaz() {
+        let d = Dogrulayici::yeni(vec![WEB.into()], TEST_JWKS).unwrap();
+        for (field, value, reason) in [
+            ("aud", serde_json::json!(ANDROID), "aud"),
+            (
+                "azp",
+                serde_json::json!("999-other.apps.googleusercontent.com"),
+                "azp",
+            ),
+            ("iat", serde_json::json!(NOW + 600), "iat"),
+            ("nonce", serde_json::json!(""), "nonce"),
+        ] {
+            let e = d
+                .dogrula(&signed_claims(|c| c[field] = value), NOW)
+                .unwrap_err();
+            let text = format!("{e:?} {e}");
+            assert!(text.contains(reason), "missing {reason}: {text}");
+            for secret in [WEB, ANDROID, "test-account", "test-nonce"] {
+                assert!(!text.contains(secret));
+            }
+        }
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("../tests/fixtures/google.json")).unwrap();
+        let e = d
+            .dogrula(fixture["bad_signature"].as_str().unwrap(), NOW)
+            .unwrap_err();
+        assert!(format!("{e:?}").contains("imza"));
+    }
+
+    #[test]
+    fn android_exp_icin_tolerans_yok() {
+        let d = Dogrulayici::yeni(vec![WEB.into()], TEST_JWKS).unwrap();
+        assert!(d
+            .dogrula(
+                &signed_claims(|c| {
+                    c["iat"] = (NOW - 3600).into();
+                    c["exp"] = NOW.into();
+                }),
+                NOW
+            )
+            .is_err());
     }
 
     fn hesap(nonce: &str, sub: &str) -> Dogrulanmis {

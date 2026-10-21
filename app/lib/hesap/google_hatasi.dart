@@ -50,10 +50,16 @@ class GoogleHatasi extends HesapHatasi {
     } else if (hata is SocketException || hata is HttpException) {
       kod = 'G5';
     } else {
-      // Rust emits only these stage markers, never its underlying error text.
+      // Rust emits fixed stage and rule markers; never copy raw error text.
       kod = RegExp(r'\bG[123459]\b').firstMatch('$hata')?.group(0) ?? kod;
     }
-    return GoogleHatasi(kod, '$kod | $asama | $tur | $durum | $mesaj');
+    final neden = kod == 'G4'
+        ? RegExp(
+            r'\bG4:(aud|azp|iat|imza|nonce|iss|sub|exp|claim|diger)\b',
+          ).firstMatch('$hata')?.group(1)
+        : null;
+    final kural = neden == null ? '' : ' | $neden';
+    return GoogleHatasi(kod, '$kod | $asama | $tur | $durum | $mesaj$kural');
   }
 }
 

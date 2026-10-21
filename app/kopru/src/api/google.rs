@@ -134,24 +134,33 @@ fn adresleri_yenile(k: &mut CihazKaydi) {
     k.son_gorulme = afudesk_core::kod::simdi();
 }
 
-/// No tokens are returned except the native sign-in nonce. All failures are
-/// reduced to a safe stage code at this boundary; underlying text is never sent.
+// Emit only fixed stage/rule names; never copy arbitrary error-chain text.
+fn guvenli_islem_hatasi(e: anyhow::Error) -> anyhow::Error {
+    let code = ["G2", "G3", "G4", "G5"]
+        .into_iter()
+        .find(|code| e.chain().any(|cause| cause.to_string() == *code))
+        .unwrap_or("G9");
+    if code == "G2" {
+        anyhow!("Google girişi bu sürümde yapılandırılmamış (G2).")
+    } else if code == "G4" {
+        let neden = e
+            .chain()
+            .find_map(|cause| cause.downcast_ref::<afudesk_core::google::DogrulamaHatasi>())
+            .map_or("diger", |hata| hata.nedeni());
+        anyhow!("Google işlemi tamamlanamadı (G4:{neden}), yeniden giriş yap.")
+    } else {
+        anyhow!("Google işlemi tamamlanamadı ({code}), yeniden giriş yap.")
+    }
+}
+
+/// No tokens are returned except the native sign-in nonce. Only fixed stage
+/// and validation-rule names can leave this boundary.
 pub async fn google_islem(islem: String, veri: String) -> Result<String> {
     panik_tanisini_kur();
     islem_yap(&islem, &veri)
         .await
         .map(|v| v.to_string())
-        .map_err(|e| {
-            let code = ["G2", "G3", "G4", "G5"]
-                .into_iter()
-                .find(|code| e.chain().any(|cause| cause.to_string() == *code))
-                .unwrap_or("G9");
-            if code == "G2" {
-                anyhow!("Google girişi bu sürümde yapılandırılmamış (G2).")
-            } else {
-                anyhow!("Google işlemi tamamlanamadı ({code}), yeniden giriş yap.")
-            }
-        })
+        .map_err(guvenli_islem_hatasi)
 }
 
 async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
@@ -220,7 +229,11 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
                         .await
                         .context("G5")?;
                     let identity = d.dogrula(id, afudesk_core::kod::simdi()).context("G4")?;
-                    ensure!(identity.nonce() == g.nonce(), "G4");
+                    if identity.nonce() != g.nonce() {
+                        return Err(
+                            anyhow!(afudesk_core::google::DogrulamaHatasi::NONCE).context("G4")
+                        );
+                    }
                     (
                         id.to_owned(),
                         v["accessToken"]
@@ -310,6 +323,44 @@ mod tests {
         assert_eq!(
             guvenli_panik_mesaji("secret-token"),
             "Rust panic (payload omitted)"
+        );
+    }
+
+    #[test]
+    fn g4_yalniz_sabit_kural_adini_aktarir() {
+        let fixture: Value =
+            serde_json::from_str(include_str!("../../../../rust/tests/fixtures/google.json"))
+                .unwrap();
+        let d = Dogrulayici::yeni(
+            vec!["test.apps.googleusercontent.com".into()],
+            &fixture["jwks"].to_string(),
+        )
+        .unwrap();
+        for (name, reason) in [("wrong_aud", "aud"), ("bad_signature", "imza")] {
+            let hata = d
+                .dogrula(fixture[name].as_str().unwrap(), 1_700_000_100)
+                .unwrap_err();
+            assert_eq!(
+                guvenli_islem_hatasi(anyhow!(hata).context("G4")).to_string(),
+                format!("Google işlemi tamamlanamadı (G4:{reason}), yeniden giriş yap.")
+            );
+        }
+        let hata = anyhow!(afudesk_core::google::DogrulamaHatasi::NONCE)
+            .context("token=secret sub=private user@example.com")
+            .context("G4");
+        assert_eq!(
+            guvenli_islem_hatasi(hata).to_string(),
+            "Google işlemi tamamlanamadı (G4:nonce), yeniden giriş yap."
+        );
+        let hata = anyhow!("token=secret").context("G4");
+        assert_eq!(
+            guvenli_islem_hatasi(hata).to_string(),
+            "Google işlemi tamamlanamadı (G4:diger), yeniden giriş yap."
+        );
+        let hata = anyhow!(afudesk_core::google::DogrulamaHatasi::NONCE).context("G3");
+        assert_eq!(
+            guvenli_islem_hatasi(hata).to_string(),
+            "Google işlemi tamamlanamadı (G3), yeniden giriş yap."
         );
     }
 
