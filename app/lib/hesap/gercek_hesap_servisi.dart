@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../motor.dart';
 import '../src/rust/api/google.dart' as rust;
 import 'hesap_servisi.dart';
+import 'google_hatasi.dart';
 
 typedef GoogleOturumAc =
     void Function(Cihaz cihaz, Stream<IzleyiciOlay> Function() ac);
@@ -20,6 +21,7 @@ class GercekHesapServisi extends HesapServisi {
     required Stream<HostOlay> hostOlaylari,
     required this.platformGirisi,
     required this.tarayiciAc,
+    this.taniYaz = googleTaniYaz,
   }) {
     _host = hostOlaylari.listen((o) {
       if (o.tur == 'baglandi') {
@@ -33,7 +35,7 @@ class GercekHesapServisi extends HesapServisi {
   }
 
   factory GercekHesapServisi.rust(RustMotor motor) => GercekHesapServisi(
-    islem: (islem, veri) => rust.googleIslem(
+    islem: (islem, veri) async => rust.googleIslem(
       islem: islem,
       veri: islem == 'baslat' && Platform.isWindows
           ? jsonEncode({
@@ -41,6 +43,12 @@ class GercekHesapServisi extends HesapServisi {
                 'AFUDESK_GOOGLE_DESKTOP_CLIENT_ID',
               ),
             })
+          : islem == 'baslat' && Platform.isAndroid
+          ? jsonEncode(
+              await const MethodChannel(
+                'afudesk/google',
+              ).invokeMapMethod<String, dynamic>('ayarlar'),
+            )
           : veri,
     ),
     googleBaglan: motor.googleBaglan,
@@ -63,6 +71,7 @@ class GercekHesapServisi extends HesapServisi {
   final Future<void> Function() kes;
   final Future<Map<String, dynamic>> Function(String) platformGirisi;
   final Future<bool> Function(String) tarayiciAc;
+  final Future<void> Function(GoogleHatasi) taniYaz;
   GoogleOturumAc? oturumAc;
   late final StreamSubscription<HostOlay> _host;
   final _akis = StreamController<List<Cihaz>>.broadcast();
@@ -76,10 +85,7 @@ class GercekHesapServisi extends HesapServisi {
   @override
   bool get uzaktanErisim => _hesap != null;
   @override
-  List<Cihaz> get baglantilar => [
-    ?_gelen,
-    ?_giden,
-  ];
+  List<Cihaz> get baglantilar => [?_gelen, ?_giden];
   @override
   Stream<List<Cihaz>> get aktifBaglantilar => _akis.stream;
   void _yayinla() {
@@ -94,14 +100,17 @@ class GercekHesapServisi extends HesapServisi {
   Future<void> girisYap() async {
     if (_mesgul || _hesap != null) return;
     _mesgul = true;
+    var asama = 'baslat';
     try {
       final start = await _cagir('baslat') as Map;
       String data = '';
       if (start['nonce'] is String) {
+        asama = 'android';
         data = jsonEncode(await platformGirisi(start['nonce'] as String));
       } else if (!await tarayiciAc(start['url'] as String)) {
         throw const HesapHatasi('Tarayıcı açılamadı, yeniden dene.');
       }
+      asama = 'tamamla';
       final identity = await _cagir('tamamla', data) as Map;
       _hesap = Hesap(eposta: '', ad: identity['ad'] as String);
       _heartbeat = Timer.periodic(
@@ -109,11 +118,27 @@ class GercekHesapServisi extends HesapServisi {
         (_) => _yenile(),
       );
       _yayinla();
-    } catch (_) {
-      await _cagir('iptal');
-      rethrow;
+    } catch (hata) {
+      final tani = GoogleHatasi.cevir(hata, asama: asama);
+      // Diagnostics must not delay cancellation or keep the UI busy on failure.
+      unawaited(_taniKaydet(tani));
+      try {
+        await _cagir('iptal');
+      } catch (_) {
+        /* Keep the original failure. */
+      }
+      if (hata is HesapHatasi && hata is! GoogleHatasi) rethrow;
+      throw tani;
     } finally {
       _mesgul = false;
+    }
+  }
+
+  Future<void> _taniKaydet(GoogleHatasi tani) async {
+    try {
+      await taniYaz(tani);
+    } catch (_) {
+      /* Storage cannot hide sign-in failure. */
     }
   }
 

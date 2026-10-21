@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../tema.dart';
 import 'hesap_servisi.dart';
+import 'google_hatasi.dart';
 
 /// Eski kodla bağlantı akışı [kodlaBaglan] üzerinden aynen erişilebilir.
 class HesapSayfasi extends StatefulWidget {
@@ -23,6 +24,7 @@ class _HesapSayfasiDurum extends State<HesapSayfasi> {
   bool _mesgul = false;
   bool _ayarlar = false;
   String? _hata;
+  String? _ayrinti;
   Timer? _tazeleme;
   int _istek = 0;
   HesapServisi get servis => widget.servis;
@@ -74,11 +76,17 @@ class _HesapSayfasiDurum extends State<HesapSayfasi> {
     setState(() {
       _mesgul = true;
       _hata = null;
+      _ayrinti = null;
     });
     try {
       await islem();
     } catch (hata) {
-      if (mounted) setState(() => _hata = hesapHataMesaji(hata));
+      if (mounted) {
+        setState(() {
+          _hata = hesapHataMesaji(hata);
+          _ayrinti = hata is GoogleHatasi ? hata.ayrinti : null;
+        });
+      }
     } finally {
       if (mounted) setState(() => _mesgul = false);
     }
@@ -127,6 +135,11 @@ class _HesapSayfasiDurum extends State<HesapSayfasi> {
                         style: const TextStyle(color: Renk.tehlike),
                       ),
                     ),
+                  ),
+                if (_ayrinti != null)
+                  ExpansionTile(
+                    title: const Text('Ayrıntı'),
+                    children: [SelectableText(_ayrinti!)],
                   ),
                 if (hesap == null) ...[
                   const Icon(
@@ -217,7 +230,7 @@ class _HesapSayfasiDurum extends State<HesapSayfasi> {
 }
 
 String hesapHataMesaji(Object hata) =>
-    hata is HesapHatasi ? hata.mesaj : 'İşlem tamamlanamadı, yeniden dene.';
+    hata is HesapHatasi ? hata.mesaj : GoogleHatasi.cevir(hata).mesaj;
 
 /// Navigator'ın üstünde kalır; başka sayfaya geçiş göstergeleri gizlemez.
 class HesapBaglantiSeridi extends StatelessWidget {

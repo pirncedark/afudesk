@@ -122,9 +122,10 @@ jobs:
         env:
           AFUDESK_GOOGLE_WEB_CLIENT_ID: ${{ vars.AFUDESK_GOOGLE_WEB_CLIENT_ID }}
           AFUDESK_GOOGLE_DESKTOP_CLIENT_ID: ${{ vars.AFUDESK_GOOGLE_DESKTOP_CLIENT_ID }}
+          AFUDESK_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.AFUDESK_GOOGLE_DESKTOP_CLIENT_SECRET }}
         run: |
           flutter pub get
-          flutter build windows --release --dart-define=AFUDESK_GOOGLE_DESKTOP_CLIENT_ID=${{ vars.AFUDESK_GOOGLE_DESKTOP_CLIENT_ID }}
+          flutter build windows --release --dart-define=AFUDESK_GOOGLE_DESKTOP_CLIENT_ID=${{ vars.AFUDESK_GOOGLE_DESKTOP_CLIENT_ID }} --dart-define=AFUDESK_GOOGLE_DESKTOP_CLIENT_SECRET=${{ secrets.AFUDESK_GOOGLE_DESKTOP_CLIENT_SECRET }}
       - name: Windows paketi hazırla (AfuDesk-windows-x64.zip)
         shell: pwsh
         working-directory: app/build/windows/x64/runner/Release
