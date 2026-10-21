@@ -33,7 +33,16 @@ class GercekHesapServisi extends HesapServisi {
   }
 
   factory GercekHesapServisi.rust(RustMotor motor) => GercekHesapServisi(
-    islem: (islem, veri) => rust.googleIslem(islem: islem, veri: veri),
+    islem: (islem, veri) => rust.googleIslem(
+      islem: islem,
+      veri: islem == 'baslat' && Platform.isWindows
+          ? jsonEncode({
+              'desktopClientId': const String.fromEnvironment(
+                'AFUDESK_GOOGLE_DESKTOP_CLIENT_ID',
+              ),
+            })
+          : veri,
+    ),
     googleBaglan: motor.googleBaglan,
     kes: () async {
       await motor.hostKes();

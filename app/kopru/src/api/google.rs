@@ -15,21 +15,19 @@ enum Bekleyen {
     Masaustu(MasaustuGiris),
     Android(Giris),
 }
-static BEKLEYEN: Mutex<Option<Bekleyen>> = Mutex::new(None);
+// Keep the audience allowlist with the transaction until remote access starts.
+static BEKLEYEN: Mutex<Option<(Bekleyen, Vec<String>)>> = Mutex::new(None);
 static HESAP: Mutex<Option<Arc<Erisim>>> = Mutex::new(None);
 // Serializes sign-in, sign-out and directory mutations across await points.
 static ISLEM: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-fn istemciler() -> Vec<String> {
-    [
-        option_env!("AFUDESK_GOOGLE_DESKTOP_CLIENT_ID"),
-        option_env!("AFUDESK_GOOGLE_WEB_CLIENT_ID"),
-    ]
-    .into_iter()
-    .flatten()
-    .filter(|s| !s.is_empty())
-    .map(str::to_owned)
-    .collect()
+fn istemciler(desktop: Option<&str>, web: Option<&str>) -> Vec<String> {
+    [desktop, web]
+        .into_iter()
+        .flatten()
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .collect()
 }
 fn cihaz() -> Result<CihazKaydi> {
     let v = afudesk::veri().ok_or_else(|| anyhow!("Cihaz kaydedilemedi, yeniden dene."))?;
@@ -80,20 +78,31 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
         "baslat" => {
             ensure!(HESAP.lock().unwrap().is_none(), "already signed in");
             ensure!(BEKLEYEN.lock().unwrap().is_none(), "sign-in pending");
+            // Dart defines are not Rust compiler environment variables. Accept
+            // the desktop ID explicitly from the trusted Flutter application.
+            let ayarlar: Value = if veri.is_empty() {
+                json!({})
+            } else {
+                serde_json::from_str(veri)?
+            };
+            let desktop = ayarlar["desktopClientId"]
+                .as_str()
+                .filter(|id| !id.is_empty())
+                .or(option_env!("AFUDESK_GOOGLE_DESKTOP_CLIENT_ID"));
+            let web = option_env!("AFUDESK_GOOGLE_WEB_CLIENT_ID");
+            let kabul_edilen = istemciler(desktop, web);
             let k = cihaz()?;
             if cfg!(target_os = "android") {
-                let id = option_env!("AFUDESK_GOOGLE_WEB_CLIENT_ID")
-                    .ok_or_else(|| anyhow!("configuration"))?;
+                let id = web.ok_or_else(|| anyhow!("configuration"))?;
                 let g = Giris::yeni(id, 1, &k.host, &k.izleyici)?;
                 let nonce = g.nonce().to_owned();
-                *BEKLEYEN.lock().unwrap() = Some(Bekleyen::Android(g));
+                *BEKLEYEN.lock().unwrap() = Some((Bekleyen::Android(g), kabul_edilen));
                 Ok(json!({"nonce":nonce}))
             } else {
-                let id = option_env!("AFUDESK_GOOGLE_DESKTOP_CLIENT_ID")
-                    .ok_or_else(|| anyhow!("configuration"))?;
+                let id = desktop.ok_or_else(|| anyhow!("configuration"))?;
                 let g = MasaustuGiris::baslat(id, &k.host, &k.izleyici).await?;
                 let url = g.url().to_owned();
-                *BEKLEYEN.lock().unwrap() = Some(Bekleyen::Masaustu(g));
+                *BEKLEYEN.lock().unwrap() = Some((Bekleyen::Masaustu(g), kabul_edilen));
                 Ok(json!({"url":url}))
             }
         }
@@ -102,24 +111,21 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
             Ok(json!({}))
         }
         "tamamla" => {
-            let pending = BEKLEYEN
+            let (pending, kabul_edilen) = BEKLEYEN
                 .lock()
                 .unwrap()
                 .take()
                 .ok_or_else(|| anyhow!("no transaction"))?;
             let (id, access) = match pending {
                 Bekleyen::Masaustu(g) => {
-                    let token = g
-                        .kod_bekle()
-                        .await?
-                        .oturum(option_env!("AFUDESK_GOOGLE_DESKTOP_CLIENT_SECRET"))
-                        .await?;
+                    let token = g.kod_bekle().await?.oturum(None).await?;
                     (token.id_token, token.access_token)
                 }
                 Bekleyen::Android(g) => {
                     let v: Value = serde_json::from_str(veri)?;
                     let id = v["idToken"].as_str().ok_or_else(|| anyhow!("id"))?;
-                    let d = afudesk_core::google::Dogrulayici::google_dan(istemciler()).await?;
+                    let d =
+                        afudesk_core::google::Dogrulayici::google_dan(kabul_edilen.clone()).await?;
                     let identity = d.dogrula(id, afudesk_core::kod::simdi())?;
                     ensure!(identity.nonce() == g.nonce(), "nonce");
                     (
@@ -133,7 +139,7 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
             };
             let mut k = cihaz()?;
             adresleri_yenile(&mut k);
-            let g = Erisim::yeni(id, access, istemciler(), k).await?;
+            let g = Erisim::yeni(id, access, kabul_edilen, k).await?;
             g.dizin.hesabi_dogrula().await?;
             g.dizin.kaydet(&g.cihaz).await?;
             google_baglanti::etkinlestir(g.clone());
@@ -189,4 +195,52 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
 
 pub(super) fn etkin_hesap() -> Result<Arc<Erisim>> {
     hesap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use afudesk_core::google::Dogrulayici;
+
+    #[test]
+    fn web_ve_desktop_audience_kabul_edilir_yabanci_reddedilir() {
+        let fixture: Value =
+            serde_json::from_str(include_str!("../../../../rust/tests/fixtures/google.json"))
+                .unwrap();
+        // The signed fixture is used in each role independently: either web or
+        // desktop tokens must verify while both IDs are configured on the peer.
+        for ids in [
+            istemciler(
+                Some("desktop.apps.googleusercontent.com"),
+                Some("test.apps.googleusercontent.com"),
+            ),
+            istemciler(
+                Some("test.apps.googleusercontent.com"),
+                Some("web.apps.googleusercontent.com"),
+            ),
+        ] {
+            assert_eq!(ids.len(), 2);
+            let d = Dogrulayici::yeni(ids, &fixture["jwks"].to_string()).unwrap();
+            assert!(d
+                .dogrula(fixture["token"].as_str().unwrap(), 1_700_000_100)
+                .is_ok());
+            for name in ["wrong_aud", "bad_signature", "expired", "wrong_iss"] {
+                assert!(
+                    d.dogrula(fixture[name].as_str().unwrap(), 1_700_000_100)
+                        .is_err(),
+                    "{name}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn bos_yapilandirma_kimlik_dogrulamasini_acmaz() {
+        let fixture: Value =
+            serde_json::from_str(include_str!("../../../../rust/tests/fixtures/google.json"))
+                .unwrap();
+        let ids = istemciler(Some(""), None);
+        assert!(ids.is_empty());
+        assert!(Dogrulayici::yeni(ids, &fixture["jwks"].to_string()).is_err());
+    }
 }

@@ -85,6 +85,9 @@ jobs:
           fi
       - name: APK derle
         working-directory: app
+        env:
+          AFUDESK_GOOGLE_WEB_CLIENT_ID: ${{ vars.AFUDESK_GOOGLE_WEB_CLIENT_ID }}
+          AFUDESK_GOOGLE_DESKTOP_CLIENT_ID: ${{ vars.AFUDESK_GOOGLE_DESKTOP_CLIENT_ID }}
         run: |
           flutter pub get
           flutter build apk --release
@@ -116,9 +119,12 @@ jobs:
           channel: stable
       - name: Windows derleme
         working-directory: app
+        env:
+          AFUDESK_GOOGLE_WEB_CLIENT_ID: ${{ vars.AFUDESK_GOOGLE_WEB_CLIENT_ID }}
+          AFUDESK_GOOGLE_DESKTOP_CLIENT_ID: ${{ vars.AFUDESK_GOOGLE_DESKTOP_CLIENT_ID }}
         run: |
           flutter pub get
-          flutter build windows --release
+          flutter build windows --release --dart-define=AFUDESK_GOOGLE_DESKTOP_CLIENT_ID=${{ vars.AFUDESK_GOOGLE_DESKTOP_CLIENT_ID }}
       - name: Windows paketi hazırla (AfuDesk-windows-x64.zip)
         shell: pwsh
         working-directory: app/build/windows/x64/runner/Release
