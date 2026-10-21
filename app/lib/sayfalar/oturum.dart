@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
@@ -12,6 +13,7 @@ import '../klavye.dart';
 import '../motor.dart';
 import '../oyun_kolu.dart';
 import '../tema.dart';
+import 'terminal_modu.dart';
 
 /// Uzak ekran oturumu: bağlanır, onayı bekler, kareleri çizer, girdiyi gönderir.
 class OturumSayfasi extends StatefulWidget {
@@ -22,6 +24,9 @@ class OturumSayfasi extends StatefulWidget {
   /// Doluysa kod/parola yerine bu kayıtlı bilgisayara bağlanılır.
   final String? kayitliKimlik;
   final Stream<IzleyiciOlay> Function()? baglantiAc;
+
+  /// Google dahil her bağlantı türünde ilk kabulden sonra terminali seçer.
+  final bool terminalleBasla;
   const OturumSayfasi({
     super.key,
     required this.motor,
@@ -29,6 +34,7 @@ class OturumSayfasi extends StatefulWidget {
     this.parola = '',
     this.kayitliKimlik,
     this.baglantiAc,
+    this.terminalleBasla = false,
   });
 
   @override
@@ -43,6 +49,206 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   String _karsiAd = '';
   String _mesaj = '';
   bool _kontrol = false;
+  bool _terminal = false,
+      _terminalBekliyor = false,
+      _terminalListeBekliyor = false;
+  bool _terminalCtrl = false;
+  bool _terminalIlkKare = false;
+  int _kareNesli = 0;
+  Timer? _terminalSaat;
+  static bool _terminalIpucuGosterildi = false;
+  bool _terminalBaslangiciIstendi = false;
+
+  void _terminalIste() {
+    if (!_kontrol ||
+        _yeniden != null ||
+        _terminalBekliyor ||
+        _terminalListeBekliyor)
+      return;
+    setState(() => _terminalListeBekliyor = true);
+    widget.motor.girdi(const Girdi('terminal_liste'));
+    _terminalZamanAsimi();
+  }
+
+  void _terminalZamanAsimi() {
+    _terminalSaat?.cancel();
+    _terminalSaat = Timer(const Duration(seconds: 10), () {
+      if (!mounted) return;
+      // A delayed acknowledgement must not leave the host in terminal mode.
+      if (_terminalBekliyor) widget.motor.girdi(const Girdi('terminal_kapat'));
+      setState(() {
+        _terminalBekliyor = false;
+        _terminalListeBekliyor = false;
+      });
+      _terminalBilgi('Terminal açılamadı. Yeniden dene.');
+    });
+  }
+
+  void _terminalBilgi(String metin) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(metin)));
+  }
+
+  Future<void> _terminalListesi(String metin) async {
+    if (!_terminalListeBekliyor || !_kontrol) return;
+    _terminalSaat?.cancel();
+    setState(() => _terminalListeBekliyor = false);
+    try {
+      final liste = (jsonDecode(metin) as List).cast<Map<String, dynamic>>();
+      if (liste.isEmpty) {
+        _terminalBilgi('Açık terminal bulunamadı. Bilgisayarda terminal aç.');
+        return;
+      }
+      final secilen = liste.length == 1
+          ? liste.single
+          : await showModalBottomSheet<Map<String, dynamic>>(
+              context: context,
+              isScrollControlled: true,
+              builder: (context) => SafeArea(
+                child: SizedBox(
+                  height: MediaQuery.sizeOf(context).height * .6,
+                  child: Column(
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text('Terminal seç'),
+                      ),
+                      Expanded(
+                        child: ListView(
+                          children: liste
+                              .map(
+                                (t) => ListTile(
+                                  leading: Icon(
+                                    t['uygulama'] == 'PowerShell'
+                                        ? Icons.code
+                                        : Icons.terminal,
+                                  ),
+                                  title: Text(
+                                    t['baslik'] as String? ?? 'Terminal',
+                                  ),
+                                  subtitle: Text(
+                                    t['uygulama'] as String? ?? 'Terminal',
+                                  ),
+                                  onTap: () => Navigator.pop(context, t),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+      if (secilen == null ||
+          !mounted ||
+          _asama != _Asama.bagli ||
+          !_kontrol ||
+          _yeniden != null)
+        return;
+      final boyut = MediaQuery.sizeOf(context);
+      final en = boyut.shortestSide;
+      final boy = boyut.longestSide;
+      _tuslariBirak();
+      setState(() => _terminalBekliyor = true);
+      widget.motor.girdi(
+        Girdi(
+          'terminal_ac',
+          metin: '${secilen['id']}',
+          dx: en.round(),
+          dy: boy.round(),
+        ),
+      );
+      _terminalZamanAsimi();
+    } catch (_) {
+      if (mounted) _terminalBilgi('Terminal listesi alınamadı. Yeniden dene.');
+    }
+  }
+
+  void _terminalDurumu(String metin) {
+    _terminalSaat?.cancel();
+    if (metin == 'acik' && !_terminalBekliyor) {
+      widget.motor.girdi(const Girdi('terminal_kapat'));
+      return;
+    }
+    if (metin == 'acik' && _kontrol && _yeniden == null) {
+      _kareyiTemizle();
+      setState(() {
+        _terminal = true;
+        _terminalIlkKare = true;
+        _terminalBekliyor = false;
+      });
+      if (widget.motor.dokunmatik) {
+        SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      }
+      _odak.requestFocus();
+      if (!_terminalIpucuGosterildi) {
+        _terminalIpucuGosterildi = true;
+        _terminalBilgi(
+          'Klavye düğmesine dokun; önceki satırlar için ekranı kaydır.',
+        );
+      }
+    } else {
+      _terminalKapat(gonder: false);
+      if (metin != 'kapali')
+        _terminalBilgi('Terminal açılamadı. Yeniden dene.');
+    }
+  }
+
+  void _terminalKapat({bool gonder = true}) {
+    _terminalSaat?.cancel();
+    if (gonder && (_terminal || _terminalBekliyor))
+      widget.motor.girdi(const Girdi('terminal_kapat'));
+    _tuslariBirak();
+    _yaziOdak.unfocus();
+    SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+    final degisti = _terminal || _terminalBekliyor;
+    if (degisti) _kareyiTemizle();
+    setState(() {
+      _terminal = false;
+      _terminalIlkKare = false;
+      _terminalBekliyor = false;
+      _terminalListeBekliyor = false;
+      _klavyeAcik = false;
+    });
+    if (degisti && widget.motor.dokunmatik) {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    }
+    _odak.requestFocus();
+  }
+
+  void _kareyiTemizle() {
+    _kareNesli++;
+    final eski = _kare;
+    _kare = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) => eski?.dispose());
+  }
+
+  void _terminalCtrlDegistir() {
+    setState(() => _terminalCtrl = !_terminalCtrl);
+    widget.motor.girdi(Girdi('tus', ad: 'Ctrl', basili: _terminalCtrl));
+  }
+
+  void _terminalKes() {
+    if (!_terminalCtrl)
+      widget.motor.girdi(const Girdi('tus', ad: 'Ctrl', basili: true));
+    _ozelTus('c');
+    widget.motor.girdi(const Girdi('tus', ad: 'Ctrl', basili: false));
+    setState(() => _terminalCtrl = false);
+  }
+
+  Future<void> _terminalYapistir() async {
+    final veri = await Clipboard.getData(Clipboard.kTextPlain);
+    if (!mounted || !_terminal || !_kontrol || _yeniden != null) return;
+    if (_terminalCtrl) _terminalCtrlDegistir();
+    if (veri?.text?.isNotEmpty ?? false)
+      _gonder([Girdi('metin', metin: veri!.text!)]);
+  }
+
   bool _dosyaIzni = false;
   _Aktarim? _aktarim;
   bool _p2 = false;
@@ -147,6 +353,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   void _bitir(String m) {
     if (!mounted) return;
     _tuslariBirak();
+    _terminalKapat();
     _kontrol = false;
     setState(() {
       _asama = _Asama.bitti;
@@ -157,13 +364,20 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   void _olay(IzleyiciOlay o) {
     if (!mounted) return;
     switch (o.tur) {
+      case 'terminal_liste':
+        _terminalListesi(o.metin);
+      case 'terminal_durum':
+        _terminalDurumu(o.metin);
       case 'bekliyor':
         setState(() {
           _asama = _Asama.onayBekleniyor;
           _karsiAd = o.ad;
         });
       case 'kabul':
-        if (_kontrol && !o.kontrol) _tuslariBirak();
+        if (_kontrol && !o.kontrol) {
+          _terminalKapat();
+          _tuslariBirak();
+        }
         setState(() {
           _yeniden = null;
           _asama = _Asama.bagli;
@@ -172,6 +386,14 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
           _oyunKoluIzni = o.oyunKolu;
         });
         _odak.requestFocus();
+        if (widget.terminalleBasla &&
+            !_terminalBaslangiciIstendi &&
+            o.kontrol) {
+          _terminalBaslangiciIstendi = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _asama == _Asama.bagli) _terminalIste();
+          });
+        }
         if (widget.motor.dokunmatik && o.kontrol) {
           // Uzun basışı zamanında yakalamak için düzenli yokla.
           _dokunmaSaat?.cancel();
@@ -207,14 +429,22 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
       case 'kol':
         setState(() => _p2 = true);
       case 'kare':
+        // Desktop frames already in flight must not flash inside terminal mode.
+        if (_terminalIlkKare && o.genislik > o.yukseklik) {
+          widget.motor.kareCizildi();
+          break;
+        }
+        _terminalIlkKare = false;
+        final nesil = _kareNesli;
         ui.decodeImageFromPixels(
           o.rgba,
           o.genislik,
           o.yukseklik,
           ui.PixelFormat.rgba8888,
           (img) {
-            if (!mounted) {
+            if (!mounted || nesil != _kareNesli) {
               img.dispose();
+              if (mounted) widget.motor.kareCizildi();
               return;
             }
             final eski = _kare;
@@ -235,6 +465,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
           _yeniden = null;
         });
       case 'yeniden':
+        _terminalKapat();
         _tuslariBirak();
         setState(() => _yeniden = o.metin);
       case 'kaydedildi':
@@ -364,6 +595,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _terminalSaat?.cancel();
+    if (_terminal || _terminalBekliyor)
+      widget.motor.girdi(const Girdi('terminal_kapat'));
     _tuslariBirak();
     WidgetsBinding.instance.removeObserver(this);
     _yaziOdak.removeListener(_yaziOdakDegisti);
@@ -452,7 +686,14 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   /// Görünmez yazı alanı hep tek bir gözcü karakter tutar: silinirse Backspace,
   /// eklenen her şey metin olarak gider.
   void _yaziDegisti(String v) {
-    if (v.isEmpty) {
+    if (_terminalCtrl) {
+      final yeni = v.replaceAll(_gozcu, '');
+      if (v.isEmpty) _ozelTus('Backspace');
+      for (final harf in yeni.runes) {
+        final c = String.fromCharCode(harf).toUpperCase();
+        if (RegExp(r'^[A-Z]$').hasMatch(c)) _ozelTus(c.toLowerCase());
+      }
+    } else if (v.isEmpty) {
       _ozelTus('Backspace');
     } else {
       final yeni = v.replaceAll(_gozcu, '');
@@ -769,6 +1010,10 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   }
 
   void _tuslariBirak() {
+    if (_terminalCtrl) {
+      widget.motor.girdi(const Girdi('tus', ad: 'Ctrl', basili: false));
+      _terminalCtrl = false;
+    }
     for (final hid in _basiliTuslar) {
       widget.motor.girdi(
         Girdi('tus', hid: hid, ad: _tusAdlari[hid] ?? '', basili: false),
@@ -838,6 +1083,59 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    if (_terminal && _asama == _Asama.bagli) {
+      return _klavyeOdak(
+        TerminalModu(
+          kare: _kare,
+          ctrl: _terminalCtrl,
+          klavyeAcik: _klavyeAcik,
+          kapat: _terminalKapat,
+          ctrlDegistir: _terminalCtrlDegistir,
+          kopyayiKes: _terminalKes,
+          yapistir: _terminalYapistir,
+          tus: _ozelTus,
+          konum: _konum,
+          fare: _fareDugmeleri,
+          kaydir: (e) => _gonder([
+            Girdi(
+              'kaydir',
+              dx: e.scrollDelta.dx.sign.toInt(),
+              dy: e.scrollDelta.dy.sign.toInt(),
+            ),
+          ]),
+          klavye: () {
+            setState(() => _klavyeAcik = !_klavyeAcik);
+            if (_klavyeAcik) {
+              _yaziOdak.requestFocus();
+              SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+            } else {
+              _yaziOdak.unfocus();
+              _odak.requestFocus();
+              SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+            }
+          },
+          yaziAlani: SizedBox(
+            width: 1,
+            height: 1,
+            child: Opacity(
+              opacity: 0,
+              child: TextField(
+                key: const Key('terminal_yazi'),
+                focusNode: _yaziOdak,
+                controller: _yazi,
+                autocorrect: false,
+                enableSuggestions: false,
+                onChanged: _yaziDegisti,
+                onSubmitted: (_) {
+                  _ozelTus('Enter');
+                  _yaziOdak.requestFocus();
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     // Dar ekranda (telefon dikey) çip ve düğme yalnız simge: başlık sığsın.
     final dar = MediaQuery.sizeOf(context).width < 520;
     final izinMetni = _kontrol ? 'Kontrol açık' : 'Yalnız izleme';
@@ -862,6 +1160,21 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
           ],
         ),
         actions: [
+          if (_asama == _Asama.bagli)
+            IconButton(
+              key: const Key('oturum_terminal'),
+              tooltip: _terminalBekliyor || _terminalListeBekliyor
+                  ? 'Terminal açılıyor…'
+                  : 'Terminal',
+              onPressed:
+                  _kontrol &&
+                      _yeniden == null &&
+                      !_terminalBekliyor &&
+                      !_terminalListeBekliyor
+                  ? _terminalIste
+                  : null,
+              icon: const Icon(Icons.terminal),
+            ),
           if (_asama == _Asama.bagli && _yeniden != null)
             Padding(
               padding: const EdgeInsets.only(right: 8),

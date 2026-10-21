@@ -93,7 +93,8 @@ class _HesapSayfasiDurum extends State<HesapSayfasi> {
     }
   }
 
-  Future<void> _baglan(Cihaz cihaz) => servis.baglan(cihaz.id);
+  Future<void> _baglan(Cihaz cihaz, {bool terminalleBasla = false}) =>
+      servis.baglan(cihaz.id, terminalleBasla: terminalleBasla);
   Future<void> _erisim(bool acik) => servis.uzaktanErisimAyarla(acik);
 
   @override
@@ -115,7 +116,9 @@ class _HesapSayfasiDurum extends State<HesapSayfasi> {
               onPressed: _mesgul
                   ? null
                   : () => setState(() => _ayarlar = !_ayarlar),
-              icon: Icon(_ayarlar ? Icons.computer : Icons.manage_accounts_outlined),
+              icon: Icon(
+                _ayarlar ? Icons.computer : Icons.manage_accounts_outlined,
+              ),
             ),
           const GuncelleKarti(ayarDugmesi: true),
         ],
@@ -206,6 +209,14 @@ class _HesapSayfasiDurum extends State<HesapSayfasi> {
                           cihaz.cevrimici ? 'Çevrimiçi' : 'Çevrimdışı',
                         ),
                         enabled: cihaz.cevrimici && !_mesgul,
+                        trailing: TextButton(
+                          onPressed: cihaz.cevrimici && !_mesgul
+                              ? () => _yap(
+                                  () => _baglan(cihaz, terminalleBasla: true),
+                                )
+                              : null,
+                          child: const Text('Terminal'),
+                        ),
                         onTap: cihaz.cevrimici && !_mesgul
                             ? () => _yap(() => _baglan(cihaz))
                             : null,
@@ -264,6 +275,8 @@ class HesapBaglantiSeridi extends StatelessWidget {
                     Expanded(
                       child: Text(
                         'Uzaktan bağlı: ${snapshot.data!.map((c) => c.ad).join(', ')}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     _KesDugmesi(servis: servis),

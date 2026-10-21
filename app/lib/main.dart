@@ -59,10 +59,14 @@ class _AfuDeskUygulamaDurum extends State<AfuDeskUygulama> {
     super.initState();
     final servis = widget.hesapServisi;
     if (servis is GercekHesapServisi) {
-      servis.oturumAc = (cihaz, ac) {
+      servis.oturumAc = (cihaz, ac, {required terminalleBasla}) {
         _gezgin.currentState?.push(
           MaterialPageRoute(
-            builder: (_) => OturumSayfasi(motor: widget.motor, baglantiAc: ac),
+            builder: (_) => OturumSayfasi(
+              motor: widget.motor,
+              baglantiAc: ac,
+              terminalleBasla: terminalleBasla,
+            ),
           ),
         );
       };

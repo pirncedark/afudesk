@@ -11,7 +11,11 @@ import 'hesap_servisi.dart';
 import 'google_hatasi.dart';
 
 typedef GoogleOturumAc =
-    void Function(Cihaz cihaz, Stream<IzleyiciOlay> Function() ac);
+    void Function(
+      Cihaz cihaz,
+      Stream<IzleyiciOlay> Function() ac, {
+      required bool terminalleBasla,
+    });
 
 class GercekHesapServisi extends HesapServisi {
   GercekHesapServisi({
@@ -166,7 +170,7 @@ class GercekHesapServisi extends HesapServisi {
       .toList();
 
   @override
-  Future<void> baglan(String cihazId) async {
+  Future<void> baglan(String cihazId, {bool terminalleBasla = false}) async {
     final cihaz = (await bilgisayarlarim())
         .where((c) => c.id == cihazId && c.cevrimici)
         .firstOrNull;
@@ -192,7 +196,7 @@ class GercekHesapServisi extends HesapServisi {
         _giden = null;
         _yayinla();
       }
-    });
+    }, terminalleBasla: terminalleBasla);
   }
 
   @override

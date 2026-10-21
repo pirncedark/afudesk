@@ -18,7 +18,7 @@ use std::{
     collections::VecDeque,
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicBool, AtomicI64, Ordering},
+        atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering},
         Arc, Mutex,
     },
     time::Duration,
@@ -68,6 +68,11 @@ pub enum IzleyiciOlay {
         sebep: String,
     },
     Pano(String),
+    TerminalListesi(Vec<crate::terminal::Pencere>),
+    TerminalDurum {
+        acik: bool,
+        hata: Option<String>,
+    },
     Dosya {
         ad: String,
         gonderilen: u64,
@@ -86,6 +91,9 @@ pub enum IzleyiciOlay {
 pub struct Izleyici {
     pub olaylar: mpsc::Receiver<IzleyiciOlay>,
     girdi: mpsc::Sender<Girdi>,
+    terminal: mpsc::Sender<(u64, Kontrol)>,
+    terminal_nesli: Arc<AtomicU64>,
+    terminal_hazir: Arc<AtomicBool>,
     /// Yeniden bağlanınca değişir.
     baglanti: Arc<Mutex<Baglanti>>,
     kapatildi: Arc<AtomicBool>,
@@ -107,6 +115,26 @@ impl Izleyici {
         } else {
             let _ = self.girdi.send(g).await;
         }
+    }
+
+    /// Terminal komutları klavye/fare girdisi değildir; kontrol akışında taşınır.
+    pub async fn terminal_komut(&self, komut: Kontrol) -> Result<()> {
+        anyhow::ensure!(
+            matches!(
+                komut,
+                Kontrol::TerminalListesi | Kontrol::TerminalModu { .. }
+            ),
+            "Geçersiz terminal işlemi."
+        );
+        let nesil = self.terminal_nesli.load(Ordering::SeqCst);
+        anyhow::ensure!(
+            self.terminal_hazir.load(Ordering::SeqCst)
+                && !self.kapatildi.load(Ordering::SeqCst)
+                && self.simdiki().close_reason().is_none(),
+            "Bağlantı hazır değil; yeniden bağlanmayı bekleyin."
+        );
+        self.terminal.send((nesil, komut)).await?;
+        Ok(())
     }
 
     pub fn kapat(&self) {
@@ -321,6 +349,9 @@ async fn oturum_ac(
     protokol::yaz(&mut w, &ilk_mesaj).await?;
     let (olay_tx, olaylar) = mpsc::channel(4);
     let (girdi, girdi_rx) = mpsc::channel::<Girdi>(256);
+    let (terminal, terminal_rx) = mpsc::channel(16);
+    let terminal_nesli = Arc::new(AtomicU64::new(0));
+    let terminal_hazir = Arc::new(AtomicBool::new(false));
     let _ = olay_tx
         .send(IzleyiciOlay::OnayBekleniyor {
             karsi_ad: karsi_ad.to_owned(),
@@ -352,6 +383,9 @@ async fn oturum_ac(
         yeniden_iste: yeniden_iste.clone(),
         olay: olay_tx,
         girdi: girdi_rx,
+        terminal: terminal_rx,
+        terminal_nesli: terminal_nesli.clone(),
+        terminal_hazir: terminal_hazir.clone(),
         pano: PanoDurumu {
             kaynak: pano,
             es: None,
@@ -367,6 +401,9 @@ async fn oturum_ac(
     Ok(Izleyici {
         olaylar,
         girdi,
+        terminal,
+        terminal_nesli,
+        terminal_hazir,
         baglanti,
         kapatildi,
         yeniden_iste,
@@ -380,6 +417,16 @@ struct PanoDurumu {
     es: Option<Esitleyici>,
 }
 
+fn terminal_oturumunu_sifirla(
+    nesil: &AtomicU64,
+    hazir: &AtomicBool,
+    kuyruk: &mut mpsc::Receiver<(u64, Kontrol)>,
+) {
+    hazir.store(false, Ordering::SeqCst);
+    nesil.fetch_add(1, Ordering::SeqCst);
+    while kuyruk.try_recv().is_ok() {}
+}
+
 /// Oturumu yürütür; bağlantı koparsa yeniden kurar.
 struct Gozetmen {
     ep: Endpoint,
@@ -390,6 +437,9 @@ struct Gozetmen {
     yeniden_iste: Arc<AtomicBool>,
     olay: mpsc::Sender<IzleyiciOlay>,
     girdi: mpsc::Receiver<Girdi>,
+    terminal: mpsc::Receiver<(u64, Kontrol)>,
+    terminal_nesli: Arc<AtomicU64>,
+    terminal_hazir: Arc<AtomicBool>,
     pano: PanoDurumu,
     saat_farki: Arc<AtomicI64>,
     saat_esitlendi: Arc<AtomicBool>,
@@ -412,6 +462,18 @@ impl Gozetmen {
         let mut jeton: Option<String> = None;
         let sebep = loop {
             let sebep = self.oturum(&c, &mut w, r, &mut jeton).await;
+            terminal_oturumunu_sifirla(
+                &self.terminal_nesli,
+                &self.terminal_hazir,
+                &mut self.terminal,
+            );
+            let _ = self
+                .olay
+                .send(IzleyiciOlay::TerminalDurum {
+                    acik: false,
+                    hata: None,
+                })
+                .await;
             let istendi = self.yeniden_iste.swap(false, Ordering::SeqCst);
             #[cfg(test)]
             eprintln!(
@@ -500,6 +562,7 @@ impl Gozetmen {
                 genislik,
                 yukseklik,
             }))) => {
+                self.terminal_hazir.store(true, Ordering::SeqCst);
                 if let (Some(v), Some(h)) = (&self.veri, &self.kayitli_host) {
                     let _ = guvenilen::guncelle(&guvenilen::kayit_yolu(v), |k| {
                         if let Some(x) = k.izleyiciler.iter_mut().find(|x| &x.host_kimlik == h) {
@@ -625,6 +688,10 @@ impl Gozetmen {
             };
             let pano_var = pano.is_some();
             tokio::select! {
+                Some((nesil, komut)) = self.terminal.recv() => {
+                    if nesil != self.terminal_nesli.load(Ordering::SeqCst) { continue; }
+                    if protokol::yaz(w, &komut).await.is_err() { break KOPTU.into(); }
+                }
                 s = &mut goruntu => break match s { Ok(Err(e)) => format!("Görüntü akışı kesildi: {e}"), _ => KAPANDI.into() },
                 g = self.girdi.recv() => match g {
                     Some(g) => {
@@ -682,6 +749,12 @@ impl Gozetmen {
                         if let Some(p) = pano { let _ = tokio::task::block_in_place(|| p.gelen(&metin)); }
                         let _ = olay.send(IzleyiciOlay::Pano(metin)).await;
                     }
+                    Some(Kontrol::TerminalPencereleri(pencereler)) => {
+                        let _ = olay.send(IzleyiciOlay::TerminalListesi(pencereler)).await;
+                    }
+                    Some(Kontrol::TerminalDurum { acik, hata }) => {
+                        let _ = olay.send(IzleyiciOlay::TerminalDurum { acik, hata }).await;
+                    }
                     Some(Kontrol::Titresim { slot, buyuk, kucuk }) => {
                         let _ = self.titresim.send((buyuk, kucuk));
                         let _ = olay.send(IzleyiciOlay::Titresim { slot, buyuk, kucuk }).await;
@@ -724,6 +797,30 @@ fn unix_ms() -> u64 {
 #[cfg(test)]
 mod testler {
     use super::*;
+
+    #[test]
+    fn kopusta_terminal_komutlari_yeni_oturuma_tasinmaz() {
+        let nesil = AtomicU64::new(5);
+        let hazir = AtomicBool::new(true);
+        let (tx, mut rx) = mpsc::channel(4);
+        tx.try_send((
+            5,
+            Kontrol::TerminalModu {
+                ac: Some(42),
+                en: 390,
+                boy: 844,
+            },
+        ))
+        .unwrap();
+        terminal_oturumunu_sifirla(&nesil, &hazir, &mut rx);
+        assert!(!hazir.load(Ordering::SeqCst));
+        assert_eq!(nesil.load(Ordering::SeqCst), 6);
+        assert!(rx.try_recv().is_err());
+        // Eski gönderici sıfırlamadan sonra uyansa da alıcı yeni nesille kıyaslar.
+        tx.try_send((5, Kontrol::TerminalListesi)).unwrap();
+        let (eski_nesil, _) = rx.try_recv().unwrap();
+        assert_ne!(eski_nesil, nesil.load(Ordering::SeqCst));
+    }
 
     #[test]
     fn bekleme_artar_ve_sinirda_durur() {
