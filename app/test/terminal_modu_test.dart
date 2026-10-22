@@ -162,7 +162,7 @@ void main() {
 
   testWidgets('Bas konus birakma ve iptalde Space serbest kalir', (t) async {
     final m = await terminalAc(t);
-    final b = find.byKey(const Key('terminal_bas_konus'));
+    final b = find.byKey(const Key('terminal_konusma_modu'));
     final gesture = await t.startGesture(t.getCenter(b));
     await t.pump(const Duration(seconds: 1));
     expect(m.girdiler.map((g) => g.basili), [true]);
@@ -376,7 +376,7 @@ void main() {
   testWidgets('oturum kapanirken bas konus Space birakilir', (t) async {
     final m = await terminalAc(t);
     final gesture = await t.startGesture(
-      t.getCenter(find.byKey(const Key('terminal_bas_konus'))),
+      t.getCenter(find.byKey(const Key('terminal_konusma_modu'))),
     );
     expect(m.girdiler.where((g) => g.ad == 'Space').map((g) => g.basili), [
       true,
@@ -435,45 +435,6 @@ void main() {
   );
 
   testWidgets(
-    'konusma modu acikken Space tusu PTT olarak calisir ve tekrar uretmez',
-    (t) async {
-      final m = await terminalAc(t);
-      // SnackBar'ı temizle
-      ScaffoldMessenger.of(t.element(find.byType(Scaffold).first)).clearSnackBars();
-      await t.pump();
-      // Konusma modunu ac
-      await t.tap(find.byKey(const Key('terminal_konusma_modu')));
-      await t.pump();
-      ScaffoldMessenger.of(t.element(find.byType(Scaffold).first)).clearSnackBars();
-      await t.pump();
-      m.girdiler.clear();
-      // Space bas
-      await t.sendKeyDownEvent(LogicalKeyboardKey.space);
-      expect(m.girdiler.where((g) => g.ad == 'Space').map((g) => g.basili), [true]);
-
-      // KeyRepeat (basili tutma tekrari) yeni girdi veya ekstra karakter uretmez
-      m.girdiler.clear();
-      await simulateKeyRepeatEvent(LogicalKeyboardKey.space);
-      expect(m.girdiler.where((g) => g.ad == 'Space'), isEmpty);
-
-      // Space birak
-      await t.sendKeyUpEvent(LogicalKeyboardKey.space);
-      expect(m.girdiler.where((g) => g.ad == 'Space').map((g) => g.basili), [false]);
-
-      // Konusma modunu kapatinca Space yine normal tus olarak iletilir
-      await t.tap(find.byKey(const Key('terminal_konusma_modu')));
-      await t.pump();
-      ScaffoldMessenger.of(t.element(find.byType(Scaffold).first)).clearSnackBars();
-      await t.pump();
-      m.girdiler.clear();
-      await t.sendKeyEvent(LogicalKeyboardKey.space);
-      expect(m.girdiler.where((g) => g.ad == 'Space').map((g) => g.basili), [true, false]);
-
-      await t.pumpWidget(const SizedBox.shrink());
-    },
-  );
-
-  testWidgets(
     'dokunmatik cubuk uzerindeki konusma modu dugmesi modu degistirir',
     (t) async {
       await baglan(t, dokunmatik: true);
@@ -487,4 +448,72 @@ void main() {
       await t.pumpWidget(const SizedBox.shrink());
     },
   );
+
+  testWidgets('mikrofon aninda Space gonderir ve ayri dugme yoktur', (t) async {
+    final m = await terminalAc(t);
+    expect(find.text('Bas-konuş'), findsNothing);
+    final g = await t.startGesture(
+      t.getCenter(find.byKey(const Key('terminal_konusma_modu'))),
+    );
+    expect(m.girdiler.map((g) => (g.ad, g.basili)), [('Space', true)]);
+    await g.up();
+    expect(m.girdiler.map((g) => (g.ad, g.basili)), [
+      ('Space', true),
+      ('Space', false),
+    ]);
+    await t.pumpWidget(const SizedBox.shrink());
+  });
+  testWidgets('mikrofon ikinci parmakla erken birakilmaz', (t) async {
+    final m = await terminalAc(t);
+    final nokta = t.getCenter(find.byKey(const Key('terminal_konusma_modu')));
+    final bir = await t.startGesture(nokta, pointer: 1);
+    final iki = await t.startGesture(nokta, pointer: 2);
+    await iki.up();
+    expect(m.girdiler.map((g) => (g.ad, g.basili)), [('Space', true)]);
+    await bir.up();
+    expect(m.girdiler.map((g) => (g.ad, g.basili)), [
+      ('Space', true),
+      ('Space', false),
+    ]);
+    await t.pumpWidget(const SizedBox.shrink());
+  });
+  testWidgets('terminal kapanirken mikrofon Space birakilir', (t) async {
+    final m = await terminalAc(t);
+    final g = await t.startGesture(
+      t.getCenter(find.byKey(const Key('terminal_konusma_modu'))),
+    );
+    await t.binding.handlePopRoute();
+    await t.pump();
+    expect(m.girdiler.where((g) => g.ad == 'Space').map((g) => g.basili), [
+      true,
+      false,
+    ]);
+    await g.cancel();
+    await t.pumpWidget(const SizedBox.shrink());
+  });
+  for (final harf in ['c', 'p']) {
+    for (final ctrlAcik in [false, true]) {
+      testWidgets('Ctrl+$harf sirasi dogru (Ctrl acik: $ctrlAcik)', (t) async {
+        final m = await terminalAc(t);
+        if (ctrlAcik) {
+          await t.ensureVisible(find.byKey(const Key('terminal_ctrl')));
+          await t.tap(find.byKey(const Key('terminal_ctrl')));
+          await t.pump();
+        }
+        final dugme = find.byKey(Key('terminal_ctrl_$harf'));
+        await t.ensureVisible(dugme);
+        await t.tap(dugme);
+        await t.pump();
+        expect(m.girdiler.map((g) => (g.tur, g.ad, g.basili)), [
+          ('tus', 'Ctrl', true),
+          ('tus', harf, true),
+          ('tus', harf, false),
+          ('tus', 'Ctrl', false),
+        ]);
+        m.girdiler.clear();
+        await t.pumpWidget(const SizedBox.shrink());
+        expect(m.girdiler.where((g) => g.ad == 'Ctrl'), isEmpty);
+      });
+    }
+  }
 }

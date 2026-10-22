@@ -9,9 +9,7 @@ class TerminalModu extends StatelessWidget {
   final Widget yaziAlani;
   final bool ctrl;
   final bool klavyeAcik;
-  final bool konusmaModu;
-  final VoidCallback kapat, klavye, ctrlDegistir, kopyayiKes, yapistir;
-  final VoidCallback? konusmaModuDegistir;
+  final VoidCallback kapat, klavye, ctrlDegistir, kopyayiKes, ctrlP, yapistir;
   final ValueChanged<String> tus;
   final ValueChanged<bool> basKonus;
   final void Function(Offset konum, Size alan) konum;
@@ -24,12 +22,11 @@ class TerminalModu extends StatelessWidget {
     required this.yaziAlani,
     required this.ctrl,
     required this.klavyeAcik,
-    this.konusmaModu = false,
-    this.konusmaModuDegistir,
     required this.kapat,
     required this.klavye,
     required this.ctrlDegistir,
     required this.kopyayiKes,
+    required this.ctrlP,
     required this.yapistir,
     required this.tus,
     required this.basKonus,
@@ -150,19 +147,6 @@ class TerminalModu extends StatelessWidget {
                           klavyeAcik ? Icons.keyboard_hide : Icons.keyboard,
                         ),
                       ),
-                      IconButton.filledTonal(
-                        key: const Key('terminal_konusma_modu'),
-                        style: IconButton.styleFrom(
-                          backgroundColor: konusmaModu
-                              ? Theme.of(context).colorScheme.primary
-                              : null,
-                          foregroundColor: konusmaModu
-                              ? Theme.of(context).colorScheme.onPrimary
-                              : null,
-                        ),
-                        onPressed: konusmaModuDegistir,
-                        icon: Icon(konusmaModu ? Icons.mic : Icons.mic_none),
-                      ),
                       _BasKonusDugmesi(basKonus: basKonus),
                       Expanded(
                         child: SingleChildScrollView(
@@ -178,6 +162,7 @@ class TerminalModu extends StatelessWidget {
                               dugme('sag', '→', () => tus('ArrowRight')),
                               dugme('enter', 'Enter', () => tus('Enter')),
                               dugme('ctrl_c', 'Ctrl+C', kopyayiKes),
+                              dugme('ctrl_p', 'Ctrl+P', ctrlP),
                               dugme('yapistir', 'Yapıştır', yapistir),
                             ],
                           ),
@@ -221,7 +206,7 @@ class _BasKonusDugmesiState extends State<_BasKonusDugmesi> {
 
   @override
   Widget build(BuildContext context) => Listener(
-    key: const Key('terminal_bas_konus'),
+    key: const Key('terminal_konusma_modu'),
     onPointerDown: (e) {
       if (_parmak != null) return;
       _parmak = e.pointer;
@@ -238,21 +223,20 @@ class _BasKonusDugmesiState extends State<_BasKonusDugmesi> {
       _birak();
       setState(() {});
     },
-    child: Semantics(
-      button: true,
-      label: 'Basılı tutarak konuş',
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 52, minWidth: 124),
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: _parmak == null
-              ? Theme.of(context).colorScheme.primaryContainer
-              : Theme.of(context).colorScheme.tertiaryContainer,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [Icon(Icons.mic), SizedBox(width: 6), Text('Bas-konuş')],
+    child: Tooltip(
+      message: 'Basılı tut: Space',
+      child: Semantics(
+        button: true,
+        label: 'Space tuşunu basılı tut',
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
+          decoration: BoxDecoration(
+            color: _parmak == null
+                ? Theme.of(context).colorScheme.primaryContainer
+                : Theme.of(context).colorScheme.tertiaryContainer,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Icon(_parmak == null ? Icons.mic_none : Icons.mic),
         ),
       ),
     ),
