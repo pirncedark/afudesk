@@ -651,7 +651,7 @@ async fn oturum(
             }
             (ad, None, Tur::Kod)
         }
-        (Ok(Ok(Some(Kontrol::MerhabaGoogle { kanit, ad }))), Giris::Yeni { .. }) => {
+        (Ok(Ok(Some(Kontrol::MerhabaGoogle { kanit, ad }))), _) => {
             let Some(g) = crate::google_baglanti::bul(yerel_kimlik) else {
                 reddet(&mut w, c, "Google hesabı kapalı, kodla bağlantıyı kullan.").await;
                 return Oturum::Reddedildi;

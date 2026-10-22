@@ -625,7 +625,11 @@ impl Gozetmen {
             let mut son = std::time::Instant::now();
             let mut gecikmeler = VecDeque::<(std::time::Instant, u32)>::new();
             while let Some(k) = kare_rx.recv().await {
-                b.uygula(&k)?;
+                if b.uygula(&k).is_err() {
+                    // Çözünürlük değişimi veya aktarım bozulmasında geçersiz döşeme/kare
+                    // tüm oturumu koparmamalı; atlanıp sonraki geçerli kare beklenir.
+                    continue;
+                }
                 let simdi = std::time::Instant::now();
                 if esit2.load(Ordering::Relaxed) {
                     gecikmeler.push_back((

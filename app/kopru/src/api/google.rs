@@ -119,8 +119,19 @@ impl KaliciOturum {
 static KALICI: Mutex<Option<KaliciOturum>> = Mutex::new(None);
 
 fn oturum_sonucu() -> Value {
-    json!({"ad":"Google hesabın", "oturum": KALICI.lock().unwrap().as_ref()
-        .map(KaliciOturum::yaz)})
+    let hesap_guard = HESAP.lock().unwrap();
+    let (ad, eposta) = if let Some(g) = hesap_guard.as_ref() {
+        let name = g.hesap.name().unwrap_or("Google hesabın");
+        let email = g.hesap.email().unwrap_or("");
+        (name.to_owned(), email.to_owned())
+    } else {
+        ("Google hesabın".to_owned(), "".to_owned())
+    };
+    json!({
+        "ad": ad,
+        "eposta": eposta,
+        "oturum": KALICI.lock().unwrap().as_ref().map(KaliciOturum::yaz)
+    })
 }
 
 async fn kalici_yenile(k: KaliciOturum) -> Result<Value> {
@@ -414,7 +425,7 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
                 "expired"
             );
             let list = g.dizin.liste().await?;
-            Ok(json!(list.into_iter().filter(|k| k.host != g.cihaz.host && k.platform != "android")
+            Ok(json!(list.into_iter().filter(|k| k.host != g.cihaz.host)
                 .map(|k| json!({"id":k.host,"ad":k.ad,"cevrimici":k.erisim && k.guncel(g.hesap.sub(),afudesk_core::kod::simdi())})).collect::<Vec<_>>()))
         }
         "yenile" => {

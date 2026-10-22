@@ -43,7 +43,7 @@ class GercekHesapServisi extends HesapServisi {
   }
 
   factory GercekHesapServisi.rust(RustMotor motor) => GercekHesapServisi(
-    kasa: Platform.isWindows ? WindowsOturumKasasi() : null,
+    kasa: (Platform.isWindows || Platform.isAndroid) ? PlatformOturumKasasi() : null,
     islem: (islem, veri) async => rust.googleIslem(
       islem: islem,
       veri: islem == 'baslat' && Platform.isWindows
@@ -157,7 +157,10 @@ class GercekHesapServisi extends HesapServisi {
       });
     }
     if (_kapali || nesil != _oturumNesli) return;
-    _hesap = Hesap(eposta: '', ad: identity['ad'] as String);
+    _hesap = Hesap(
+      eposta: identity['eposta'] as String? ?? '',
+      ad: identity['ad'] as String? ?? 'Google hesabın',
+    );
     durum = null;
     _saatBaslat();
     _yayinla();

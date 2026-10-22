@@ -8,7 +8,7 @@ abstract class OturumKasasi {
   Future<void> sil();
 }
 
-class WindowsOturumKasasi implements OturumKasasi {
+class PlatformOturumKasasi implements OturumKasasi {
   static const _kanal = MethodChannel('afudesk/secure_storage');
   @override
   Future<String?> oku() => _kanal.invokeMethod<String>('read');
@@ -17,3 +17,5 @@ class WindowsOturumKasasi implements OturumKasasi {
   @override
   Future<void> sil() => _kanal.invokeMethod<void>('clear');
 }
+
+typedef WindowsOturumKasasi = PlatformOturumKasasi;

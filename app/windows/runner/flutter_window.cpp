@@ -197,9 +197,9 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     if (lparam == WM_LBUTTONDBLCLK) { Show(); SetForegroundWindow(hwnd); }
     if (lparam == WM_RBUTTONUP || lparam == WM_CONTEXTMENU) {
       HMENU menu = CreatePopupMenu();
-      AppendMenuW(menu, MF_STRING, kOpen, L"Aç");
-      AppendMenuW(menu, MF_STRING, kStop, L"Bağlantıları durdur");
-      AppendMenuW(menu, MF_STRING, kExit, L"Çıkış");
+      AppendMenuW(menu, MF_STRING, kOpen, L"A\u00e7");
+      AppendMenuW(menu, MF_STRING, kStop, L"Ba\u011flant\u0131lar\u0131 durdur");
+      AppendMenuW(menu, MF_STRING, kExit, L"\u00c7\u0131k\u0131\u015f");
       POINT point; GetCursorPos(&point);
       SetForegroundWindow(hwnd);
       const UINT selected = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON,

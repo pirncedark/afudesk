@@ -145,18 +145,9 @@ void main() {
     await t.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('Space kisa basista bosluk uzun basista tek down up', (t) async {
+  testWidgets('Space normal klavye tusu olarak aninda iletilir', (t) async {
     final m = await terminalAc(t);
     await t.sendKeyDownEvent(LogicalKeyboardKey.space);
-    expect(m.girdiler, isEmpty);
-    await t.pump(const Duration(milliseconds: 100));
-    await t.sendKeyUpEvent(LogicalKeyboardKey.space);
-    expect(m.girdiler.map((g) => g.basili), [true, false]);
-    m.girdiler.clear();
-    await t.sendKeyDownEvent(LogicalKeyboardKey.space);
-    await t.pump(const Duration(milliseconds: 401));
-    await t.sendKeyRepeatEvent(LogicalKeyboardKey.space);
-    await t.pump(const Duration(seconds: 1));
     expect(m.girdiler.map((g) => g.basili), [true]);
     await t.sendKeyUpEvent(LogicalKeyboardKey.space);
     expect(m.girdiler.map((g) => g.basili), [true, false]);

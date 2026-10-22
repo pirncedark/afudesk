@@ -74,6 +74,8 @@ pub struct Dogrulanmis {
     sub: String,
     nonce: String,
     exp: i64,
+    email: Option<String>,
+    name: Option<String>,
 }
 
 impl Dogrulanmis {
@@ -85,6 +87,12 @@ impl Dogrulanmis {
     }
     pub fn gecerlilik_sonu(&self) -> i64 {
         self.exp
+    }
+    pub fn email(&self) -> Option<&str> {
+        self.email.as_deref()
+    }
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
     }
 }
 
@@ -145,6 +153,10 @@ struct Claims {
     iat: i64,
     #[serde(default)]
     nonce: String,
+    #[serde(default)]
+    email: Option<String>,
+    #[serde(default)]
+    name: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -338,6 +350,8 @@ impl Dogrulayici {
             sub: c.sub,
             nonce: c.nonce,
             exp: c.exp,
+            email: c.email,
+            name: c.name,
         })
     }
 }
@@ -396,11 +410,15 @@ mod dizin_testleri {
             sub: "hesap".into(),
             nonce: "yerel".into(),
             exp: 999,
+            email: None,
+            name: None,
         };
         let karsi = Dogrulanmis {
             sub: "hesap".into(),
             nonce: anahtar_nonce("host", "viewer"),
             exp: 2000,
+            email: None,
+            name: None,
         };
         let mut kayit = CihazKaydi {
             v: 1,
@@ -615,6 +633,8 @@ mod dizin_testleri {
             sub: sub.into(),
             nonce: nonce.into(),
             exp: 2000,
+            email: None,
+            name: None,
         }
     }
 
