@@ -50,8 +50,12 @@ void main() {
     await t.pumpWidget(const SizedBox.shrink());
   });
 
-  Future<SahteMotor> baglan(WidgetTester t, {bool kontrol = true}) async {
-    final m = SahteMotor();
+  Future<SahteMotor> baglan(
+    WidgetTester t, {
+    bool kontrol = true,
+    bool dokunmatik = false,
+  }) async {
+    final m = SahteMotor()..dokunmatik = dokunmatik;
     await t.pumpWidget(MaterialApp(home: OturumSayfasi(motor: m)));
     m.izleyici.add(IzleyiciOlay('kabul', kontrol: kontrol));
     await t.pump();
@@ -426,6 +430,60 @@ void main() {
       await t.pump();
       expect(m.girdiler.last.tur, 'terminal_ac');
       expect(m.girdiler.last.metin, '101');
+      await t.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
+    'konusma modu acikken Space tusu PTT olarak calisir ve tekrar uretmez',
+    (t) async {
+      final m = await terminalAc(t);
+      // SnackBar'ı temizle
+      ScaffoldMessenger.of(t.element(find.byType(Scaffold).first)).clearSnackBars();
+      await t.pump();
+      // Konusma modunu ac
+      await t.tap(find.byKey(const Key('terminal_konusma_modu')));
+      await t.pump();
+      ScaffoldMessenger.of(t.element(find.byType(Scaffold).first)).clearSnackBars();
+      await t.pump();
+      m.girdiler.clear();
+      // Space bas
+      await t.sendKeyDownEvent(LogicalKeyboardKey.space);
+      expect(m.girdiler.where((g) => g.ad == 'Space').map((g) => g.basili), [true]);
+
+      // KeyRepeat (basili tutma tekrari) yeni girdi veya ekstra karakter uretmez
+      m.girdiler.clear();
+      await simulateKeyRepeatEvent(LogicalKeyboardKey.space);
+      expect(m.girdiler.where((g) => g.ad == 'Space'), isEmpty);
+
+      // Space birak
+      await t.sendKeyUpEvent(LogicalKeyboardKey.space);
+      expect(m.girdiler.where((g) => g.ad == 'Space').map((g) => g.basili), [false]);
+
+      // Konusma modunu kapatinca Space yine normal tus olarak iletilir
+      await t.tap(find.byKey(const Key('terminal_konusma_modu')));
+      await t.pump();
+      ScaffoldMessenger.of(t.element(find.byType(Scaffold).first)).clearSnackBars();
+      await t.pump();
+      m.girdiler.clear();
+      await t.sendKeyEvent(LogicalKeyboardKey.space);
+      expect(m.girdiler.where((g) => g.ad == 'Space').map((g) => g.basili), [true, false]);
+
+      await t.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
+    'dokunmatik cubuk uzerindeki konusma modu dugmesi modu degistirir',
+    (t) async {
+      await baglan(t, dokunmatik: true);
+      expect(find.byKey(const Key('oturum_konusma_modu')), findsOneWidget);
+      await t.tap(find.byKey(const Key('oturum_konusma_modu')));
+      await t.pump();
+      expect(find.textContaining('Konuşma modu açık'), findsOneWidget);
+      await t.tap(find.byKey(const Key('oturum_konusma_modu')));
+      await t.pump();
+      expect(find.textContaining('Yazma modu'), findsOneWidget);
       await t.pumpWidget(const SizedBox.shrink());
     },
   );
