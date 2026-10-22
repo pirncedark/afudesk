@@ -9,7 +9,9 @@ class TerminalModu extends StatelessWidget {
   final Widget yaziAlani;
   final bool ctrl;
   final bool klavyeAcik;
+  final bool konusmaModu;
   final VoidCallback kapat, klavye, ctrlDegistir, kopyayiKes, yapistir;
+  final VoidCallback? konusmaModuDegistir;
   final ValueChanged<String> tus;
   final ValueChanged<bool> basKonus;
   final void Function(Offset konum, Size alan) konum;
@@ -22,6 +24,8 @@ class TerminalModu extends StatelessWidget {
     required this.yaziAlani,
     required this.ctrl,
     required this.klavyeAcik,
+    this.konusmaModu = false,
+    this.konusmaModuDegistir,
     required this.kapat,
     required this.klavye,
     required this.ctrlDegistir,
@@ -145,6 +149,22 @@ class TerminalModu extends StatelessWidget {
                         icon: Icon(
                           klavyeAcik ? Icons.keyboard_hide : Icons.keyboard,
                         ),
+                      ),
+                      IconButton.filledTonal(
+                        key: const Key('terminal_konusma_modu'),
+                        tooltip: konusmaModu
+                            ? 'Konuşma modu açık (Space bas-konuş)'
+                            : 'Konuşma modu kapalı (Space boşluk)',
+                        style: IconButton.styleFrom(
+                          backgroundColor: konusmaModu
+                              ? Theme.of(context).colorScheme.primary
+                              : null,
+                          foregroundColor: konusmaModu
+                              ? Theme.of(context).colorScheme.onPrimary
+                              : null,
+                        ),
+                        onPressed: konusmaModuDegistir,
+                        icon: Icon(konusmaModu ? Icons.mic : Icons.mic_none),
                       ),
                       _BasKonusDugmesi(basKonus: basKonus),
                       Expanded(

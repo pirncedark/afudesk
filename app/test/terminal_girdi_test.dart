@@ -57,4 +57,13 @@ void main() {
     b.dugme(false);
     expect(g.map((x) => x.basili), [true, false]);
   });
+
+  testWidgets('aninda Space basisi beklemeden derhal Space down gonderir', (t) async {
+    final g = <Girdi>[];
+    final b = BasKonusGirdisi(g.addAll);
+    b.spaceBas(aninda: true);
+    expect(g.map((x) => x.basili), [true]);
+    b.spaceBirak();
+    expect(g.map((x) => x.basili), [true, false]);
+  });
 }

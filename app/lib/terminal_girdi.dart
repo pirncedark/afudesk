@@ -43,10 +43,14 @@ class BasKonusGirdisi {
 
   void dugme(bool basili) => basili ? _tut('dugme') : _birak('dugme');
 
-  void spaceBas() {
+  void spaceBas({bool aninda = false}) {
     if (_space) return; // Otomatik tuş tekrarı yeni KEYDOWN üretmez.
     _space = true;
-    _bekle = Timer(const Duration(milliseconds: 400), () => _tut('space'));
+    if (aninda) {
+      _tut('space');
+    } else {
+      _bekle = Timer(const Duration(milliseconds: 400), () => _tut('space'));
+    }
   }
 
   void spaceBirak() {

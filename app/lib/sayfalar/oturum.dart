@@ -87,7 +87,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   }
 
   void _terminalBilgi(String metin) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(metin)));
+    final m = ScaffoldMessenger.of(context);
+    m.clearSnackBars();
+    m.showSnackBar(SnackBar(content: Text(metin)));
   }
 
   bool _isTerminal(Map<String, dynamic> oge) {
@@ -270,6 +272,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   final _yazi = TextEditingController(text: _gozcu);
   String _oncekiYazi = _gozcu;
   late final _basKonus = BasKonusGirdisi(_gonder);
+  bool _konusmaModu = false;
   bool _klavyeAcik = false;
   bool _oyunKoluIzni = false, _kolAcik = false;
   OyunKoluDurumu? _sonKol, _bekleyenKol;
@@ -279,6 +282,18 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   static bool _kolIpucuGosterildi = false;
   static bool _zoomIpucuGosterildi = false;
   static const _gozcu = '\u200b';
+
+  void _konusmaModuDegistir() {
+    setState(() => _konusmaModu = !_konusmaModu);
+    if (!_konusmaModu) {
+      _basKonus.iptal();
+    }
+    _terminalBilgi(
+      _konusmaModu
+          ? 'Konuşma modu açık: Space tuşunu basılı tutarak konuşun.'
+          : 'Yazma modu: Space tuşu normal boşluk yazar.',
+    );
+  }
 
   @override
   void initState() {
@@ -797,6 +812,31 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
                   : const Text('🎮 Oyun kolu'),
             ),
           ),
+          const SizedBox(width: 8),
+          Tooltip(
+            message: _konusmaModu
+                ? 'Konuşma modu açık (Space bas-konuş)'
+                : 'Konuşma modunu aç (Space bas-konuş)',
+            child: FilledButton(
+              key: const Key('oturum_konusma_modu'),
+              style: FilledButton.styleFrom(
+                minimumSize: Size(dar ? 56 : 0, 56),
+                padding: EdgeInsets.symmetric(horizontal: dar ? 8 : 16),
+                backgroundColor: _konusmaModu ? Renk.vurgu : null,
+              ),
+              onPressed: _konusmaModuDegistir,
+              child: dar
+                  ? Icon(_konusmaModu ? Icons.mic : Icons.mic_none)
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(_konusmaModu ? Icons.mic : Icons.mic_none, size: 18),
+                        const SizedBox(width: 4),
+                        const Text('Bas-konuş'),
+                      ],
+                    ),
+            ),
+          ),
           const SizedBox(width: 6),
           Expanded(
             child: SingleChildScrollView(
@@ -1099,6 +1139,16 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     final ad = tusAdi(e.logicalKey) ?? '';
 
     if (hid == 0 && ad.isEmpty) return KeyEventResult.ignored;
+
+    if (ad == 'Space' && _konusmaModu) {
+      if (e is KeyRepeatEvent) return KeyEventResult.handled;
+      if (e is KeyDownEvent) {
+        _basKonus.spaceBas(aninda: true);
+      } else if (e is KeyUpEvent) {
+        _basKonus.spaceBirak();
+      }
+      return KeyEventResult.handled;
+    }
     if (e is KeyRepeatEvent) {
       if (!_basiliTuslar.contains(hid)) return KeyEventResult.handled;
       final once = _sonTekrar[hid];
@@ -1131,6 +1181,8 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
           kare: _kare,
           ctrl: _terminalCtrl,
           klavyeAcik: _klavyeAcik,
+          konusmaModu: _konusmaModu,
+          konusmaModuDegistir: _konusmaModuDegistir,
           kapat: _terminalKapat,
           ctrlDegistir: _terminalCtrlDegistir,
           kopyayiKes: _terminalKes,
