@@ -182,7 +182,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
       if (!_terminalIpucuGosterildi) {
         _terminalIpucuGosterildi = true;
         _terminalBilgi(
-          'Klavye mikrofonuyla yaz veya Bas-konuş düğmesini basılı tut.',
+          'Klavye ile yaz veya Space için mikrofon simgesini basılı tut.',
         );
       }
     } else {
