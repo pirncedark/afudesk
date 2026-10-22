@@ -855,9 +855,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
 
   Widget _dokunmatikEkran(ui.Image? k) {
     return _klavyeOdak(
-      Column(
+      Stack(
         children: [
-          Expanded(
+          Positioned.fill(
             child: Container(
               color: Colors.black,
               child: LayoutBuilder(
@@ -1013,7 +1013,19 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
               ),
             ),
           ),
-          if (_kontrol) SafeArea(top: false, child: _dokunmatikCubuk()),
+          if (_kontrol)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SafeArea(
+                top: false,
+                child: Container(
+                  color: Renk.arkaplan.withValues(alpha: 0.85),
+                  child: _dokunmatikCubuk(),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -1099,12 +1111,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     if (!_kontrol || _yeniden != null) return KeyEventResult.ignored;
     final hid = e.physicalKey.usbHidUsage;
     final ad = tusAdi(e.logicalKey) ?? '';
-    if (_terminal && ad == 'Space') {
-      _yaziSifirla();
-      if (e is KeyDownEvent) _basKonus.spaceBas();
-      if (e is KeyUpEvent) _basKonus.spaceBirak();
-      return KeyEventResult.handled;
-    }
+
     if (hid == 0 && ad.isEmpty) return KeyEventResult.ignored;
     if (e is KeyRepeatEvent) {
       if (!_basiliTuslar.contains(hid)) return KeyEventResult.handled;
@@ -1194,8 +1201,12 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     final izinMetni = _kontrol ? 'Kontrol açık' : 'Yalnız izleme';
     final izinSimge = Icon(_kontrol ? Icons.mouse : Icons.visibility, size: 16);
     return Scaffold(
+      extendBodyBehindAppBar: widget.motor.dokunmatik && _asama == _Asama.bagli,
       appBar: AppBar(
-        toolbarHeight: widget.motor.dokunmatik ? 44 : null,
+        backgroundColor: widget.motor.dokunmatik && _asama == _Asama.bagli
+            ? Colors.black.withValues(alpha: 0.6)
+            : null,
+        toolbarHeight: widget.motor.dokunmatik ? 40 : null,
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
