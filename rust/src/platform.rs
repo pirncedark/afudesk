@@ -74,11 +74,24 @@ pub mod masaustu {
     #[cfg(windows)]
     pub struct WgcYakalayici {
         kare: std::sync::Arc<(std::sync::Mutex<Option<(Goruntu, u64)>>, std::sync::Condvar)>,
-        _kontrol: windows_capture::capture::CaptureControl<WgcIsleyici, WgcHata>,
+        kontrol: Option<windows_capture::capture::CaptureControl<WgcIsleyici, WgcHata>>,
     }
 
     #[cfg(windows)]
     type WgcHata = Box<dyn std::error::Error + Send + Sync>;
+
+    #[cfg(windows)]
+    impl Drop for WgcYakalayici {
+        fn drop(&mut self) {
+            // CaptureControl kendi Drop'unda yakalama iş parçacığını durdurmaz.
+            // stop() WM_QUIT gönderip iş parçacığını bekleyerek WGC oturumunu kapatır.
+            if let Some(kontrol) = self.kontrol.take() {
+                if let Err(hata) = kontrol.stop() {
+                    log::warn!("Ekran yakalama durdurulamadı: {hata}");
+                }
+            }
+        }
+    }
 
     #[cfg(windows)]
     struct WgcIsleyici {
@@ -147,7 +160,7 @@ pub mod masaustu {
             let kontrol = WgcIsleyici::start_free_threaded(ayarlar)?;
             Ok(Self {
                 kare,
-                _kontrol: kontrol,
+                kontrol: Some(kontrol),
             })
         }
     }

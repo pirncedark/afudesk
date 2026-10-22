@@ -216,14 +216,14 @@ void main() {
     expect(find.byTooltip('Bağlantıyı kes'), findsOneWidget);
   });
 
-  testWidgets('dokunmatik oturum yatay kipe geçer, çıkınca serbest bırakır', (t) async {
+  testWidgets('dokunmatik oturum giriş ve çıkışta telefon yönünü zorlamaz', (t) async {
     final yonler = <Object?>[];
     t.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (c) async {
       if (c.method == 'SystemChrome.setPreferredOrientations') yonler.add(c.arguments);
       return null;
     });
     await telefon(t);
-    expect(yonler.first, ['DeviceOrientation.landscapeLeft', 'DeviceOrientation.landscapeRight']);
+    expect(yonler.first, DeviceOrientation.values.map((yon) => yon.toString()).toList());
     await t.tap(find.byTooltip('Bağlantıyı kes'));
     await gec(t);
     expect((yonler.last as List).length, 4, reason: 'çıkınca tüm yönler serbest');

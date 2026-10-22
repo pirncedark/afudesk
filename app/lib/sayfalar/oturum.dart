@@ -82,7 +82,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
         _terminalBekliyor = false;
         _terminalListeBekliyor = false;
       });
-      _terminalBilgi('Terminal açılamadı. Yeniden dene.');
+      _terminalBilgi('Pencere açılamadı. Yeniden dene.');
     });
   }
 
@@ -110,7 +110,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     try {
       final liste = (jsonDecode(metin) as List).cast<Map<String, dynamic>>();
       if (liste.isEmpty) {
-        _terminalBilgi('Açık terminal bulunamadı. Bilgisayarda terminal aç.');
+        _terminalBilgi(
+          'Açık pencere bulunamadı. Bilgisayarda bir uygulama aç.',
+        );
         return;
       }
       final terminaller = liste.where(_isTerminal).toList();
@@ -139,8 +141,8 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
         return;
       }
       final boyut = MediaQuery.sizeOf(context);
-      final en = boyut.shortestSide;
-      final boy = boyut.longestSide;
+      final en = boyut.width;
+      final boy = boyut.height;
       _tuslariBirak();
       setState(() => _terminalBekliyor = true);
       widget.motor.girdi(
@@ -153,7 +155,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
       );
       _terminalZamanAsimi();
     } catch (_) {
-      if (mounted) _terminalBilgi('Terminal listesi alınamadı. Yeniden dene.');
+      if (mounted) _terminalBilgi('Pencereler listelenemedi. Yeniden dene.');
     }
   }
 
@@ -171,7 +173,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
         _terminalBekliyor = false;
       });
       if (widget.motor.dokunmatik) {
-        SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+        SystemChrome.setPreferredOrientations(DeviceOrientation.values);
         SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
       }
       _odak.requestFocus();
@@ -184,7 +186,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     } else {
       _terminalKapat(gonder: false);
       if (metin != 'kapali') {
-        _terminalBilgi('Terminal açılamadı. Yeniden dene.');
+        _terminalBilgi('Pencere açılamadı. Yeniden dene.');
       }
     }
   }
@@ -207,10 +209,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
       _klavyeAcik = false;
     });
     if (degisti && widget.motor.dokunmatik) {
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.landscapeLeft,
-        DeviceOrientation.landscapeRight,
-      ]);
+      SystemChrome.setPreferredOrientations(DeviceOrientation.values);
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     }
     _odak.requestFocus();
@@ -289,11 +288,8 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     _yazi.addListener(_imeDegisti);
     _kolKanal.setMethodCallHandler(_androidKol);
     if (widget.motor.dokunmatik) {
-      // Telefonda bilgisayar ekranı yatayda ve tam ekranda çok daha okunaklı.
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.landscapeLeft,
-        DeviceOrientation.landscapeRight,
-      ]);
+      // Pencere seçerken alınan ölçü, telefonun kullandığı yönü korumalı.
+      SystemChrome.setPreferredOrientations(DeviceOrientation.values);
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     }
     final akis = widget.baglantiAc != null
@@ -1502,13 +1498,23 @@ class _PencereSecimDiyaloguState extends State<_PencereSecimDiyalogu> {
   IconData _uygulamaSimgesi(Map<String, dynamic> oge) {
     final uyg = (oge['uygulama'] as String? ?? '').toLowerCase();
     final tur = oge['tur'] as String? ?? '';
-    if (tur == 'terminal' || uyg.contains('terminal') || uyg.contains('istemi') || uyg.contains('cmd')) {
+    if (tur == 'terminal' ||
+        uyg.contains('terminal') ||
+        uyg.contains('istemi') ||
+        uyg.contains('cmd')) {
       return Icons.terminal;
     }
-    if (uyg == 'powershell' || uyg.contains('code') || uyg.contains('cursor') || uyg.contains('visual studio')) {
+    if (uyg == 'powershell' ||
+        uyg.contains('code') ||
+        uyg.contains('cursor') ||
+        uyg.contains('visual studio')) {
       return Icons.code;
     }
-    if (uyg.contains('chrome') || uyg.contains('edge') || uyg.contains('firefox') || uyg.contains('brave') || uyg.contains('opera')) {
+    if (uyg.contains('chrome') ||
+        uyg.contains('edge') ||
+        uyg.contains('firefox') ||
+        uyg.contains('brave') ||
+        uyg.contains('opera')) {
       return Icons.language;
     }
     if (uyg.contains('not defteri') || uyg.contains('notepad')) {
@@ -1520,7 +1526,9 @@ class _PencereSecimDiyaloguState extends State<_PencereSecimDiyalogu> {
     if (uyg.contains('spotify')) {
       return Icons.music_note;
     }
-    if (uyg.contains('discord') || uyg.contains('telegram') || uyg.contains('slack')) {
+    if (uyg.contains('discord') ||
+        uyg.contains('telegram') ||
+        uyg.contains('slack')) {
       return Icons.chat;
     }
     return Icons.window_outlined;
@@ -1529,7 +1537,9 @@ class _PencereSecimDiyaloguState extends State<_PencereSecimDiyalogu> {
   @override
   Widget build(BuildContext context) {
     final sadecePencereler = widget.terminaller.isEmpty;
-    final gosterilenler = _tumPencereler ? widget.pencereler : widget.terminaller;
+    final gosterilenler = _tumPencereler
+        ? widget.pencereler
+        : widget.terminaller;
 
     return SafeArea(
       child: SizedBox(
@@ -1544,10 +1554,12 @@ class _PencereSecimDiyaloguState extends State<_PencereSecimDiyalogu> {
                     child: Text(
                       sadecePencereler
                           ? 'Pencere seç'
-                          : (_tumPencereler ? 'Açık pencereler' : 'Terminal seç'),
+                          : (_tumPencereler
+                                ? 'Açık pencereler'
+                                : 'Terminal seç'),
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   if (!sadecePencereler && widget.pencereler.isNotEmpty)
@@ -1607,4 +1619,3 @@ class _PencereSecimDiyaloguState extends State<_PencereSecimDiyalogu> {
     );
   }
 }
-
