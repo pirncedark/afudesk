@@ -247,7 +247,7 @@ void main() {
         'terminal_liste',
         metin: jsonEncode([
           {"id": 101, "baslik": "GitHub - Google Chrome", "uygulama": "Google Chrome", "tur": "pencere"},
-          {"id": 102, "baslik": "Not Defteri", "uygulama": "Not Defteri", "tur": "pencere"},
+          {"id": 102, "baslik": "Notlar.txt - Not Defteri", "uygulama": "Not Defteri", "tur": "pencere"},
         ]),
       ),
     );
@@ -255,6 +255,7 @@ void main() {
     await t.pump(const Duration(milliseconds: 300));
     expect(find.text('Pencere seç'), findsOneWidget);
     expect(find.text('GitHub - Google Chrome'), findsOneWidget);
+    expect(find.text('Notlar.txt - Not Defteri'), findsOneWidget);
     expect(find.text('Not Defteri'), findsOneWidget);
 
     await t.tap(find.text('GitHub - Google Chrome'));
