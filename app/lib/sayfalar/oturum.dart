@@ -90,6 +90,19 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(metin)));
   }
 
+  bool _isTerminal(Map<String, dynamic> oge) {
+    final tur = oge['tur'] as String? ?? '';
+    if (tur == 'terminal') return true;
+    if (tur == 'pencere') return false;
+    final uyg = (oge['uygulama'] as String? ?? '').toLowerCase();
+    return uyg.contains('terminal') ||
+        uyg == 'powershell' ||
+        uyg.contains('komut') ||
+        uyg.contains('cmd') ||
+        uyg == 'wezterm' ||
+        uyg == 'alacritty';
+  }
+
   Future<void> _terminalListesi(String metin) async {
     if (!_terminalListeBekliyor || !_kontrol) return;
     _terminalSaat?.cancel();
@@ -100,47 +113,24 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
         _terminalBilgi('Açık terminal bulunamadı. Bilgisayarda terminal aç.');
         return;
       }
-      final secilen = liste.length == 1
-          ? liste.single
-          : await showModalBottomSheet<Map<String, dynamic>>(
-              context: context,
-              isScrollControlled: true,
-              builder: (context) => SafeArea(
-                child: SizedBox(
-                  height: MediaQuery.sizeOf(context).height * .6,
-                  child: Column(
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Text('Terminal seç'),
-                      ),
-                      Expanded(
-                        child: ListView(
-                          children: liste
-                              .map(
-                                (t) => ListTile(
-                                  leading: Icon(
-                                    t['uygulama'] == 'PowerShell'
-                                        ? Icons.code
-                                        : Icons.terminal,
-                                  ),
-                                  title: Text(
-                                    t['baslik'] as String? ?? 'Terminal',
-                                  ),
-                                  subtitle: Text(
-                                    t['uygulama'] as String? ?? 'Terminal',
-                                  ),
-                                  onTap: () => Navigator.pop(context, t),
-                                ),
-                              )
-                              .toList(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
+      final terminaller = liste.where(_isTerminal).toList();
+      final pencereler = liste.where((t) => !_isTerminal(t)).toList();
+
+      final Map<String, dynamic>? secilen;
+      if (terminaller.length == 1 && pencereler.isEmpty) {
+        secilen = terminaller.single;
+      } else if (terminaller.isEmpty && pencereler.length == 1) {
+        secilen = pencereler.single;
+      } else {
+        secilen = await showModalBottomSheet<Map<String, dynamic>>(
+          context: context,
+          isScrollControlled: true,
+          builder: (context) => _PencereSecimDiyalogu(
+            terminaller: terminaller,
+            pencereler: pencereler,
+          ),
+        );
+      }
       if (secilen == null ||
           !mounted ||
           _asama != _Asama.bagli ||
@@ -1228,8 +1218,8 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
             IconButton(
               key: const Key('oturum_terminal'),
               tooltip: _terminalBekliyor || _terminalListeBekliyor
-                  ? 'Terminal açılıyor…'
-                  : 'Terminal',
+                  ? 'Pencere açılıyor…'
+                  : 'Terminal / Pencere',
               onPressed:
                   _kontrol &&
                       _yeniden == null &&
@@ -1486,3 +1476,135 @@ class _Bilgi extends StatelessWidget {
     ),
   );
 }
+
+class _PencereSecimDiyalogu extends StatefulWidget {
+  final List<Map<String, dynamic>> terminaller;
+  final List<Map<String, dynamic>> pencereler;
+
+  const _PencereSecimDiyalogu({
+    required this.terminaller,
+    required this.pencereler,
+  });
+
+  @override
+  State<_PencereSecimDiyalogu> createState() => _PencereSecimDiyaloguState();
+}
+
+class _PencereSecimDiyaloguState extends State<_PencereSecimDiyalogu> {
+  late bool _tumPencereler;
+
+  @override
+  void initState() {
+    super.initState();
+    _tumPencereler = widget.terminaller.isEmpty;
+  }
+
+  IconData _uygulamaSimgesi(Map<String, dynamic> oge) {
+    final uyg = (oge['uygulama'] as String? ?? '').toLowerCase();
+    final tur = oge['tur'] as String? ?? '';
+    if (tur == 'terminal' || uyg.contains('terminal') || uyg.contains('istemi') || uyg.contains('cmd')) {
+      return Icons.terminal;
+    }
+    if (uyg == 'powershell' || uyg.contains('code') || uyg.contains('cursor') || uyg.contains('visual studio')) {
+      return Icons.code;
+    }
+    if (uyg.contains('chrome') || uyg.contains('edge') || uyg.contains('firefox') || uyg.contains('brave') || uyg.contains('opera')) {
+      return Icons.language;
+    }
+    if (uyg.contains('not defteri') || uyg.contains('notepad')) {
+      return Icons.edit_note;
+    }
+    if (uyg.contains('gezgini') || uyg.contains('explorer')) {
+      return Icons.folder_open;
+    }
+    if (uyg.contains('spotify')) {
+      return Icons.music_note;
+    }
+    if (uyg.contains('discord') || uyg.contains('telegram') || uyg.contains('slack')) {
+      return Icons.chat;
+    }
+    return Icons.window_outlined;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sadecePencereler = widget.terminaller.isEmpty;
+    final gosterilenler = _tumPencereler ? widget.pencereler : widget.terminaller;
+
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * .65,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      sadecePencereler
+                          ? 'Pencere seç'
+                          : (_tumPencereler ? 'Açık pencereler' : 'Terminal seç'),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                  ),
+                  if (!sadecePencereler && widget.pencereler.isNotEmpty)
+                    TextButton.icon(
+                      key: const Key('pencere_gecis_dugmesi'),
+                      onPressed: () {
+                        setState(() {
+                          _tumPencereler = !_tumPencereler;
+                        });
+                      },
+                      icon: Icon(
+                        _tumPencereler ? Icons.terminal : Icons.window,
+                        size: 18,
+                      ),
+                      label: Text(
+                        _tumPencereler
+                            ? 'Terminaller (${widget.terminaller.length})'
+                            : 'Diğer pencereler (${widget.pencereler.length})',
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: gosterilenler.isEmpty
+                  ? Center(
+                      child: Text(
+                        _tumPencereler
+                            ? 'Açık pencere bulunamadı.'
+                            : 'Açık terminal bulunamadı.',
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: gosterilenler.length,
+                      itemBuilder: (context, i) {
+                        final oge = gosterilenler[i];
+                        return ListTile(
+                          leading: Icon(_uygulamaSimgesi(oge)),
+                          title: Text(
+                            oge['baslik'] as String? ?? 'Pencere',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            oge['uygulama'] as String? ?? 'Uygulama',
+                          ),
+                          onTap: () => Navigator.pop(context, oge),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+

@@ -20,6 +20,50 @@ pub struct Pencere {
     pub id: u64,
     pub baslik: String,
     pub uygulama: String,
+    #[serde(default)]
+    pub tur: String,
+}
+
+/// Uygulama yürütülebilir dosya adından kullanıcı dostu başlık üretir.
+pub fn uygulama_adi(islem: &str) -> String {
+    let dosya = islem
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(islem)
+        .to_ascii_lowercase();
+    match dosya.as_str() {
+        "chrome.exe" => "Google Chrome".into(),
+        "msedge.exe" => "Microsoft Edge".into(),
+        "firefox.exe" => "Firefox".into(),
+        "brave.exe" => "Brave".into(),
+        "opera.exe" => "Opera".into(),
+        "notepad.exe" => "Not Defteri".into(),
+        "code.exe" => "VS Code".into(),
+        "cursor.exe" => "Cursor".into(),
+        "devenv.exe" => "Visual Studio".into(),
+        "explorer.exe" => "Dosya Gezgini".into(),
+        "spotify.exe" => "Spotify".into(),
+        "discord.exe" => "Discord".into(),
+        "slack.exe" => "Slack".into(),
+        "telegram.exe" => "Telegram".into(),
+        "steam.exe" | "steamwebhelper.exe" => "Steam".into(),
+        _ => {
+            let kok = dosya.strip_suffix(".exe").unwrap_or(&dosya);
+            if kok.is_empty() {
+                "Uygulama".into()
+            } else {
+                let mut chars = kok.chars();
+                match chars.next() {
+                    None => "Uygulama".into(),
+                    Some(first) => {
+                        let mut s = first.to_uppercase().collect::<String>();
+                        s.push_str(chars.as_str());
+                        s
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Birincil ekran yakalamasına göre fiziksel piksel koordinatları.
@@ -290,44 +334,105 @@ mod win {
         if IsWindowVisible(hwnd) == 0 || !GetWindow(hwnd, GW_OWNER).is_null() {
             return 1;
         }
-        let mut sinif = [0u16; 256];
-        let n = GetClassNameW(hwnd, sinif.as_mut_ptr(), sinif.len() as i32);
-        let Some(uygulama) = siniflandir(
-            &String::from_utf16_lossy(&sinif[..n.max(0) as usize]),
-            &islem_adi(hwnd),
-        ) else {
-            return 1;
-        };
+        let mut pid = 0;
+        GetWindowThreadProcessId(hwnd, &mut pid);
+        if pid == std::process::id() {
+            return 1; // AfuDesk'in kendi penceresi
+        }
         let len = GetWindowTextLengthW(hwnd).clamp(0, 32767) as usize;
+        if len == 0 {
+            return 1;
+        }
         let mut baslik = vec![0u16; len + 1];
         let n = GetWindowTextW(hwnd, baslik.as_mut_ptr(), baslik.len() as i32);
         let baslik = String::from_utf16_lossy(&baslik[..n.max(0) as usize]);
+        let baslik_kirpik = baslik.trim();
+        if baslik_kirpik.is_empty() {
+            return 1;
+        }
+
+        let mut sinif = [0u16; 256];
+        let n = GetClassNameW(hwnd, sinif.as_mut_ptr(), sinif.len() as i32);
+        let sinif_str = String::from_utf16_lossy(&sinif[..n.max(0) as usize]);
+        let islem = islem_adi(hwnd);
+
+        // Sistem / Shell sınıflarını filtrele
+        if sinif_str.eq_ignore_ascii_case("Progman")
+            || sinif_str.eq_ignore_ascii_case("WorkerW")
+            || sinif_str.eq_ignore_ascii_case("Shell_TrayWnd")
+            || sinif_str.eq_ignore_ascii_case("Shell_SecondaryTrayWnd")
+        {
+            return 1;
+        }
+        if sinif_str.eq_ignore_ascii_case("Windows.UI.Core.CoreWindow")
+            && (baslik_kirpik == "Search"
+                || baslik_kirpik == "Başlat"
+                || baslik_kirpik == "Start"
+                || baslik_kirpik == "Program Manager"
+                || baslik_kirpik == "Task View"
+                || baslik_kirpik == "Windows Shell Experience Host")
+        {
+            return 1;
+        }
+
+        let ex = GetWindowLongW(hwnd, GWL_EXSTYLE) as u32;
+        if (ex & WS_EX_TOOLWINDOW) != 0 {
+            return 1;
+        }
+
+        let mut r: RECT = std::mem::zeroed();
+        if GetWindowRect(hwnd, &mut r) != 0 {
+            if (r.right - r.left) <= 10 || (r.bottom - r.top) <= 10 {
+                return 1;
+            }
+        }
+
         let liste = &mut *(data as *mut Vec<Pencere>);
-        liste.push(Pencere {
-            id: hwnd as usize as u64,
-            baslik: if baslik.trim().is_empty() {
-                uygulama.into()
-            } else {
-                baslik
-            },
-            uygulama: uygulama.into(),
-        });
+        if let Some(terminal_adi) = siniflandir(&sinif_str, &islem) {
+            liste.push(Pencere {
+                id: hwnd as usize as u64,
+                baslik: if baslik_kirpik.is_empty() {
+                    terminal_adi.into()
+                } else {
+                    baslik
+                },
+                uygulama: terminal_adi.into(),
+                tur: "terminal".into(),
+            });
+        } else {
+            let app_name = uygulama_adi(&islem);
+            liste.push(Pencere {
+                id: hwnd as usize as u64,
+                baslik,
+                uygulama: app_name,
+                tur: "pencere".into(),
+            });
+        }
         1
     }
 
     pub(super) fn listele() -> Result<Vec<Pencere>> {
-        let mut liste = Vec::new();
+        let mut liste: Vec<Pencere> = Vec::new();
         ensure!(
             unsafe { EnumWindows(Some(pencere), &mut liste as *mut _ as LPARAM) } != 0,
-            "Terminaller alınamadı. Yeniden dene."
+            "Pencereler alınamadı. Yeniden dene."
         );
+        liste.sort_by(|a, b| {
+            let a_term = a.tur == "terminal";
+            let b_term = b.tur == "terminal";
+            match (a_term, b_term) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => a.uygulama.cmp(&b.uygulama).then_with(|| a.baslik.cmp(&b.baslik)),
+            }
+        });
         Ok(liste)
     }
 
     pub(super) fn ac(id: u64, en: u32, boy: u32) -> Result<TerminalOturumu> {
         ensure!(
             listele()?.iter().any(|p| p.id == id),
-            "Terminal kapanmış. Başka terminal seç."
+            "Pencere kapanmış. Başka bir pencere veya terminal seç."
         );
         let _dpi = Dpi::new();
         let (_, calisma) = monitor()?;
@@ -489,6 +594,14 @@ mod tests {
         );
         assert_eq!(siniflandir("", "alacritty.exe"), Some("Alacritty"));
         assert_eq!(siniflandir("Chrome_WidgetWin_1", "chrome.exe"), None);
+    }
+
+    #[test]
+    fn uygulama_adi_eslestirme() {
+        assert_eq!(uygulama_adi("C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"), "Google Chrome");
+        assert_eq!(uygulama_adi("C:\\Windows\\System32\\notepad.exe"), "Not Defteri");
+        assert_eq!(uygulama_adi("code.exe"), "VS Code");
+        assert_eq!(uygulama_adi("custom_tool.exe"), "Custom_tool");
     }
 
     #[test]
