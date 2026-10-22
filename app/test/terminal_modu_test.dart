@@ -42,7 +42,7 @@ void main() {
     expect(find.byKey(const Key('terminal_modu')), findsOneWidget);
     expect(acilis, 1);
     expect(m.cagrilar.where((s) => s == 'baglan'), isEmpty);
-    await t.tap(find.byTooltip('Masaüstüne dön'));
+    await t.tap(find.byKey(const Key('terminal_geri')));
     await t.pump();
     m.izleyici.add(IzleyiciOlay('kabul', kontrol: true));
     await t.pump();
@@ -88,7 +88,7 @@ void main() {
       true,
       false,
     ]);
-    await t.tap(find.byTooltip('Masaüstüne dön'));
+    await t.tap(find.byKey(const Key('terminal_geri')));
     await t.pump();
     expect(m.girdiler.last.tur, 'terminal_kapat');
     expect(find.byKey(const Key('terminal_modu')), findsNothing);
@@ -160,17 +160,27 @@ void main() {
     await t.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('Bas konus birakma ve iptalde Space serbest kalir', (t) async {
+  testWidgets('held microphone repeats until cancel without white overlays', (
+    t,
+  ) async {
     final m = await terminalAc(t);
-    final b = find.byKey(const Key('terminal_konusma_modu'));
-    final gesture = await t.startGesture(t.getCenter(b));
-    await t.pump(const Duration(seconds: 1));
-    expect(m.girdiler.map((g) => g.basili), [true]);
+    expect(find.byType(SnackBar), findsNothing);
+    final mic = find.byKey(const Key('terminal_konusma_modu'));
+    final gesture = await t.startGesture(t.getCenter(mic));
+    for (var i = 0; i < 20; i++) {
+      await t.pump(const Duration(milliseconds: 50));
+    }
+    expect(m.girdiler.length, greaterThan(3));
+    expect(m.girdiler.every((g) => g.ad == 'Space' && g.basili), isTrue);
+    expect(find.text('Bas\u0131l\u0131 tut: Space'), findsNothing);
     await gesture.cancel();
-    expect(m.girdiler.map((g) => g.basili), [true, false]);
+    expect(m.girdiler.last.basili, isFalse);
+    final before = m.girdiler.length;
+    await t.pump(const Duration(seconds: 2));
+    expect(m.girdiler.length, before);
     m.girdiler.clear();
-    final g2 = await t.startGesture(t.getCenter(b));
-    await g2.up();
+    final quick = await t.startGesture(t.getCenter(mic));
+    await quick.up();
     expect(m.girdiler.map((g) => g.basili), [true, false]);
     await t.pumpWidget(const SizedBox.shrink());
   });
@@ -336,7 +346,7 @@ void main() {
           equals(DeviceOrientation.values.map((d) => d.toString()).toList()),
         ),
       );
-      await t.tap(find.byTooltip('Masaüstüne dön'));
+      await t.tap(find.byKey(const Key('terminal_geri')));
       await t.pump();
       expect(
         yonler,
@@ -363,7 +373,7 @@ void main() {
       m.izleyici.add(IzleyiciOlay('terminal_durum', metin: 'acik'));
       await t.pump();
       expect(find.byKey(const Key('terminal_modu')), findsOneWidget);
-      await t.tap(find.byTooltip('Masaüstüne dön'));
+      await t.tap(find.byKey(const Key('terminal_geri')));
       await t.pump();
       expect(find.byKey(const Key('terminal_modu')), findsNothing);
     }
@@ -515,5 +525,44 @@ void main() {
         expect(m.girdiler.where((g) => g.ad == 'Ctrl'), isEmpty);
       });
     }
+  }
+
+  for (final end in ['back', 'disconnect', 'background', 'dispose']) {
+    testWidgets('active microphone repeats stop on $end', (t) async {
+      final m = await terminalAc(t);
+      final gesture = await t.startGesture(
+        t.getCenter(find.byKey(const Key('terminal_konusma_modu'))),
+      );
+      for (var i = 0; i < 14; i++) {
+        await t.pump(const Duration(milliseconds: 50));
+      }
+      expect(
+        m.girdiler.where((g) => g.ad == 'Space' && g.basili).length,
+        greaterThan(3),
+      );
+      switch (end) {
+        case 'back':
+          await t.binding.handlePopRoute();
+        case 'disconnect':
+          m.izleyici.add(IzleyiciOlay('koptu', metin: 'Disconnected'));
+        case 'background':
+          t.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+        case 'dispose':
+          await t.pumpWidget(const SizedBox.shrink());
+      }
+      await t.pump();
+      expect(
+        m.girdiler.where((g) => g.ad == 'Space' && !g.basili),
+        hasLength(1),
+      );
+      final before = m.girdiler.where((g) => g.ad == 'Space').length;
+      await t.pump(const Duration(seconds: 2));
+      expect(m.girdiler.where((g) => g.ad == 'Space').length, before);
+      await gesture.cancel();
+      await t.pumpWidget(const SizedBox.shrink());
+      if (end == 'background') {
+        t.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      }
+    });
   }
 }

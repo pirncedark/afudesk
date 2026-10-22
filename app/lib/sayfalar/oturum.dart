@@ -57,7 +57,6 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   bool _terminalIlkKare = false;
   int _kareNesli = 0;
   Timer? _terminalSaat;
-  static bool _terminalIpucuGosterildi = false;
   bool _terminalBaslangiciIstendi = false;
 
   void _terminalIste() {
@@ -179,12 +178,6 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
         SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
       }
       _odak.requestFocus();
-      if (!_terminalIpucuGosterildi) {
-        _terminalIpucuGosterildi = true;
-        _terminalBilgi(
-          'Klavye ile yaz veya Space için mikrofon simgesini basılı tut.',
-        );
-      }
     } else {
       _terminalKapat(gonder: false);
       if (metin != 'kapali') {
