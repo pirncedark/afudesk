@@ -229,11 +229,11 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     widget.motor.girdi(Girdi('tus', ad: 'Ctrl', basili: _terminalCtrl));
   }
 
-  void _terminalKes() {
+  void _terminalCtrlKisayol(String harf) {
     if (!_terminalCtrl) {
       widget.motor.girdi(const Girdi('tus', ad: 'Ctrl', basili: true));
     }
-    _ozelTus('c');
+    _ozelTus(harf);
     widget.motor.girdi(const Girdi('tus', ad: 'Ctrl', basili: false));
     setState(() => _terminalCtrl = false);
   }
@@ -1179,11 +1179,10 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
           kare: _kare,
           ctrl: _terminalCtrl,
           klavyeAcik: _klavyeAcik,
-          konusmaModu: _konusmaModu,
-          konusmaModuDegistir: _konusmaModuDegistir,
           kapat: _terminalKapat,
           ctrlDegistir: _terminalCtrlDegistir,
-          kopyayiKes: _terminalKes,
+          kopyayiKes: () => _terminalCtrlKisayol('c'),
+          ctrlP: () => _terminalCtrlKisayol('p'),
           yapistir: _terminalYapistir,
           basKonus: (basili) {
             if (!_kontrol || _yeniden != null) return;
