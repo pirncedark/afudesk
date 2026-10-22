@@ -1021,7 +1021,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
               child: SafeArea(
                 top: false,
                 child: Container(
-                  color: Renk.arkaplan.withValues(alpha: 0.85),
+                  color: Renk.zemin.withValues(alpha: 0.85),
                   child: _dokunmatikCubuk(),
                 ),
               ),
