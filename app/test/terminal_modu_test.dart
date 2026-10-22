@@ -213,7 +213,7 @@ void main() {
     m.izleyici.add(IzleyiciOlay('terminal_liste', metin: '[]'));
     await t.pump();
     expect(
-      find.text('Açık terminal bulunamadı. Bilgisayarda terminal aç.'),
+      find.text('Açık pencere bulunamadı. Bilgisayarda bir uygulama aç.'),
       findsOneWidget,
     );
     expect(m.girdiler.where((g) => g.tur == 'terminal_ac'), isEmpty);
@@ -239,62 +239,194 @@ void main() {
     await t.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('terminal yoksa dogrudan acik pencereler listelenir ve secilen pencere acilir', (t) async {
-    final m = await baglan(t);
-    await t.tap(find.byKey(const Key('oturum_terminal')));
-    m.izleyici.add(
-      IzleyiciOlay(
-        'terminal_liste',
-        metin: jsonEncode([
-          {"id": 101, "baslik": "GitHub - Google Chrome", "uygulama": "Google Chrome", "tur": "pencere"},
-          {"id": 102, "baslik": "Notlar.txt - Not Defteri", "uygulama": "Not Defteri", "tur": "pencere"},
-        ]),
-      ),
-    );
-    await t.pump();
-    await t.pump(const Duration(milliseconds: 300));
-    expect(find.text('Pencere seç'), findsOneWidget);
-    expect(find.text('GitHub - Google Chrome'), findsOneWidget);
-    expect(find.text('Notlar.txt - Not Defteri'), findsOneWidget);
-    expect(find.text('Not Defteri'), findsOneWidget);
+  testWidgets(
+    'terminal yoksa dogrudan acik pencereler listelenir ve secilen pencere acilir',
+    (t) async {
+      final m = await baglan(t);
+      await t.tap(find.byKey(const Key('oturum_terminal')));
+      m.izleyici.add(
+        IzleyiciOlay(
+          'terminal_liste',
+          metin: jsonEncode([
+            {
+              "id": 101,
+              "baslik": "GitHub - Google Chrome",
+              "uygulama": "Google Chrome",
+              "tur": "pencere",
+            },
+            {
+              "id": 102,
+              "baslik": "Notlar.txt - Not Defteri",
+              "uygulama": "Not Defteri",
+              "tur": "pencere",
+            },
+          ]),
+        ),
+      );
+      await t.pump();
+      await t.pump(const Duration(milliseconds: 300));
+      expect(find.text('Pencere seç'), findsOneWidget);
+      expect(find.text('GitHub - Google Chrome'), findsOneWidget);
+      expect(find.text('Notlar.txt - Not Defteri'), findsOneWidget);
+      expect(find.text('Not Defteri'), findsOneWidget);
 
-    await t.tap(find.text('GitHub - Google Chrome'));
-    await t.pump();
-    expect(m.girdiler.last.tur, 'terminal_ac');
-    expect(m.girdiler.last.metin, '101');
+      await t.tap(find.text('GitHub - Google Chrome'));
+      await t.pump();
+      expect(m.girdiler.last.tur, 'terminal_ac');
+      expect(m.girdiler.last.metin, '101');
+      await t.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  for (final boyut in [const Size(390, 844), const Size(844, 390)]) {
+    testWidgets('pencere boyutu telefon yonunu korur $boyut', (t) async {
+      t.view.devicePixelRatio = 1;
+      t.view.physicalSize = boyut;
+      addTearDown(t.view.resetPhysicalSize);
+      addTearDown(t.view.resetDevicePixelRatio);
+      final m = SahteMotor()..dokunmatik = true;
+      final yonler = <Object?>[];
+      t.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (cagri) async {
+          if (cagri.method == 'SystemChrome.setPreferredOrientations') {
+            yonler.add(cagri.arguments);
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => t.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      await t.pumpWidget(MaterialApp(home: OturumSayfasi(motor: m)));
+      m.izleyici.add(IzleyiciOlay('kabul', kontrol: true));
+      await t.pump();
+      expect(yonler, isNotEmpty);
+      expect(
+        yonler,
+        everyElement(
+          equals(DeviceOrientation.values.map((d) => d.toString()).toList()),
+        ),
+      );
+      await t.tap(find.byKey(const Key('oturum_terminal')));
+      m.izleyici.add(
+        IzleyiciOlay(
+          'terminal_liste',
+          metin:
+              '[{"id":101,"baslik":"Notlar","uygulama":"Not Defteri","tur":"pencere"}]',
+        ),
+      );
+      await t.pump();
+      final ac = m.girdiler.last;
+      expect(ac.tur, 'terminal_ac');
+      expect(ac.dx, boyut.width.round());
+      expect(ac.dy, boyut.height.round());
+      m.izleyici.add(IzleyiciOlay('terminal_durum', metin: 'acik'));
+      await t.pump();
+      expect(
+        yonler,
+        contains(
+          equals(DeviceOrientation.values.map((d) => d.toString()).toList()),
+        ),
+      );
+      await t.tap(find.byTooltip('Masaüstüne dön'));
+      await t.pump();
+      expect(
+        yonler,
+        everyElement(
+          equals(DeviceOrientation.values.map((d) => d.toString()).toList()),
+        ),
+      );
+      expect(m.girdiler.where((g) => g.tur == 'terminal_ac'), hasLength(1));
+      await t.pumpWidget(const SizedBox.shrink());
+    });
+  }
+
+  testWidgets('on gecis ayni baglantiyi korur', (t) async {
+    final m = await baglan(t);
+    for (var i = 0; i < 10; i++) {
+      await t.tap(find.byKey(const Key('oturum_terminal')));
+      m.izleyici.add(
+        IzleyiciOlay(
+          'terminal_liste',
+          metin: '[{"id":42,"baslik":"Kod","uygulama":"PowerShell"}]',
+        ),
+      );
+      await t.pump();
+      m.izleyici.add(IzleyiciOlay('terminal_durum', metin: 'acik'));
+      await t.pump();
+      expect(find.byKey(const Key('terminal_modu')), findsOneWidget);
+      await t.tap(find.byTooltip('Masaüstüne dön'));
+      await t.pump();
+      expect(find.byKey(const Key('terminal_modu')), findsNothing);
+    }
+    expect(m.cagrilar.where((s) => s == 'baglan').length, 1);
+    expect(m.girdiler.where((g) => g.tur == 'terminal_ac').length, 10);
+    expect(m.girdiler.where((g) => g.tur == 'terminal_kapat').length, 10);
     await t.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('hem terminal hem pencere varsa gecis dugmesi ile diger pencereler gorulebilir', (t) async {
-    final m = await baglan(t);
-    await t.tap(find.byKey(const Key('oturum_terminal')));
-    m.izleyici.add(
-      IzleyiciOlay(
-        'terminal_liste',
-        metin: jsonEncode([
-          {"id": 42, "baslik": "Sunucu", "uygulama": "PowerShell", "tur": "terminal"},
-          {"id": 101, "baslik": "VS Code", "uygulama": "VS Code", "tur": "pencere"},
-        ]),
-      ),
+  testWidgets('oturum kapanirken bas konus Space birakilir', (t) async {
+    final m = await terminalAc(t);
+    final gesture = await t.startGesture(
+      t.getCenter(find.byKey(const Key('terminal_bas_konus'))),
     );
-    await t.pump();
-    await t.pump(const Duration(milliseconds: 300));
-    expect(find.text('Terminal seç'), findsOneWidget);
-    expect(find.text('Sunucu'), findsOneWidget);
-    expect(find.byKey(const Key('pencere_gecis_dugmesi')), findsOneWidget);
-
-    // Diger pencerelere gec
-    await t.tap(find.byKey(const Key('pencere_gecis_dugmesi')));
-    await t.pump();
-    await t.pump(const Duration(milliseconds: 300));
-    expect(find.text('Açık pencereler'), findsOneWidget);
-    expect(find.text('VS Code'), findsWidgets);
-
-    await t.tap(find.text('VS Code').first);
-    await t.pump();
-    expect(m.girdiler.last.tur, 'terminal_ac');
-    expect(m.girdiler.last.metin, '101');
+    expect(m.girdiler.where((g) => g.ad == 'Space').map((g) => g.basili), [
+      true,
+    ]);
     await t.pumpWidget(const SizedBox.shrink());
+    expect(m.girdiler.where((g) => g.ad == 'Space').map((g) => g.basili), [
+      true,
+      false,
+    ]);
+    await gesture.cancel();
   });
+
+  testWidgets(
+    'hem terminal hem pencere varsa gecis dugmesi ile diger pencereler gorulebilir',
+    (t) async {
+      final m = await baglan(t);
+      await t.tap(find.byKey(const Key('oturum_terminal')));
+      m.izleyici.add(
+        IzleyiciOlay(
+          'terminal_liste',
+          metin: jsonEncode([
+            {
+              "id": 42,
+              "baslik": "Sunucu",
+              "uygulama": "PowerShell",
+              "tur": "terminal",
+            },
+            {
+              "id": 101,
+              "baslik": "VS Code",
+              "uygulama": "VS Code",
+              "tur": "pencere",
+            },
+          ]),
+        ),
+      );
+      await t.pump();
+      await t.pump(const Duration(milliseconds: 300));
+      expect(find.text('Terminal seç'), findsOneWidget);
+      expect(find.text('Sunucu'), findsOneWidget);
+      expect(find.byKey(const Key('pencere_gecis_dugmesi')), findsOneWidget);
+
+      // Diger pencerelere gec
+      await t.tap(find.byKey(const Key('pencere_gecis_dugmesi')));
+      await t.pump();
+      await t.pump(const Duration(milliseconds: 300));
+      expect(find.text('Açık pencereler'), findsOneWidget);
+      expect(find.text('VS Code'), findsWidgets);
+
+      await t.tap(find.text('VS Code').first);
+      await t.pump();
+      expect(m.girdiler.last.tur, 'terminal_ac');
+      expect(m.girdiler.last.metin, '101');
+      await t.pumpWidget(const SizedBox.shrink());
+    },
+  );
 }
-

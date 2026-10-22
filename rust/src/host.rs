@@ -43,6 +43,15 @@ struct YayinAyari {
     fps: std::sync::atomic::AtomicU32,
 }
 
+/// Oturum erken döndüğünde veya async görev iptal edildiğinde de yakalamayı bitir.
+struct YayinKoruma(Arc<AtomicBool>);
+
+impl Drop for YayinKoruma {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::Relaxed);
+    }
+}
+
 fn terminal_erisimi(kontrol: bool, destek: bool) -> Result<()> {
     anyhow::ensure!(kontrol, "Terminali kullanmak için kontrol izni iste.");
     anyhow::ensure!(
@@ -290,6 +299,142 @@ fn hatali_bilet_say(denemeler: &mut usize) -> bool {
 #[cfg(test)]
 mod guvenlik_testleri {
     use super::*;
+
+    struct IzlenenFabrika {
+        sahte: crate::platform::sahte::SahteFabrika,
+        etkin: Arc<std::sync::atomic::AtomicUsize>,
+        birakilan: Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    struct IzlenenYakalayici {
+        ic: Box<dyn crate::platform::Yakalayici>,
+        etkin: Arc<std::sync::atomic::AtomicUsize>,
+        birakilan: Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    impl crate::platform::Yakalayici for IzlenenYakalayici {
+        fn yakala(&mut self) -> Result<crate::goruntu::Goruntu> {
+            self.ic.yakala()
+        }
+    }
+
+    impl Drop for IzlenenYakalayici {
+        fn drop(&mut self) {
+            self.etkin.fetch_sub(1, Ordering::SeqCst);
+            self.birakilan.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    impl Fabrika for IzlenenFabrika {
+        fn yakalayici(&self) -> Result<Box<dyn crate::platform::Yakalayici>> {
+            let ic = self.sahte.yakalayici()?;
+            self.etkin.fetch_add(1, Ordering::SeqCst);
+            Ok(Box::new(IzlenenYakalayici {
+                ic,
+                etkin: self.etkin.clone(),
+                birakilan: self.birakilan.clone(),
+            }))
+        }
+        fn enjektor(&self) -> Result<Box<dyn crate::platform::Enjektor>> {
+            self.sahte.enjektor()
+        }
+        fn pano(&self) -> Result<Box<dyn crate::pano::Pano>> {
+            self.sahte.pano()
+        }
+        fn kol_surucusu(&self) -> Result<Box<dyn crate::sanal_kol::KolSurucusu>> {
+            self.sahte.kol_surucusu()
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn on_oturum_sonrasinda_yakalayici_birikmez() {
+        let etkin = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let birakilan = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let fab = Arc::new(IzlenenFabrika {
+            sahte: crate::platform::sahte::SahteFabrika::new(80, 60),
+            etkin: etkin.clone(),
+            birakilan: birakilan.clone(),
+        });
+        tokio::time::timeout(Duration::from_secs(90), async {
+            let mut host = baslat(
+                HostAyar {
+                    ad: "Kaynak testi".into(),
+                    upnp: false,
+                    parola: "1234567890".into(),
+                    yalniz_yerel: true,
+                    dosya_klasoru: None,
+                    veri_klasoru: None,
+                    kod_acik: true,
+                },
+                fab,
+            )
+            .await
+            .unwrap();
+            let dinleyici = host.endpoint.addr();
+            for tur in 1..=10 {
+                let kod = loop {
+                    if let Some(HostOlay::Hazir { kod, .. }) = host.olaylar.recv().await {
+                        break kod;
+                    }
+                };
+                let mut izleyici = crate::izleyici::baglan(&kod, "1234567890", "Sahte telefon")
+                    .await
+                    .unwrap();
+                loop {
+                    if let Some(HostOlay::Istek { .. }) = host.olaylar.recv().await {
+                        break;
+                    }
+                }
+                host.komut(HostKomut::Kabul(Izinler {
+                    kontrol: false,
+                    pano: false,
+                    dosya: false,
+                    oyun_kolu: false,
+                }))
+                .await;
+                loop {
+                    if let Some(crate::izleyici::IzleyiciOlay::Kare { .. }) =
+                        izleyici.olaylar.recv().await
+                    {
+                        break;
+                    }
+                }
+                assert_eq!(
+                    etkin.load(Ordering::SeqCst),
+                    1,
+                    "Tur {tur}: tek yakalayıcı olmalı"
+                );
+                izleyici.kapat();
+                while birakilan.load(Ordering::SeqCst) < tur {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+                assert_eq!(
+                    etkin.load(Ordering::SeqCst),
+                    0,
+                    "Tur {tur}: yakalayıcı birikti"
+                );
+                assert_eq!(birakilan.load(Ordering::SeqCst), tur);
+                assert_eq!(
+                    host.endpoint.addr(),
+                    dinleyici,
+                    "Tur {tur}: dinleyici değişti"
+                );
+            }
+            host.durdur();
+        })
+        .await
+        .expect("Oturum bittikten sonra yakalayıcı bırakılmadı");
+    }
+
+    #[test]
+    fn yayin_korumasi_erken_cikista_durdurur() {
+        let dur = Arc::new(AtomicBool::new(false));
+        {
+            let _koruma = YayinKoruma(dur.clone());
+            assert!(!dur.load(Ordering::Relaxed));
+        }
+        assert!(dur.load(Ordering::Relaxed));
+    }
 
     #[test]
     fn terminal_yalniz_kontrol_izni_ve_gercek_fabrika_ile_acilir() {
@@ -796,6 +941,7 @@ async fn oturum(
     let (iptal_tx, iptal_rx) = std::sync::mpsc::channel::<Vec<(u32, u32)>>();
     let (boyut_tx, boyut_rx) = oneshot::channel::<Result<(u32, u32), String>>();
     let yayin_dur = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let _yayin_koruma = YayinKoruma(yayin_dur.clone());
     let dur2 = yayin_dur.clone();
     let fab2 = fabrika.clone();
     std::thread::spawn(move || {
