@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:afudesk/motor.dart';
 import 'package:afudesk/sayfalar/oturum.dart';
 import 'package:flutter/material.dart';
@@ -237,4 +238,63 @@ void main() {
     expect(m.girdiler.last.tur, 'terminal_kapat');
     await t.pumpWidget(const SizedBox.shrink());
   });
+
+  testWidgets('terminal yoksa dogrudan acik pencereler listelenir ve secilen pencere acilir', (t) async {
+    final m = await baglan(t);
+    await t.tap(find.byKey(const Key('oturum_terminal')));
+    m.izleyici.add(
+      IzleyiciOlay(
+        'terminal_liste',
+        metin: jsonEncode([
+          {"id": 101, "baslik": "GitHub - Google Chrome", "uygulama": "Google Chrome", "tur": "pencere"},
+          {"id": 102, "baslik": "Notlar.txt - Not Defteri", "uygulama": "Not Defteri", "tur": "pencere"},
+        ]),
+      ),
+    );
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 300));
+    expect(find.text('Pencere seç'), findsOneWidget);
+    expect(find.text('GitHub - Google Chrome'), findsOneWidget);
+    expect(find.text('Notlar.txt - Not Defteri'), findsOneWidget);
+    expect(find.text('Not Defteri'), findsOneWidget);
+
+    await t.tap(find.text('GitHub - Google Chrome'));
+    await t.pump();
+    expect(m.girdiler.last.tur, 'terminal_ac');
+    expect(m.girdiler.last.metin, '101');
+    await t.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('hem terminal hem pencere varsa gecis dugmesi ile diger pencereler gorulebilir', (t) async {
+    final m = await baglan(t);
+    await t.tap(find.byKey(const Key('oturum_terminal')));
+    m.izleyici.add(
+      IzleyiciOlay(
+        'terminal_liste',
+        metin: jsonEncode([
+          {"id": 42, "baslik": "Sunucu", "uygulama": "PowerShell", "tur": "terminal"},
+          {"id": 101, "baslik": "VS Code", "uygulama": "VS Code", "tur": "pencere"},
+        ]),
+      ),
+    );
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 300));
+    expect(find.text('Terminal seç'), findsOneWidget);
+    expect(find.text('Sunucu'), findsOneWidget);
+    expect(find.byKey(const Key('pencere_gecis_dugmesi')), findsOneWidget);
+
+    // Diger pencerelere gec
+    await t.tap(find.byKey(const Key('pencere_gecis_dugmesi')));
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 300));
+    expect(find.text('Açık pencereler'), findsOneWidget);
+    expect(find.text('VS Code'), findsWidgets);
+
+    await t.tap(find.text('VS Code').first);
+    await t.pump();
+    expect(m.girdiler.last.tur, 'terminal_ac');
+    expect(m.girdiler.last.metin, '101');
+    await t.pumpWidget(const SizedBox.shrink());
+  });
 }
+

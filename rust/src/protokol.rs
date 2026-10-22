@@ -223,6 +223,7 @@ mod testler {
                 id: 42,
                 baslik: "Türkçe — Codex".into(),
                 uygulama: "Windows Terminal".into(),
+                tur: "terminal".into(),
             }]),
             Kontrol::TerminalModu {
                 ac: Some(42),
