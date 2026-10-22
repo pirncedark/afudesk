@@ -6,12 +6,20 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `host_dto`, `host_komut`, `izleyici_pompala`, `kayitlar`, `rt`, `veri`
+// These functions are ignored because they are not marked as `pub`: `host_adresleri`, `host_dto`, `host_komut`, `izleyici_pompala`, `kayitlar`, `rt`, `terminal_komutu`, `veri`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// Uygulama açılışında çağrılır: kimlik ve kayıtlı cihazlar bu klasörde saklanır.
 void veriKlasoruAyarla({required String yol}) =>
     RustLib.instance.api.crateApiAfudeskVeriKlasoruAyarla(yol: yol);
+
+Stream<IzleyiciOlayi> izleyiciGoogleBaglan({
+  required String kimlik,
+  required String ad,
+}) => RustLib.instance.api.crateApiAfudeskIzleyiciGoogleBaglan(
+  kimlik: kimlik,
+  ad: ad,
+);
 
 /// Bu cihazın kod olmadan bağlanabileceği bilgisayarlar (en son görülen önce).
 List<KayitliCihaz> kayitliCihazlar() =>
@@ -93,6 +101,14 @@ Stream<IzleyiciOlayi> izleyiciKayitliBaglan({
 /// Dart kareyi ekrana çizdiğinde çağırır.
 void kareCizildi() => RustLib.instance.api.crateApiAfudeskKareCizildi();
 
+/// Arka plandan dönüşte veya donma durumunda izleyiciyi ve kare kilidini canlandırır.
+void izleyiciCanlandir() =>
+    RustLib.instance.api.crateApiAfudeskIzleyiciCanlandir();
+
+/// Kopan veya takılan bağlantıyı aynı oturuma hemen yeniden bağlar.
+void izleyiciYenidenBaglan() =>
+    RustLib.instance.api.crateApiAfudeskIzleyiciYenidenBaglan();
+
 Future<void> izleyiciGirdi({required GirdiOlayi g}) =>
     RustLib.instance.api.crateApiAfudeskIzleyiciGirdi(g: g);
 
@@ -138,8 +154,7 @@ void guvenilenYenidenAdla({required String kimlik, required String ad}) =>
 Future<List<String>> cevrimiciKimlikler() =>
     RustLib.instance.api.crateApiAfudeskCevrimiciKimlikler();
 
-/// Girdi. `tur`: konum | fare | kaydir | tus | metin |
-/// terminal_liste | terminal_ac (metin=id, dx=en, dy=boy) | terminal_kapat.
+/// Girdi. Terminal: terminal_liste | terminal_ac (metin=id, dx=en, dy=boy) | terminal_kapat.
 class GirdiOlayi {
   final String tur;
   final double x;
@@ -414,12 +429,3 @@ class KayitliCihaz {
           acik == other.acik &&
           sonGorulme == other.sonGorulme;
 }
-
-/// Aynı Google hesabındaki bilgisayara kod ve onay olmadan bağlanır.
-Stream<IzleyiciOlayi> izleyiciGoogleBaglan({
-  required String kimlik,
-  required String ad,
-}) => RustLib.instance.api.crateApiAfudeskIzleyiciGoogleBaglan(
-  kimlik: kimlik,
-  ad: ad,
-);

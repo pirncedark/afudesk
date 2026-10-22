@@ -156,6 +156,10 @@ class SahteMotor implements Motor {
   @override
   void kareCizildi() => kareOnayi++;
   @override
+  void izleyiciCanlandir() => cagrilar.add('izleyiciCanlandir');
+  @override
+  void izleyiciYenidenBaglan() => cagrilar.add('izleyiciYenidenBaglan');
+  @override
   void girdi(Girdi g) => girdiler.add(g);
   @override
   void izleyiciKol(OyunKoluDurumu durum) => oyunKoluDurumlari.add(durum);

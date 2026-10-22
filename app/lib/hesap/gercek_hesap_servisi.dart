@@ -66,10 +66,10 @@ class GercekHesapServisi extends HesapServisi {
       await motor.izleyiciKapat();
     },
     hostOlaylari: motor.hostOlaylari,
-    platformGirisi: (nonce) async => Map<String, dynamic>.from(
+    platformGirisi: (nonce, {bool sessiz = false}) async => Map<String, dynamic>.from(
       (await const MethodChannel(
         'afudesk/google',
-      ).invokeMapMethod<String, dynamic>('giris', {'nonce': nonce}))!,
+      ).invokeMapMethod<String, dynamic>('giris', {'nonce': nonce, 'sessiz': sessiz}))!,
     ),
     tarayiciAc: (url) =>
         launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
@@ -78,7 +78,7 @@ class GercekHesapServisi extends HesapServisi {
   final Future<String> Function(String, String) islem;
   final Stream<IzleyiciOlay> Function(String) googleBaglan;
   final Future<void> Function() kes;
-  final Future<Map<String, dynamic>> Function(String) platformGirisi;
+  final Future<Map<String, dynamic>> Function(String nonce, {bool sessiz}) platformGirisi;
   final Future<bool> Function(String) tarayiciAc;
   final Future<void> Function(GoogleHatasi) taniYaz;
   final OturumKasasi? kasa;
@@ -176,7 +176,19 @@ class GercekHesapServisi extends HesapServisi {
     try {
       final kayit = await kasa!.oku();
       if (kayit == null || _kapali) return;
-      final identity = await _cagir('geriYukle', kayit) as Map;
+      Map identity;
+      try {
+        identity = await _cagir('geriYukle', kayit) as Map;
+      } catch (err) {
+        if ('$err'.contains('android_sessiz')) {
+          final start = await _cagir('baslat') as Map;
+          final nonce = start['nonce'] as String;
+          final data = jsonEncode(await platformGirisi(nonce, sessiz: true));
+          identity = await _cagir('tamamla', data) as Map;
+        } else {
+          rethrow;
+        }
+      }
       etkinlesti = true;
       if (nesil != _oturumNesli || _kapali) return;
       await _kimligiAl(identity);

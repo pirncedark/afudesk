@@ -33,7 +33,7 @@ void main() {
         kesildi++;
       },
       hostOlaylari: host.stream,
-      platformGirisi: (_) async =>
+      platformGirisi: (nonce, {bool sessiz = false}) async =>
           throw StateError('Masaüstü tarayıcı kullanır'),
       tarayiciAc: (_) async => true,
     );

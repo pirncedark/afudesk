@@ -30,7 +30,7 @@ pub const ONAY_SURESI: Duration = Duration::from_secs(60);
 pub const DEVAM_SURESI: Duration = Duration::from_secs(120);
 /// Kod üretmeden önce relay'e bağlanmak için beklenen en uzun süre.
 const CEVRIMICI_BEKLE: Duration = Duration::from_secs(8);
-pub const HEDEF_FPS: u64 = 15;
+pub const HEDEF_FPS: u64 = 30;
 /// Aynı anda yolda olabilecek kare sayısı; aşılırsa en eski kare iptal edilir.
 pub const AZAMI_UCUSTA: usize = 3;
 pub const AZAMI_PAROLA_DENEMESI: usize = 3;
@@ -86,10 +86,10 @@ pub fn uyarla(kalite: u8, fps: u32, rtt_ms: u32, iptal: u32) -> (u8, u32) {
     if iptal > 0 || rtt_ms > 200 {
         (
             kalite.saturating_sub(10).max(35),
-            fps.saturating_sub(3).max(8),
+            fps.saturating_sub(5).max(10),
         )
     } else if rtt_ms < 80 {
-        ((kalite + 5).min(80), (fps + 2).min(24))
+        ((kalite + 5).min(85), (fps + 5).min(60))
     } else {
         (kalite, fps)
     }
@@ -1462,20 +1462,20 @@ mod uyarlama_testleri {
 
     #[test]
     fn kotu_agda_kalite_ve_fps_duser_sinirlarda_durur() {
-        assert_eq!(uyarla(70, 15, 250, 0), (60, 12));
-        assert_eq!(uyarla(70, 15, 30, 2), (60, 12), "iptal varsa düşer");
-        assert_eq!(uyarla(36, 9, 300, 5), (35, 8), "alt sınır");
+        assert_eq!(uyarla(70, 30, 250, 0), (60, 25));
+        assert_eq!(uyarla(70, 30, 30, 2), (60, 25), "iptal varsa düşer");
+        assert_eq!(uyarla(36, 12, 300, 5), (35, 10), "alt sınır");
     }
 
     #[test]
     fn iyi_agda_yukselir_ust_sinirda_durur() {
-        assert_eq!(uyarla(70, 15, 20, 0), (75, 17));
-        assert_eq!(uyarla(79, 23, 20, 0), (80, 24));
-        assert_eq!(uyarla(80, 24, 20, 0), (80, 24));
+        assert_eq!(uyarla(70, 30, 20, 0), (75, 35));
+        assert_eq!(uyarla(80, 58, 20, 0), (85, 60));
+        assert_eq!(uyarla(85, 60, 20, 0), (85, 60));
     }
 
     #[test]
     fn orta_agda_sabit() {
-        assert_eq!(uyarla(60, 12, 120, 0), (60, 12));
+        assert_eq!(uyarla(60, 30, 120, 0), (60, 30));
     }
 }

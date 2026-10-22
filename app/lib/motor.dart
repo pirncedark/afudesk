@@ -184,6 +184,8 @@ abstract class Motor {
   List<KayitliCihaz> guvenilenCihazlar();
   void guvenilenKaldir(String kimlik);
   void kareCizildi();
+  void izleyiciCanlandir();
+  void izleyiciYenidenBaglan();
   void girdi(Girdi g);
   void izleyiciKol(OyunKoluDurumu durum);
 
@@ -360,6 +362,11 @@ class RustMotor implements Motor {
   @override
   void kareCizildi() => rust.kareCizildi();
 
+  @override
+  void izleyiciCanlandir() => rust.izleyiciCanlandir();
+
+  @override
+  void izleyiciYenidenBaglan() => rust.izleyiciYenidenBaglan();
   @override
   void girdi(Girdi g) {
     rust.izleyiciGirdi(

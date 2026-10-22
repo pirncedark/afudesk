@@ -151,6 +151,11 @@ impl Izleyici {
         self.simdiki().close(KOPUS_KODU.into(), b"ag-degisti");
     }
 
+    /// Bağlantı koptu mu veya kapandı mı?
+    pub fn kapali_mi(&self) -> bool {
+        self.simdiki().close_reason().is_some()
+    }
+
     /// Şu an veri taşıyan yol ve RTT.
     pub fn yol(&self) -> (ag::Yol, Duration) {
         ag::secili_yol(&self.simdiki())

@@ -480,10 +480,10 @@ void main() {
       expect(find.byKey(const Key('oturum_konusma_modu')), findsOneWidget);
       await t.tap(find.byKey(const Key('oturum_konusma_modu')));
       await t.pump();
-      expect(find.textContaining('Konuşma modu açık'), findsOneWidget);
+      expect(find.byIcon(Icons.mic), findsOneWidget);
       await t.tap(find.byKey(const Key('oturum_konusma_modu')));
       await t.pump();
-      expect(find.textContaining('Yazma modu'), findsOneWidget);
+      expect(find.byIcon(Icons.mic_none), findsWidgets);
       await t.pumpWidget(const SizedBox.shrink());
     },
   );

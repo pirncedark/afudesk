@@ -76,7 +76,7 @@ void main() {
             if (op == 'baslat') return '{"nonce":"nonce"}';
             throw StateError('cleanup failure');
           },
-          platformGirisi: (_) async => throw PlatformException(code: 'G3'),
+          platformGirisi: (nonce, {bool sessiz = false}) async => throw PlatformException(code: 'G3'),
           googleBaglan: (_) => const Stream.empty(),
           hostOlaylari: const Stream.empty(),
           kes: () async {},

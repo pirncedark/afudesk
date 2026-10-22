@@ -32,6 +32,7 @@ static HOST: Mutex<Option<(host::Host, tokio::sync::mpsc::Sender<HostKomut>)>> =
 static IZLEYICI: Mutex<Option<Arc<izleyici::Izleyici>>> = Mutex::new(None);
 /// Dart son kareyi çizdi mi? (en-yeni-kazanır geri basıncı)
 static KARE_SERBEST: AtomicBool = AtomicBool::new(true);
+static SON_KARE_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static IZLEYICI_KOL_IZNI: AtomicBool = AtomicBool::new(false);
 static IZLEYICI_KOL_SIRASI: AtomicU32 = AtomicU32::new(0);
 /// Kalıcı cihaz kimliği + kayıtlı cihazlar klasörü (Dart uygulama destek klasörünü verir).
@@ -479,10 +480,18 @@ fn izleyici_pompala(sonuc: anyhow::Result<izleyici::Izleyici>, olaylar: StreamSi
                     yukseklik,
                     rgba,
                 } => {
+                    let simdi = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis() as u64;
+                    let onceki_ms = SON_KARE_MS.load(Ordering::Relaxed);
+                    let zaman_asimi = simdi.saturating_sub(onceki_ms) > 500;
                     // Dart önceki kareyi çizmediyse bunu atla; sıradaki daha yeni olacak.
-                    if !KARE_SERBEST.swap(false, Ordering::SeqCst) {
+                    // 500ms aşılmışsa (arka plan/donma) kilit otomatik sıfırlanır.
+                    if !KARE_SERBEST.swap(false, Ordering::SeqCst) && !zaman_asimi {
                         continue;
                     }
+                    SON_KARE_MS.store(simdi, Ordering::Relaxed);
                     IzleyiciOlayi {
                         tur: "kare".into(),
                         genislik,
@@ -573,6 +582,26 @@ fn izleyici_pompala(sonuc: anyhow::Result<izleyici::Izleyici>, olaylar: StreamSi
 #[flutter_rust_bridge::frb(sync)]
 pub fn kare_cizildi() {
     KARE_SERBEST.store(true, Ordering::SeqCst);
+}
+
+/// Arka plandan dönüşte veya donma durumunda izleyiciyi ve kare kilidini canlandırır.
+#[flutter_rust_bridge::frb(sync)]
+pub fn izleyici_canlandir() {
+    KARE_SERBEST.store(true, Ordering::SeqCst);
+    if let Some(iz) = IZLEYICI.lock().unwrap().as_ref() {
+        if iz.kapali_mi() {
+            iz.yeniden_baglan();
+        }
+    }
+}
+
+/// Kopan veya takılan bağlantıyı aynı oturuma hemen yeniden bağlar.
+#[flutter_rust_bridge::frb(sync)]
+pub fn izleyici_yeniden_baglan() {
+    KARE_SERBEST.store(true, Ordering::SeqCst);
+    if let Some(iz) = IZLEYICI.lock().unwrap().as_ref() {
+        iz.yeniden_baglan();
+    }
 }
 
 pub fn izleyici_girdi(g: GirdiOlayi) {

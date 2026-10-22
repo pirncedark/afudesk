@@ -33,7 +33,7 @@ void main() {
       googleBaglan: baglan ?? (_) => const Stream<IzleyiciOlay>.empty(),
       kes: () async {},
       hostOlaylari: const Stream<HostOlay>.empty(),
-      platformGirisi: (_) async => throw StateError('Sessiz yükleme'),
+      platformGirisi: (nonce, {bool sessiz = false}) async => throw StateError('Sessiz yükleme'),
       tarayiciAc: (_) async => throw StateError('Tarayıcı açılmamalı'),
       bekle: bekle ?? (sure) => Future<void>.delayed(sure),
     );

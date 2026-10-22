@@ -38,7 +38,7 @@ void main() {
         motor.izleyici.add(IzleyiciOlay('koptu', metin: 'Bağlantı kapandı.'));
       },
       hostOlaylari: motor.hostOlaylari,
-      platformGirisi: (_) async => {},
+      platformGirisi: (nonce, {bool sessiz = false}) async => {},
       tarayiciAc: (_) async => true,
     );
     addTearDown(servis.dispose);
@@ -197,7 +197,7 @@ void main() {
       googleBaglan: (_) => const Stream.empty(),
       kes: () async {},
       hostOlaylari: const Stream.empty(),
-      platformGirisi: (_) async => {},
+      platformGirisi: (nonce, {bool sessiz = false}) async => {},
       tarayiciAc: (_) async => false,
     );
     addTearDown(servis.dispose);
@@ -233,7 +233,7 @@ void main() {
       googleBaglan: (_) => const Stream.empty(),
       kes: () async {},
       hostOlaylari: const Stream.empty(),
-      platformGirisi: (_) async => {},
+      platformGirisi: (nonce, {bool sessiz = false}) async => {},
       tarayiciAc: (_) async => false,
       taniYaz: (_) => kayit.future,
     );

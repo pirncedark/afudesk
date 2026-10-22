@@ -288,11 +288,6 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     if (!_konusmaModu) {
       _basKonus.iptal();
     }
-    _terminalBilgi(
-      _konusmaModu
-          ? 'Konuşma modu açık: Space tuşunu basılı tutarak konuşun.'
-          : 'Yazma modu: Space tuşu normal boşluk yazar.',
-    );
   }
 
   @override
@@ -813,29 +808,24 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
             ),
           ),
           const SizedBox(width: 8),
-          Tooltip(
-            message: _konusmaModu
-                ? 'Konuşma modu açık (Space bas-konuş)'
-                : 'Konuşma modunu aç (Space bas-konuş)',
-            child: FilledButton(
-              key: const Key('oturum_konusma_modu'),
-              style: FilledButton.styleFrom(
-                minimumSize: Size(dar ? 56 : 0, 56),
-                padding: EdgeInsets.symmetric(horizontal: dar ? 8 : 16),
-                backgroundColor: _konusmaModu ? Renk.vurgu : null,
-              ),
-              onPressed: _konusmaModuDegistir,
-              child: dar
-                  ? Icon(_konusmaModu ? Icons.mic : Icons.mic_none)
-                  : Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(_konusmaModu ? Icons.mic : Icons.mic_none, size: 18),
-                        const SizedBox(width: 4),
-                        const Text('Bas-konuş'),
-                      ],
-                    ),
+          FilledButton(
+            key: const Key('oturum_konusma_modu'),
+            style: FilledButton.styleFrom(
+              minimumSize: Size(dar ? 56 : 0, 56),
+              padding: EdgeInsets.symmetric(horizontal: dar ? 8 : 16),
+              backgroundColor: _konusmaModu ? Renk.vurgu : null,
             ),
+            onPressed: _konusmaModuDegistir,
+            child: dar
+                ? Icon(_konusmaModu ? Icons.mic : Icons.mic_none)
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(_konusmaModu ? Icons.mic : Icons.mic_none, size: 18),
+                      const SizedBox(width: 4),
+                      const Text('Bas-konuş'),
+                    ],
+                  ),
           ),
           const SizedBox(width: 6),
           Expanded(
@@ -1115,11 +1105,19 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.detached ||
         state == AppLifecycleState.hidden) {
       _tuslariBirak();
+    } else if (state == AppLifecycleState.resumed) {
+      widget.motor.kareCizildi();
+      if (_yeniden != null) {
+        widget.motor.izleyiciYenidenBaglan();
+      } else {
+        widget.motor.izleyiciCanlandir();
+      }
     }
   }
 

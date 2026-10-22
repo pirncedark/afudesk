@@ -152,9 +152,6 @@ class TerminalModu extends StatelessWidget {
                       ),
                       IconButton.filledTonal(
                         key: const Key('terminal_konusma_modu'),
-                        tooltip: konusmaModu
-                            ? 'Konuşma modu açık (Space bas-konuş)'
-                            : 'Konuşma modu kapalı (Space boşluk)',
                         style: IconButton.styleFrom(
                           backgroundColor: konusmaModu
                               ? Theme.of(context).colorScheme.primary

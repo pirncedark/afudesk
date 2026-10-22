@@ -22,6 +22,7 @@ import androidx.credentials.GetCredentialResponse
 import androidx.credentials.exceptions.ClearCredentialException
 import androidx.credentials.exceptions.GetCredentialException
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.plugin.common.MethodChannel
@@ -46,15 +47,22 @@ class GoogleHesap(private val activity: FlutterActivity) {
                     if (pending != null || authorizationResult != null) { fail(result); return }
                     val requestGeneration = ++generation
                     val nonce = requireNotNull(call.argument<String>("nonce"))
+                    val sessiz = call.argument<Boolean>("sessiz") ?: false
                     require(nonce.length in 43..256)
                     val id = BuildConfig.GOOGLE_WEB_CLIENT_ID
                     if (!id.endsWith(".apps.googleusercontent.com")) {
                         fail(result, code = "G2"); return
                     }
-                    // Explicit Google button: all accounts are selectable. Unlike
-                    // GetGoogleIdOption, there is no authorized-accounts filter
-                    // and therefore no first-login filtered retry to perform.
-                    val option = GetSignInWithGoogleOption.Builder(id).setNonce(nonce).build()
+                    val option = if (sessiz) {
+                        GetGoogleIdOption.Builder()
+                            .setFilterByAuthorizedAccounts(true)
+                            .setServerClientId(id)
+                            .setAutoSelectEnabled(true)
+                            .setNonce(nonce)
+                            .build()
+                    } else {
+                        GetSignInWithGoogleOption.Builder(id).setNonce(nonce).build()
+                    }
                     val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
                     val signal = CancellationSignal()
                     pending = signal
@@ -79,8 +87,12 @@ class GoogleHesap(private val activity: FlutterActivity) {
                                             if (generation != requestGeneration) return@addOnSuccessListener
                                             try {
                                                 if (value.hasResolution()) {
-                                                    activity.startIntentSenderForResult(requireNotNull(value.pendingIntent).intentSender,
-                                                        805, null, 0, 0, 0)
+                                                    if (sessiz) {
+                                                        authorizationFailed(Exception("Silent resolution required"))
+                                                    } else {
+                                                        activity.startIntentSenderForResult(requireNotNull(value.pendingIntent).intentSender,
+                                                            805, null, 0, 0, 0)
+                                                    }
                                                 } else authorized(value)
                                             } catch (e: Exception) { authorizationFailed(e) }
                                         }
@@ -92,7 +104,7 @@ class GoogleHesap(private val activity: FlutterActivity) {
                             }
                             override fun onError(e: GetCredentialException) {
                                 if (generation == requestGeneration) pending = null
-                                fail(result, e)
+                                fail(result, e, if (sessiz) "G6" else "G9")
                             }
                         })
                 }

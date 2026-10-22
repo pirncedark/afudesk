@@ -29,7 +29,7 @@ void main() {
     googleBaglan: (_) => const Stream<IzleyiciOlay>.empty(),
     kes: () async {},
     hostOlaylari: const Stream<HostOlay>.empty(),
-    platformGirisi: (_) async => throw StateError('Sessiz olmalı'),
+    platformGirisi: (nonce, {bool sessiz = false}) async => throw StateError('Sessiz olmalı'),
     tarayiciAc: (_) async => throw StateError('Sessiz olmalı'),
   );
 

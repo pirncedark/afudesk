@@ -82,7 +82,8 @@ struct KaliciOturum {
 impl KaliciOturum {
     fn yaz(&self) -> String {
         json!({"client_id":self.client_id, "refresh_token":self.refresh_token,
-            "sub":self.sub, "nonce":self.nonce, "istemciler":self.istemciler})
+            "sub":self.sub, "nonce":self.nonce, "istemciler":self.istemciler,
+            "platform": if self.refresh_token == "android" { "android" } else { "desktop" }})
         .to_string()
     }
     fn oku(veri: &str) -> Result<Self> {
@@ -289,6 +290,10 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
             ensure!(HESAP.lock().unwrap().is_none(), "already signed in");
             ensure!(veri.len() <= 65536, "G9");
             let k = KaliciOturum::oku(veri)?;
+            if k.refresh_token == "android" {
+                *KALICI.lock().unwrap() = Some(k);
+                return Err(anyhow!("android_sessiz"));
+            }
             let onceki = KALICI.lock().unwrap().clone();
             let k = onceki
                 .filter(|onceki| {
@@ -368,7 +373,7 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
                 .unwrap()
                 .take()
                 .ok_or_else(|| anyhow!("no transaction"))?;
-            let mut kalici = None;
+            let kalici;
             let (id, access) = match pending {
                 Bekleyen::Masaustu(g, secret) => {
                     let token = g.kod_bekle().await?.oturum(Some(&secret)).await?;
@@ -397,6 +402,13 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
                             anyhow!(afudesk_core::google::DogrulamaHatasi::NONCE).context("G4")
                         );
                     }
+                    kalici = Some(KaliciOturum {
+                        client_id: kabul_edilen.first().cloned().unwrap_or_else(|| "android".into()),
+                        refresh_token: "android".into(),
+                        sub: identity.sub().into(),
+                        nonce: identity.nonce().into(),
+                        istemciler: kabul_edilen.clone(),
+                    });
                     (
                         id.to_owned(),
                         v["accessToken"]
