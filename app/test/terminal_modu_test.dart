@@ -251,7 +251,8 @@ void main() {
         ]),
       ),
     );
-    await t.pumpAndSettle();
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 300));
     expect(find.text('Pencere seç'), findsOneWidget);
     expect(find.text('GitHub - Google Chrome'), findsOneWidget);
     expect(find.text('Not Defteri'), findsOneWidget);
@@ -275,14 +276,16 @@ void main() {
         ]),
       ),
     );
-    await t.pumpAndSettle();
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 300));
     expect(find.text('Terminal seç'), findsOneWidget);
     expect(find.text('Sunucu'), findsOneWidget);
     expect(find.byKey(const Key('pencere_gecis_dugmesi')), findsOneWidget);
 
     // Diger pencerelere gec
     await t.tap(find.byKey(const Key('pencere_gecis_dugmesi')));
-    await t.pumpAndSettle();
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 300));
     expect(find.text('Açık pencereler'), findsOneWidget);
     expect(find.text('VS Code'), findsWidgets);
 
