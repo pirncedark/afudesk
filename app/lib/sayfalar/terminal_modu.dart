@@ -52,7 +52,7 @@ class TerminalModu extends StatelessWidget {
         child: Text(etiket),
       ),
     );
-    return PopScope(
+    final sayfa = PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) kapat();
@@ -135,6 +135,7 @@ class TerminalModu extends StatelessWidget {
                   child: Row(
                     children: [
                       IconButton(
+                        key: const Key('terminal_geri'),
                         tooltip: 'Masaüstüne dön',
                         onPressed: kapat,
                         icon: const Icon(Icons.arrow_back),
@@ -178,6 +179,7 @@ class TerminalModu extends StatelessWidget {
         ),
       ),
     );
+    return TooltipVisibility(visible: false, child: sayfa);
   }
 }
 

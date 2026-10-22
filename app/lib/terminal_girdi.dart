@@ -20,23 +20,44 @@ List<Girdi> imeGirdileri(String onceki, String simdiki) {
   ];
 }
 
-/// Düğme ve Space birlikte kullanıldığında da yalnız bir down/up çifti üretir.
+/// Holds Space with terminal key-repeat until the final source releases it.
 class BasKonusGirdisi {
   BasKonusGirdisi(this.gonder);
   final void Function(List<Girdi>) gonder;
   final _kaynaklar = <String>{};
   Timer? _bekle;
+  Timer? _tekrarBaslangic, _tekrarSaat;
   bool _space = false;
 
   void _tut(String kaynak) {
     if (!_kaynaklar.add(kaynak)) return;
     if (_kaynaklar.length == 1) {
       gonder([const Girdi('tus', ad: 'Space', basili: true)]);
+      // Terminal hold detection needs repeat DOWN events, not repeated taps.
+      _tekrarBaslangic = Timer(const Duration(milliseconds: 500), () {
+        _tekrarla();
+        _tekrarSaat = Timer.periodic(
+          const Duration(milliseconds: 50),
+          (_) => _tekrarla(),
+        );
+      });
     }
+  }
+
+  void _tekrarla() {
+    if (_kaynaklar.isNotEmpty) {
+      gonder([const Girdi('tus', ad: 'Space', basili: true)]);
+    }
+  }
+
+  void _tekrariDurdur() {
+    _tekrarBaslangic?.cancel();
+    _tekrarSaat?.cancel();
   }
 
   void _birak(String kaynak) {
     if (_kaynaklar.remove(kaynak) && _kaynaklar.isEmpty) {
+      _tekrariDurdur();
       gonder([const Girdi('tus', ad: 'Space', basili: false)]);
     }
   }
@@ -69,6 +90,7 @@ class BasKonusGirdisi {
 
   void iptal() {
     _bekle?.cancel();
+    _tekrariDurdur();
     _space = false;
     if (_kaynaklar.isNotEmpty) {
       _kaynaklar.clear();
