@@ -999,7 +999,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
                       ),
                       if (_zoom.olcek > 1)
                         Positioned(
-                          top: 8,
+                          top: widget.motor.dokunmatik ? 52 : 8,
                           right: 8,
                           child: FilledButton(
                             key: const Key('oturum_zoom_sifirla'),
