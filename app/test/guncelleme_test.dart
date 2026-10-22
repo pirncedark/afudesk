@@ -10,11 +10,13 @@ class SahteGuncelleyici extends Guncelleyici {
   Guncelleme? sonuc;
   int kontroller = 0;
   Object? hata;
+  Object? kontrolHatasi;
   @override
   Future<String> surum() async => '1.6.0';
   @override
   Future<Guncelleme?> kontrol() async {
     kontroller++;
+    if (kontrolHatasi != null) throw kontrolHatasi!;
     return sonuc;
   }
 
@@ -54,6 +56,72 @@ void main() {
     await tester.pump(const Duration(days: 1));
     expect(servis.kontroller, 3);
   });
+  testWidgets('Bes dakika sonra donuste yeni yayin karti gorunur', (
+    tester,
+  ) async {
+    final servis = SahteGuncelleyici();
+    await tester.pumpWidget(MaterialApp(home: GuncelleKarti(servis: servis)));
+    await tester.pumpAndSettle();
+    servis.sonuc = yeni;
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump(const Duration(minutes: 4, seconds: 59));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(servis.kontroller, 1);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump(const Duration(seconds: 1));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(servis.kontroller, 2);
+    expect(find.byKey(const Key('guncelle_karti')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump(const Duration(minutes: 5));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(servis.kontroller, 2);
+  });
+  testWidgets('Ag hatasi sonraki donuste yeniden denenir ve Guncelle gorunur', (
+    tester,
+  ) async {
+    final servis = SahteGuncelleyici()..kontrolHatasi = Exception('ag yok');
+    await tester.pumpWidget(
+      MaterialApp(home: GuncelleKarti(servis: servis, ayarDugmesi: true)),
+    );
+    await tester.pumpAndSettle();
+    expect(servis.kontroller, 1);
+    servis.kontrolHatasi = null;
+    servis.sonuc = yeni;
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(servis.kontroller, 2);
+    expect(find.widgetWithText(TextButton, 'Güncelle'), findsOneWidget);
+    expect(find.byIcon(Icons.system_update), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+  testWidgets('Hesap ekranindaki Guncelle dugmesi Ayarlar acar', (
+    tester,
+  ) async {
+    final servis = SahteGuncelleyici()..sonuc = yeni;
+    await tester.pumpWidget(
+      MaterialApp(
+        routes: {
+          '/ayarlar': (_) => const Scaffold(body: Text('Guncelleme ayarlari')),
+        },
+        home: Scaffold(
+          appBar: AppBar(
+            actions: [GuncelleKarti(servis: servis, ayarDugmesi: true)],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, 'Güncelle'));
+    await tester.pumpAndSettle();
+    expect(find.text('Guncelleme ayarlari'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
   test('1.8.0 surumu yalniz daha eski surumlere onerilir', () {
     expect(yeniSurum('v1.8.0', '1.7.0+8'), isTrue);
     expect(yeniSurum('v1.8.0', '1.8.0+9'), isFalse);
@@ -61,7 +129,8 @@ void main() {
     expect(yeniSurum('v1.8.0-rc.1', '1.7.0'), isFalse);
   });
   test('releases/latest JSON Android paketini ve ozetini ayristirir', () {
-    final json = jsonDecode('''{
+    final json =
+        jsonDecode('''{
       "tag_name": "v1.8.0", "draft": false, "prerelease": false,
       "assets": [
         {"name": "AfuDesk-windows-x64.zip", "size": 200,
@@ -71,7 +140,8 @@ void main() {
         {"name": "AfuDesk-android.apk.sha256", "size": 86,
          "browser_download_url": "https://github.com/pirncedark/afudesk/releases/download/v1.8.0/AfuDesk-android.apk.sha256"}
       ]
-    }''') as Map<String, dynamic>;
+    }''')
+            as Map<String, dynamic>;
     final g = Guncelleme.yayindan(json, '1.7.0+8', 'AfuDesk-android.apk')!;
     expect(g.surum, 'v1.8.0');
     expect(g.boyut, 123456);
