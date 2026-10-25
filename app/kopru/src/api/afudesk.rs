@@ -626,6 +626,16 @@ pub fn izleyici_ses_surucu_yok() -> bool {
         .is_some_and(|iz| iz.ses_surucu_yok())
 }
 
+/// Whether the connected PC predates phone microphone support.
+#[flutter_rust_bridge::frb(sync)]
+pub fn izleyici_ses_host_eski() -> bool {
+    IZLEYICI
+        .lock()
+        .unwrap()
+        .as_ref()
+        .is_some_and(|iz| afudesk_core::izleyici_ses_host_eski(iz))
+}
+
 pub fn izleyici_girdi(g: GirdiOlayi) {
     let Some(iz) = IZLEYICI.lock().unwrap().clone() else {
         return;

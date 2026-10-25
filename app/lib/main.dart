@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'motor.dart';
+import 'gorsel_paylas.dart';
 import 'hesap/hesap_servisi.dart';
 import 'hesap/gercek_hesap_servisi.dart';
 import 'sayfalar/oturum.dart';
@@ -42,14 +43,14 @@ Future<void> main() async {
         try {
           await hesap.duraklat();
         } finally {
-          if (call.method == 'cik') await ArkaPlan.kanal.invokeMethod<void>('kapat');
+          if (call.method == 'cik') {
+            await ArkaPlan.kanal.invokeMethod<void>('kapat');
+          }
         }
       }
     });
   }
-  runApp(
-    AfuDeskUygulama(motor: motor, hesapServisi: hesap),
-  );
+  runApp(AfuDeskUygulama(motor: motor, hesapServisi: hesap));
 }
 
 /// Uygulama kökü: bağlantı isteklerinin onay penceresini hangi ekranda olunursa olsun
@@ -72,6 +73,7 @@ class _AfuDeskUygulamaDurum extends State<AfuDeskUygulama> {
   @override
   void initState() {
     super.initState();
+    unawaited(GorselPaylas.ortak.baslat());
     final servis = widget.hesapServisi;
     if (servis is GercekHesapServisi) {
       servis.oturumAc = (cihaz, ac, {required terminalleBasla}) {

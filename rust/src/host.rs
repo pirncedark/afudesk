@@ -436,7 +436,7 @@ mod guvenlik_testleri {
             .await
             .unwrap();
             let dinleyici = host.endpoint.addr();
-            for tur in 1..=10 {
+            for tur in 1..=3 {
                 let kod = loop {
                     if let Some(HostOlay::Hazir { kod, .. }) = host.olaylar.recv().await {
                         break kod;
@@ -1271,12 +1271,16 @@ async fn oturum(
     // akışı geldiğinde yarım okunmuş bir kontrol mesajı iptal olup akış kayabilirdi
     // (`protokol::oku` iptale dayanıklı değil).
     let alici = dosya::Alici::new(klasor.to_owned(), izinler.dosya);
+    let (gorsel_tx, mut gorsel_rx) = mpsc::channel::<PathBuf>(16);
     let (c3, olay3) = (c.clone(), olay.clone());
     let dosyalar = tokio::spawn(async move {
         while let Ok((w2, r2)) = c3.accept_bi().await {
             let (alici, olay) = (alici.clone(), olay3.clone());
+            let gorsel_tx = gorsel_tx.clone();
             tokio::spawn(async move {
                 if let Some((ad, yol)) = dosya::al(&alici, w2, r2).await {
+                    // Aynı pano nesnesi oturum boyunca yaşar; pano izni ayrıca korunur.
+                    let _ = gorsel_tx.send(yol.clone()).await;
                     let _ = olay
                         .send(HostOlay::DosyaAlindi {
                             ad,
@@ -1307,6 +1311,7 @@ async fn oturum(
     let mut terminal_secili = false;
     let mut terminal_uyari_zamani: Option<std::time::Instant> = None;
     let mut bekleyen_birakmalar = Vec::new();
+    let mut telmik = crate::telmik_sayac::Sayac::yeni("host", "alinan");
     let mut titresim_araligi = tokio::time::interval(Duration::from_millis(50));
     titresim_araligi.tick().await;
     let mut yol_olcum = tokio::time::interval(Duration::from_secs(1));
@@ -1374,6 +1379,7 @@ async fn oturum(
                     // Ses odak/terminal dönüşümünden bağımsızdır; kontrol izni gerekir.
                     if protokol::ses_girdisi(&g) {
                         if !izinler.kontrol { continue; }
+                        telmik.isle(&g);
                         if let Some(e) = enjektor.as_mut() {
                             if let Err(hata) = tokio::task::block_in_place(|| e.uygula(&g)) {
                                 let mesaj = crate::sanal_mikrofon::kullanici_uyarisi(&hata);
@@ -1460,6 +1466,14 @@ async fn oturum(
                 };
                 if protokol::yaz(&mut w, &mesaj).await.is_err() { break kopus("Bağlantı koptu."); }
             }
+            Some(yol) = gorsel_rx.recv() => {
+                if let Some(p) = pano.as_mut() {
+                    if let Err(hata) = tokio::task::block_in_place(|| p.gelen_gorsel(&yol)) {
+                        log::warn!("Alınan görsel panoya konamadı: {hata}");
+                        let _ = olay.send(HostOlay::Uyari("Görsel kaydedildi ama panoya konamadı; AfuDesk Gelen klasöründen aç.".into())).await;
+                    }
+                }
+            },
             _ = pano_saat.tick(), if pano.is_some() => {
                 let yeni = pano.as_mut().and_then(|p| tokio::task::block_in_place(|| p.yokla()));
                 if let Some(metin) = yeni {

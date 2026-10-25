@@ -1,6 +1,8 @@
 //! Telefon PCM16/16 kHz/mono sesini VB-CABLE'a taşır; Windows işlemleri işçi üzerindedir.
 
 use crate::protokol::Girdi;
+#[cfg(test)]
+mod kanit_testleri;
 use anyhow::Result;
 use std::{
     collections::VecDeque,
@@ -120,6 +122,9 @@ struct Oturum<A: SesApi> {
     acik: bool,
     kapanis: Option<Instant>,
     tampon: VecDeque<i16>,
+    alinan: u64,
+    yazilan: u64,
+    son_log: Instant,
 }
 impl<A: SesApi> Oturum<A> {
     fn yeni(api: A, geri_yolu: PathBuf) -> Self {
@@ -130,6 +135,9 @@ impl<A: SesApi> Oturum<A> {
             acik: false,
             kapanis: None,
             tampon: VecDeque::new(),
+            alinan: 0,
+            yazilan: 0,
+            son_log: Instant::now(),
         }
     }
     fn ac(&mut self) -> Result<()> {
@@ -168,6 +176,7 @@ impl<A: SesApi> Oturum<A> {
         if !self.acik || self.kapanis.is_some() {
             return Ok(());
         }
+        self.alinan += b.len() as u64;
         self.tampon
             .extend(b.chunks_exact(2).map(|x| i16::from_le_bytes([x[0], x[1]])));
         // En çok 60 ms: ağ yığılması eski sesi biriktirmez.
@@ -181,7 +190,15 @@ impl<A: SesApi> Oturum<A> {
             self.kapanis = Some(simdi + Duration::from_millis(300));
         }
     }
+    fn sayac_logla(&mut self, simdi: Instant, zorla: bool) {
+        if (self.alinan != 0 || self.yazilan != 0)
+            && (zorla || simdi.saturating_duration_since(self.son_log) >= Duration::from_secs(1)) {
+            log::info!("telmik alinan={} yazilan={}", self.alinan, self.yazilan);
+            self.son_log = simdi;
+        }
+    }
     fn tick(&mut self, simdi: Instant) -> Result<()> {
+        self.sayac_logla(simdi, false);
         if self.kapanis.is_some_and(|t| simdi >= t) {
             return self.geri_yukle();
         }
@@ -192,11 +209,15 @@ impl<A: SesApi> Oturum<A> {
                 *x = *ses;
             }
             let n = self.api.yaz(&pcm)?.min(self.tampon.len()).min(pcm.len());
+            self.yazilan += (n * 2) as u64;
             self.tampon.drain(..n);
         }
         Ok(())
     }
     fn geri_yukle(&mut self) -> Result<()> {
+        self.sayac_logla(Instant::now(), true);
+        self.alinan = 0;
+        self.yazilan = 0;
         self.acik = false;
         self.kapanis = None;
         self.tampon.clear();
@@ -785,6 +806,21 @@ mod testler {
         }
         fn durdur(&mut self) {}
     }
+    #[test]
+    fn bayt_sayaci_yalniz_gercek_pcm_yazimini_sayar() {
+        let d = Arc::new(Mutex::new(Durum::default()));
+        let dizin = tempfile::tempdir().unwrap();
+        let mut s = Oturum::yeni(Sahte(d), dizin.path().join("mikrofon_geri.json"));
+        s.ac().unwrap();
+        s.ses(&[1; 640]).unwrap();
+        s.tick(Instant::now()).unwrap();
+        assert_eq!(s.alinan, 640);
+        assert_eq!(s.yazilan, 320);
+        s.tick(Instant::now()).unwrap();
+        s.tick(Instant::now()).unwrap(); // Silence is not counted as received audio.
+        assert_eq!(s.yazilan, 640);
+    }
+
     #[test]
     fn aygit_adlari() {
         assert!(cable_adi("CABLE Output (VB-Audio Virtual Cable)", true));

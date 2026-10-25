@@ -27,13 +27,19 @@ class BasKonusGirdisi {
     this.gonder, {
     bool Function()? sesDestegi,
     bool Function()? sesSurucuYok,
+    bool Function()? sesHostEski,
+    this.hostEskiUyarisi,
     this.surucuUyarisi,
     TelefonMikrofonu? mikrofon,
   }) : sesDestegi = sesDestegi ?? (() => false),
        sesSurucuYok = sesSurucuYok ?? (() => false),
+       sesHostEski = sesHostEski ?? (() => false),
        mikrofon = mikrofon ?? AndroidTelefonMikrofonu();
   final bool Function() sesDestegi;
   final bool Function() sesSurucuYok;
+  final bool Function() sesHostEski;
+  final void Function()? hostEskiUyarisi;
+  bool _hostEskiUyarildi = false;
   final void Function()? surucuUyarisi;
   bool _surucuUyarildi = false;
   final TelefonMikrofonu mikrofon;
@@ -52,7 +58,7 @@ class BasKonusGirdisi {
     if (!_kaynaklar.add(kaynak)) return;
     if (_kaynaklar.length != 1) return;
     final nesil = ++_nesil;
-    if (sesDestegi() && !sesSurucuYok()) {
+    if (sesDestegi() && !sesSurucuYok() && !sesHostEski()) {
       _sesHazirla(nesil);
     } else {
       _yalnizSpace();
@@ -61,6 +67,10 @@ class BasKonusGirdisi {
 
   void _yalnizSpace() {
     _spaceIndir();
+    if (sesHostEski() && !_hostEskiUyarildi) {
+      _hostEskiUyarildi = true;
+      hostEskiUyarisi?.call();
+    }
     if (sesSurucuYok() && !_surucuUyarildi) {
       _surucuUyarildi = true;
       surucuUyarisi?.call();
@@ -73,7 +83,7 @@ class BasKonusGirdisi {
       izin = await mikrofon.izinIste();
     } catch (_) {}
     if (nesil != _nesil || _kaynaklar.isEmpty) return;
-    if (!izin || !sesDestegi() || sesSurucuYok()) {
+    if (!izin || !sesDestegi() || sesSurucuYok() || sesHostEski()) {
       _yalnizSpace();
       return;
     }

@@ -9,6 +9,8 @@ class SahteMotor implements Motor {
   bool sesDestegi = false;
   @override
   bool sesSurucuYok = false;
+  @override
+  bool sesHostEski = false;
   final host = StreamController<HostOlay>.broadcast(sync: true);
   final izleyici = StreamController<IzleyiciOlay>.broadcast(sync: true);
   final cagrilar = <String>[];
@@ -20,6 +22,7 @@ class SahteMotor implements Motor {
   bool? sonDosyaIzni;
   bool? sonOyunKolu;
   String? secilecekDosya;
+  bool yalnizGorselSecildi = false;
   final gonderilenDosyalar = <String>[];
   int kareOnayi = 0;
   @override
@@ -168,7 +171,11 @@ class SahteMotor implements Motor {
   @override
   void izleyiciKol(OyunKoluDurumu durum) => oyunKoluDurumlari.add(durum);
   @override
-  Future<String?> dosyaSec() async => secilecekDosya;
+  Future<String?> dosyaSec({bool yalnizGorsel = false}) async {
+    yalnizGorselSecildi = yalnizGorsel;
+    return secilecekDosya;
+  }
+
   @override
   Future<void> dosyaGonder(String yol) async => gonderilenDosyalar.add(yol);
   @override

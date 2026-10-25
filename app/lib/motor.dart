@@ -134,6 +134,7 @@ class Girdi {
 abstract class Motor {
   bool get sesDestegi;
   bool get sesSurucuYok;
+  bool get sesHostEski;
   String cihazAdi();
 
   /// Bu cihaz ekranını paylaşabilir mi (şimdilik yalnız masaüstü).
@@ -194,7 +195,7 @@ abstract class Motor {
   void izleyiciKol(OyunKoluDurumu durum);
 
   /// Gönderilecek dosyayı kullanıcıya seçtirir; vazgeçilirse null.
-  Future<String?> dosyaSec();
+  Future<String?> dosyaSec({bool yalnizGorsel = false});
 
   /// Dosyayı karşı tarafa gönderir; ilerleme `baglan` akışına 'dosya' olayı olarak gelir.
   Future<void> dosyaGonder(String yol);
@@ -207,6 +208,8 @@ class RustMotor implements Motor {
   bool get sesDestegi => Platform.isAndroid && rust.izleyiciSesDestegi();
   @override
   bool get sesSurucuYok => Platform.isAndroid && rust.izleyiciSesSurucuYok();
+  @override
+  bool get sesHostEski => Platform.isAndroid && rust.izleyiciSesHostEski();
   @override
   bool get baglantiVerilebilir =>
       Platform.isWindows || Platform.isLinux || Platform.isMacOS;
@@ -406,8 +409,26 @@ class RustMotor implements Motor {
   );
 
   @override
-  Future<String?> dosyaSec() async =>
-      (await fs.openFile(confirmButtonText: 'Gönder'))?.path;
+  Future<String?> dosyaSec({bool yalnizGorsel = false}) async {
+    final dosya = await fs.openFile(
+      confirmButtonText: 'Gönder',
+      acceptedTypeGroups: yalnizGorsel
+          ? const [
+              fs.XTypeGroup(
+                label: 'Görseller',
+                extensions: ['png', 'jpg', 'jpeg', 'webp'],
+                mimeTypes: ['image/png', 'image/jpeg', 'image/webp'],
+              ),
+            ]
+          : const [],
+    );
+    if (yalnizGorsel &&
+        dosya != null &&
+        await dosya.length() > 20 * 1024 * 1024) {
+      throw StateError("Görsel çok büyük. 20 MB'den küçük bir görsel seç.");
+    }
+    return dosya?.path;
+  }
 
   @override
   Future<void> dosyaGonder(String yol) => rust.izleyiciDosyaGonder(yol: yol);

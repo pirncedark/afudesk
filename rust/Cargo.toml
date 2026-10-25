@@ -23,7 +23,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"
 futures-lite = "2.6.1"
 iroh = "1.2"
 iroh-mdns-address-lookup = "0.5"
-image = { version = "0.25", default-features = false, features = ["jpeg"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 log = "0.4"
 rayon = "1"
 dirs = "6"
@@ -37,7 +37,7 @@ reqwest = { version = "0.13", default-features = false, features = ["json", "que
 xcap = "0.9"
 enigo = "0.6"
 gilrs = "0.11"
-arboard = { version = "3", default-features = false }
+arboard = { version = "3", default-features = false, features = ["image-data"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-capture = "2.0.1"

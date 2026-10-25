@@ -39,16 +39,24 @@ pub(crate) fn saat_cevabini_isle(
     ses_izinli: bool,
     ses_yetenegi: &AtomicBool,
     ses_surucu_yok: &AtomicBool,
+    ses_host_eski: &AtomicBool,
     saat_farki: &AtomicI64,
     saat_esitlendi: &AtomicBool,
 ) {
     if izleyici_ms == protokol::SES_SOR {
         ses_yetenegi.store(ses_izinli && host_ms == protokol::SES_VAR, Ordering::SeqCst);
         ses_surucu_yok.store(host_ms == protokol::SES_SURUCU_YOK, Ordering::SeqCst);
+        ses_host_eski.store(!matches!(host_ms, protokol::SES_VAR | protokol::SES_SURUCU_YOK), Ordering::SeqCst);
         return;
     }
     saat_farki.store(zaman::saat_farki(izleyici_ms, host_ms, alim_ms), Ordering::Relaxed);
     saat_esitlendi.store(true, Ordering::Relaxed);
+}
+
+fn ses_yoklama_zaman_asimi(gecen: Duration, yanitlandi: bool, ses_host_eski: &AtomicBool) {
+    if !yanitlandi && gecen >= Duration::from_secs(2) {
+        ses_host_eski.store(true, Ordering::SeqCst);
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -116,6 +124,7 @@ pub struct Izleyici {
     terminal_hazir: Arc<AtomicBool>,
     ses_yetenegi: Arc<AtomicBool>,
     ses_surucu_yok: Arc<AtomicBool>,
+    ses_host_eski: Arc<AtomicBool>,
     /// Yeniden bağlanınca değişir.
     baglanti: Arc<Mutex<Baglanti>>,
     kapatildi: Arc<AtomicBool>,
@@ -132,6 +141,9 @@ impl Izleyici {
     }
     pub fn ses_surucu_yok(&self) -> bool {
         self.ses_surucu_yok.load(Ordering::SeqCst)
+    }
+    pub fn ses_host_eski(&self) -> bool {
+        self.ses_host_eski.load(Ordering::SeqCst)
     }
     fn simdiki(&self) -> Baglanti {
         self.baglanti.lock().expect("kilit").clone()
@@ -170,6 +182,7 @@ impl Izleyici {
     pub fn kapat(&self) {
         self.ses_yetenegi.store(false, Ordering::SeqCst);
         self.ses_surucu_yok.store(false, Ordering::SeqCst);
+        self.ses_host_eski.store(false, Ordering::SeqCst);
         self.kapatildi.store(true, Ordering::SeqCst);
         self.simdiki().close(0u32.into(), b"izleyici");
         let ep = self.ep.clone();
@@ -181,6 +194,7 @@ impl Izleyici {
     pub fn yeniden_baglan(&self) {
         self.ses_yetenegi.store(false, Ordering::SeqCst);
         self.ses_surucu_yok.store(false, Ordering::SeqCst);
+        self.ses_host_eski.store(false, Ordering::SeqCst);
         self.yeniden_iste.store(true, Ordering::SeqCst);
         self.simdiki().close(KOPUS_KODU.into(), b"ag-degisti");
     }
@@ -393,6 +407,7 @@ async fn oturum_ac(
     let terminal_hazir = Arc::new(AtomicBool::new(false));
     let ses_yetenegi = Arc::new(AtomicBool::new(false));
     let ses_surucu_yok = Arc::new(AtomicBool::new(false));
+    let ses_host_eski = Arc::new(AtomicBool::new(false));
     let _ = olay_tx
         .send(IzleyiciOlay::OnayBekleniyor {
             karsi_ad: karsi_ad.to_owned(),
@@ -429,6 +444,7 @@ async fn oturum_ac(
         terminal_hazir: terminal_hazir.clone(),
         ses_yetenegi: ses_yetenegi.clone(),
         ses_surucu_yok: ses_surucu_yok.clone(),
+        ses_host_eski: ses_host_eski.clone(),
         pano: PanoDurumu {
             kaynak: pano,
             es: None,
@@ -449,6 +465,7 @@ async fn oturum_ac(
         terminal_hazir,
         ses_yetenegi,
         ses_surucu_yok,
+        ses_host_eski,
         baglanti,
         kapatildi,
         yeniden_iste,
@@ -487,6 +504,7 @@ struct Gozetmen {
     terminal_hazir: Arc<AtomicBool>,
     ses_yetenegi: Arc<AtomicBool>,
     ses_surucu_yok: Arc<AtomicBool>,
+    ses_host_eski: Arc<AtomicBool>,
     pano: PanoDurumu,
     saat_farki: Arc<AtomicI64>,
     saat_esitlendi: Arc<AtomicBool>,
@@ -511,6 +529,7 @@ impl Gozetmen {
             let sebep = self.oturum(&c, &mut w, r, &mut jeton).await;
             self.ses_yetenegi.store(false, Ordering::SeqCst);
             self.ses_surucu_yok.store(false, Ordering::SeqCst);
+            self.ses_host_eski.store(false, Ordering::SeqCst);
             terminal_oturumunu_sifirla(
                 &self.terminal_nesli,
                 &self.terminal_hazir,
@@ -638,8 +657,10 @@ impl Gozetmen {
         };
         self.ses_yetenegi.store(false, Ordering::SeqCst);
         self.ses_surucu_yok.store(false, Ordering::SeqCst);
+        self.ses_host_eski.store(false, Ordering::SeqCst);
         // Yoklama ve yanıtı mevcut saat mesajlarını kullanır.
         let ses_yoklama = std::time::Instant::now();
+        let mut ses_yanitlandi = false;
         if protokol::yaz(w, &Kontrol::SaatSor { izleyici_ms: protokol::SES_SOR }).await.is_err() {
             return "Bağlantı koptu.".into();
         }
@@ -740,6 +761,7 @@ impl Gozetmen {
         kol_yenile.tick().await;
         const KOPTU: &str = "Bağlantı koptu.";
         const KAPANDI: &str = "Bağlantı kapandı.";
+        let mut telmik = crate::telmik_sayac::Sayac::yeni("telefon", "gonderilen");
         let sonuc: String = loop {
             let pano = if izinler.pano {
                 self.pano.es.as_mut()
@@ -748,6 +770,10 @@ impl Gozetmen {
             };
             let pano_var = pano.is_some();
             tokio::select! {
+                _ = tokio::time::sleep_until((ses_yoklama + Duration::from_secs(2)).into()), if !ses_yanitlandi => {
+                    ses_yoklama_zaman_asimi(ses_yoklama.elapsed(), ses_yanitlandi, &self.ses_host_eski);
+                    ses_yanitlandi = true;
+                }
                 Some((nesil, komut)) = self.terminal.recv() => {
                     if nesil != self.terminal_nesli.load(Ordering::SeqCst) { continue; }
                     if protokol::yaz(w, &komut).await.is_err() { break KOPTU.into(); }
@@ -766,7 +792,8 @@ impl Gozetmen {
                             continue;
                         }
                         if !izinler.kontrol { continue; }
-                        if protokol::yaz(w, &Kontrol::Girdi(g)).await.is_err() { break KOPTU.into(); }
+                        // Count only after the framed message was written successfully.
+                        if telmik.gonder(w, g).await.is_err() { break KOPTU.into(); }
                     }
                     None => break KAPANDI.into(),
                 },
@@ -801,10 +828,19 @@ impl Gozetmen {
                         }
                     }
                     Some(Kontrol::SaatCevap { izleyici_ms, host_ms }) => {
+                        if izleyici_ms == protokol::SES_SOR {
+                            if ses_yanitlandi { continue; }
+                            if ses_yoklama.elapsed() >= Duration::from_secs(2) {
+                                ses_yoklama_zaman_asimi(ses_yoklama.elapsed(), false, &self.ses_host_eski);
+                                ses_yanitlandi = true;
+                                continue;
+                            }
+                            ses_yanitlandi = true;
+                        }
                         saat_cevabini_isle(
                             izleyici_ms, host_ms, unix_ms(),
                             izinler.kontrol && ses_yoklama.elapsed() < Duration::from_secs(2),
-                            &self.ses_yetenegi, &self.ses_surucu_yok, &self.saat_farki, &self.saat_esitlendi,
+                            &self.ses_yetenegi, &self.ses_surucu_yok, &self.ses_host_eski, &self.saat_farki, &self.saat_esitlendi,
                         );
                     }
                     Some(Kontrol::Pano(metin)) => {
@@ -913,5 +949,48 @@ mod testler {
             Kurulum::YalnizYerel
         );
         assert_ne!(sec(&[], &[]), Kurulum::YalnizYerel);
+    }
+}
+
+#[cfg(test)]
+mod ses_host_testleri {
+    use super::*;
+
+    #[test]
+    fn eski_host_saat_yaniti_uyariyi_etkinlestirir() {
+        let ses = AtomicBool::new(false);
+        let surucu = AtomicBool::new(false);
+        let eski = AtomicBool::new(false);
+        saat_cevabini_isle(protokol::SES_SOR, 1720000000000, 150, true,
+            &ses, &surucu, &eski, &AtomicI64::new(0), &AtomicBool::new(false));
+        assert!(eski.load(Ordering::SeqCst));
+        assert!(!ses.load(Ordering::SeqCst));
+        assert!(!surucu.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn yeni_host_ve_eksik_surucu_eski_host_degildir() {
+        for (yanit, destek, eksik) in [(protokol::SES_VAR, true, false), (protokol::SES_SURUCU_YOK, false, true)] {
+            let ses = AtomicBool::new(false);
+            let surucu = AtomicBool::new(false);
+            let eski = AtomicBool::new(true);
+            saat_cevabini_isle(protokol::SES_SOR, yanit, 150, true,
+                &ses, &surucu, &eski, &AtomicI64::new(0), &AtomicBool::new(false));
+            assert!(!eski.load(Ordering::SeqCst));
+            assert_eq!(ses.load(Ordering::SeqCst), destek);
+            assert_eq!(surucu.load(Ordering::SeqCst), eksik);
+        }
+    }
+
+    #[test]
+    fn yanitsiz_yoklama_iki_saniyede_eski_host_olur() {
+        let eski = AtomicBool::new(false);
+        ses_yoklama_zaman_asimi(Duration::from_millis(1999), false, &eski);
+        assert!(!eski.load(Ordering::SeqCst));
+        ses_yoklama_zaman_asimi(Duration::from_secs(2), false, &eski);
+        assert!(eski.load(Ordering::SeqCst));
+        eski.store(false, Ordering::SeqCst);
+        ses_yoklama_zaman_asimi(Duration::from_secs(2), true, &eski);
+        assert!(!eski.load(Ordering::SeqCst));
     }
 }

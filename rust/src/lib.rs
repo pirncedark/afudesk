@@ -24,6 +24,12 @@ pub mod protokol;
 pub mod sanal_kol;
 pub mod sanal_mikrofon;
 pub mod zaman;
+mod telmik_sayac;
 
 #[cfg(test)]
 mod uctan_uca;
+
+/// Bridge access to the connected PC microphone capability status.
+pub fn izleyici_ses_host_eski(izleyici: &izleyici::Izleyici) -> bool {
+    izleyici.ses_host_eski()
+}

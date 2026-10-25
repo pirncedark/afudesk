@@ -5,6 +5,10 @@ import 'package:flutter/material.dart';
 
 /// Aynı oturumun kırpılmış karelerini gösterir; yeni bağlantı oluşturmaz.
 class TerminalModu extends StatelessWidget {
+  final List<Map<String, dynamic>> terminaller;
+  final String? secilenTerminal;
+  final ValueChanged<Map<String, dynamic>>? terminalSec;
+  final VoidCallback? gorselGonder;
   final ui.Image? kare;
   final Widget yaziAlani;
   final bool ctrl;
@@ -18,6 +22,10 @@ class TerminalModu extends StatelessWidget {
 
   const TerminalModu({
     super.key,
+    this.terminaller = const [],
+    this.secilenTerminal,
+    this.terminalSec,
+    this.gorselGonder,
     required this.kare,
     required this.yaziAlani,
     required this.ctrl,
@@ -64,6 +72,38 @@ class TerminalModu extends StatelessWidget {
         body: SafeArea(
           child: Column(
             children: [
+              if (MediaQuery.sizeOf(context).height >
+                  MediaQuery.sizeOf(context).width)
+                Material(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: DropdownButton<String>(
+                      key: const Key('terminal_secici'),
+                      isExpanded: true,
+                      value: secilenTerminal,
+                      hint: const Text('Terminal seç'),
+                      items: [
+                        for (final t in terminaller)
+                          DropdownMenuItem(
+                            value: '${t['id']}',
+                            child: Text(
+                              '${t['baslik'] ?? t['uygulama'] ?? 'Terminal'}',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                      onChanged: terminalSec == null
+                          ? null
+                          : (id) {
+                              terminalSec!(
+                                terminaller.firstWhere(
+                                  (t) => '${t['id']}' == id,
+                                ),
+                              );
+                            },
+                    ),
+                  ),
+                ),
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, c) {
@@ -165,6 +205,14 @@ class TerminalModu extends StatelessWidget {
                               dugme('ctrl_c', 'Ctrl+C', kopyayiKes),
                               dugme('ctrl_p', 'Ctrl+P', ctrlP),
                               dugme('yapistir', 'Yapıştır', yapistir),
+                              IconButton(
+                                key: const Key('oturum_gorsel_gonder'),
+                                tooltip: 'Görsel gönder',
+                                onPressed: gorselGonder,
+                                icon: const Icon(
+                                  Icons.add_photo_alternate_outlined,
+                                ),
+                              ),
                             ],
                           ),
                         ),

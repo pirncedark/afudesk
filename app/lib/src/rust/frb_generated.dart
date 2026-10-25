@@ -70,7 +70,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 1149107990;
+  int get rustContentHash => 1899391726;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -167,6 +167,8 @@ abstract class RustLibApi extends BaseApi {
   bool crateApiAfudeskIzleyiciSesDestegi();
 
   bool crateApiAfudeskIzleyiciSesSurucuYok();
+
+  bool crateApiAfudeskIzleyiciSesHostEski();
 
   void crateApiAfudeskIzleyiciYenidenBaglan();
 
@@ -973,6 +975,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiAfudeskIzleyiciSesSurucuYokConstMeta =>
       const TaskConstMeta(debugName: "izleyici_ses_surucu_yok", argNames: []);
+
+  @override
+  bool crateApiAfudeskIzleyiciSesHostEski() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiAfudeskIzleyiciSesHostEskiConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAfudeskIzleyiciSesHostEskiConstMeta =>
+      const TaskConstMeta(debugName: "izleyici_ses_host_eski", argNames: []);
 
   @override
   void crateApiAfudeskIzleyiciYenidenBaglan() {

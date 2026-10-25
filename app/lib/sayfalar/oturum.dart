@@ -12,6 +12,7 @@ import '../yakinlastirma.dart';
 import '../bilesenler/oyun_kolu_katmani.dart';
 import '../klavye.dart';
 import '../motor.dart';
+import '../gorsel_paylas.dart';
 import '../oyun_kolu.dart';
 import '../tema.dart';
 import '../terminal_girdi.dart';
@@ -20,6 +21,7 @@ import 'terminal_modu.dart';
 /// Uzak ekran oturumu: bağlanır, onayı bekler, kareleri çizer, girdiyi gönderir.
 class OturumSayfasi extends StatefulWidget {
   final Motor motor;
+  final GorselPaylas? gorselPaylas;
   final String kod;
   final String parola;
 
@@ -32,6 +34,7 @@ class OturumSayfasi extends StatefulWidget {
   const OturumSayfasi({
     super.key,
     required this.motor,
+    this.gorselPaylas,
     this.kod = '',
     this.parola = '',
     this.kayitliKimlik,
@@ -54,6 +57,8 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   bool _terminal = false,
       _terminalBekliyor = false,
       _terminalListeBekliyor = false;
+  List<Map<String, dynamic>> _terminaller = [];
+  String? _secilenTerminal;
   bool _terminalCtrl = false;
   bool _terminalIlkKare = false;
   int _kareNesli = 0;
@@ -117,6 +122,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
         );
         return;
       }
+      setState(() => _terminaller = liste);
       final terminaller = liste.where(_isTerminal).toList();
       final pencereler = liste.where((t) => !_isTerminal(t)).toList();
 
@@ -142,23 +148,34 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
           _yeniden != null) {
         return;
       }
-      final boyut = MediaQuery.sizeOf(context);
-      final en = boyut.width;
-      final boy = boyut.height;
-      _tuslariBirak();
-      setState(() => _terminalBekliyor = true);
-      widget.motor.girdi(
-        Girdi(
-          'terminal_ac',
-          metin: '${secilen['id']}',
-          dx: en.round(),
-          dy: boy.round(),
-        ),
-      );
-      _terminalZamanAsimi();
+      _terminalSec(secilen);
     } catch (_) {
       if (mounted) _terminalBilgi('Pencereler listelenemedi. Yeniden dene.');
     }
+  }
+
+  void _terminalSec(Map<String, dynamic> secilen) {
+    if (!_kontrol ||
+        _asama != _Asama.bagli ||
+        _yeniden != null ||
+        _terminalBekliyor) {
+      return;
+    }
+    final boyut = MediaQuery.sizeOf(context);
+    _tuslariBirak();
+    setState(() {
+      _terminalBekliyor = true;
+      _secilenTerminal = '${secilen['id']}';
+    });
+    widget.motor.girdi(
+      Girdi(
+        'terminal_ac',
+        metin: '${secilen['id']}',
+        dx: boyut.width.round(),
+        dy: boyut.height.round(),
+      ),
+    );
+    _terminalZamanAsimi();
   }
 
   void _terminalDurumu(String metin) {
@@ -243,6 +260,8 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   }
 
   bool _dosyaIzni = false;
+  GorselPaylas get _paylas => widget.gorselPaylas ?? GorselPaylas.ortak;
+  bool _gorselAktarimi = false;
   _Aktarim? _aktarim;
   bool _p2 = false;
   int _rtt = -1, _fps = 0, _gecikme = 0;
@@ -270,7 +289,20 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     sesDestegi: () => widget.motor.sesDestegi,
     sesSurucuYok: () => widget.motor.sesSurucuYok,
     surucuUyarisi: _mikrofonSurucuUyarisi,
+    sesHostEski: () => widget.motor.sesHostEski,
+    hostEskiUyarisi: _mikrofonHostEskiUyarisi,
   );
+
+  void _mikrofonHostEskiUyarisi() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          "PC'deki AfuDesk eski. Güncellemek için PC'de AfuDesk'i aç.",
+        ),
+      ),
+    );
+  }
 
   void _mikrofonSurucuUyarisi() {
     if (!mounted) return;
@@ -297,6 +329,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
       ),
     );
   }
+
   bool _konusmaModu = false;
   bool _klavyeAcik = false;
   bool _oyunKoluIzni = false, _kolAcik = false;
@@ -319,6 +352,8 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _paylas.addListener(_bekleyenGorseliGonder);
+    unawaited(_paylas.baslat());
     _yaziOdak.addListener(_yaziOdakDegisti);
     _yazi.addListener(_imeDegisti);
     _kolKanal.setMethodCallHandler(_androidKol);
@@ -419,6 +454,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
           _dosyaIzni = o.dosya;
           _oyunKoluIzni = o.oyunKolu;
         });
+        _bekleyenGorseliGonder();
         _odak.requestFocus();
         if (widget.terminalleBasla &&
             !_terminalBaslangiciIstendi &&
@@ -498,6 +534,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
           _aktarmali = o.metin == 'relay';
           _yeniden = null;
         });
+        _bekleyenGorseliGonder();
       case 'yeniden':
         _terminalKapat();
         _tuslariBirak();
@@ -543,9 +580,55 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
 
   Future<void> _dosyaGonder() async {
     final yol = await widget.motor.dosyaSec();
-    if (yol == null || !mounted) return;
+    if (yol == null || !mounted || !_gonderebilir) return;
+    await _yoluGonder(yol, gorsel: false);
+  }
+
+  bool get _gonderebilir =>
+      mounted &&
+      _asama == _Asama.bagli &&
+      _yeniden == null &&
+      _dosyaIzni &&
+      _aktarim == null;
+
+  Future<void> _gorselSec() async {
+    try {
+      final yol = await widget.motor.dosyaSec(yalnizGorsel: true);
+      if (yol != null && mounted) _paylas.ekle(yol);
+    } catch (e) {
+      if (mounted) {
+        _terminalBilgi(
+          e is StateError && e.message.startsWith('Görsel çok büyük.')
+              ? e.message
+              : 'Görsel seçilemedi. Yeniden dene.',
+        );
+      }
+    }
+  }
+
+  void _bekleyenGorseliGonder() {
+    final yol = _paylas.ilk;
+    if (yol == null || !_gonderebilir) return;
+    _paylas.al(yol);
+    unawaited(_yoluGonder(yol, gorsel: true));
+  }
+
+  Future<void> _yoluGonder(String yol, {required bool gorsel}) async {
+    _gorselAktarimi = gorsel;
     setState(() => _aktarim = _Aktarim(dosyaAdi(yol)));
-    await widget.motor.dosyaGonder(yol);
+    try {
+      await widget.motor.dosyaGonder(yol);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _aktarim = null);
+      _gorselAktarimi = false;
+      _terminalBilgi(
+        gorsel
+            ? 'Görsel gönderilemedi. Yeniden dene.'
+            : 'Dosya gönderilemedi. Yeniden dene.',
+      );
+      _bekleyenGorseliGonder();
+    }
   }
 
   void _dosyaOlayi(IzleyiciOlay o) {
@@ -561,6 +644,8 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     }
     setState(() => _aktarim = null);
     final basarili = o.metin.isEmpty;
+    final gorseldi = _gorselAktarimi;
+    _gorselAktarimi = false;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -568,13 +653,18 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
           key: const Key('oturum_dosya_sonuc'),
           content: Text(
             basarili
-                ? '${o.ad} gönderildi.'
-                : '${o.ad} gönderilemedi: ${o.metin}',
+                ? (gorseldi
+                      ? "Görsel PC'ye gönderildi; PC'de Ctrl+V ile yapıştırabilirsin."
+                      : '${o.ad} gönderildi.')
+                : (gorseldi
+                      ? 'Görsel gönderilemedi. Yeniden dene.'
+                      : '${o.ad} gönderilemedi: ${o.metin}'),
           ),
           backgroundColor: basarili ? null : Renk.tehlike,
           duration: Duration(seconds: basarili ? 3 : 6),
         ),
       );
+    _bekleyenGorseliGonder();
   }
 
   Widget _dosyaCubugu(_Aktarim a) {
@@ -629,6 +719,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _paylas.removeListener(_bekleyenGorseliGonder);
     _terminalSaat?.cancel();
     _tuslariBirak();
     if (_terminal || _terminalBekliyor) {
@@ -1201,6 +1292,11 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     if (_terminal && _asama == _Asama.bagli) {
       return _klavyeOdak(
         TerminalModu(
+          terminaller: _terminaller,
+          secilenTerminal: _secilenTerminal,
+          terminalSec: _kontrol && _yeniden == null && !_terminalBekliyor
+              ? _terminalSec
+              : null,
           kare: _kare,
           ctrl: _terminalCtrl,
           klavyeAcik: _klavyeAcik,
@@ -1209,6 +1305,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
           kopyayiKes: () => _terminalCtrlKisayol('c'),
           ctrlP: () => _terminalCtrlKisayol('p'),
           yapistir: _terminalYapistir,
+          gorselGonder: _gonderebilir ? _gorselSec : null,
           basKonus: (basili) {
             if (!_kontrol || _yeniden != null) return;
             _yaziSifirla();
@@ -1284,6 +1381,13 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
           ],
         ),
         actions: [
+          if (_asama == _Asama.bagli && widget.motor.dokunmatik)
+            IconButton(
+              key: const Key('oturum_gorsel_gonder'),
+              tooltip: 'Görsel gönder',
+              onPressed: _gonderebilir ? _gorselSec : null,
+              icon: const Icon(Icons.add_photo_alternate_outlined),
+            ),
           if (_asama == _Asama.bagli)
             IconButton(
               key: const Key('oturum_terminal'),
