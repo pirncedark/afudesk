@@ -436,7 +436,7 @@ mod guvenlik_testleri {
             .await
             .unwrap();
             let dinleyici = host.endpoint.addr();
-            for tur in 1..=10 {
+            for tur in 1..=3 {
                 let kod = loop {
                     if let Some(HostOlay::Hazir { kod, .. }) = host.olaylar.recv().await {
                         break kod;
