@@ -4,6 +4,7 @@ use crate::protokol::Girdi;
 use anyhow::Result;
 use std::{
     collections::VecDeque,
+    path::{Path, PathBuf},
     time::{Duration, Instant},
 };
 
@@ -31,6 +32,60 @@ pub trait SesApi {
     fn durdur(&mut self);
 }
 
+fn cable_var_api(api: &mut impl SesApi) -> bool {
+    api.cable().is_ok()
+}
+
+/// Yalnız aygıtları yoklar; ses akışı açmaz veya varsayılanları değiştirmez.
+pub fn cable_var() -> bool {
+    #[cfg(windows)]
+    {
+        win::WindowsSes::yeni().is_ok_and(|mut api| cable_var_api(&mut api))
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
+fn geri_yolu() -> Result<PathBuf> {
+    Ok(dirs::data_dir()
+        .ok_or_else(|| anyhow::anyhow!("Uygulama veri klasörü bulunamadı."))?
+        .join("AfuDesk")
+        .join("mikrofon_geri.json"))
+}
+
+/// Başarısız geri yüklemede dosya korunur; sonraki başlangıç yeniden deneyebilir.
+pub fn yarim_kalani_geri_yukle(api: &mut impl SesApi, yol: &Path) -> Result<()> {
+    let veri = match std::fs::read(yol) {
+        Ok(veri) => veri,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e.into()),
+    };
+    let eski: Vec<(u32, String)> = serde_json::from_slice(&veri)?;
+    let mut hata = None;
+    for (rol, id) in eski {
+        if let Err(e) = api.sec(rol, &id) {
+            hata = Some(e);
+        }
+    }
+    if let Some(e) = hata {
+        return Err(e);
+    }
+    std::fs::remove_file(yol)?;
+    Ok(())
+}
+
+#[cfg(windows)]
+pub fn baslangicta_geri_yukle() -> Result<()> {
+    let yol = geri_yolu()?;
+    // Dosya yokken COM başlatmaya gerek yok.
+    if !yol.try_exists()? {
+        return Ok(());
+    }
+    yarim_kalani_geri_yukle(&mut win::WindowsSes::yeni()?, &yol)
+}
+
 fn cable_adi(ad: &str, kayit: bool) -> bool {
     let ad = ad
         .to_lowercase()
@@ -47,15 +102,17 @@ fn cable_adi(ad: &str, kayit: bool) -> bool {
 
 struct Oturum<A: SesApi> {
     api: A,
+    geri_yolu: PathBuf,
     eski: Vec<(u32, String)>,
     acik: bool,
     kapanis: Option<Instant>,
     tampon: VecDeque<i16>,
 }
 impl<A: SesApi> Oturum<A> {
-    fn yeni(api: A) -> Self {
+    fn yeni(api: A, geri_yolu: PathBuf) -> Self {
         Self {
             api,
+            geri_yolu,
             eski: vec![],
             acik: false,
             kapanis: None,
@@ -68,10 +125,21 @@ impl<A: SesApi> Oturum<A> {
             return Ok(());
         }
         self.geri_yukle()?;
+        yarim_kalani_geri_yukle(&mut self.api, &self.geri_yolu)?;
         let (kayit, cal) = self.api.cable()?;
         // İki rol de değiştirilmeden ÖNCE saklanır; ikinci rol hata verirse geri alınır.
         let eski = vec![(0, self.api.varsayilan(0)?), (2, self.api.varsayilan(2)?)];
         self.api.baslat(&cal)?;
+        // Kalıcı kayıt tamamlanmadan hiçbir varsayılan aygıt değişmez.
+        let veri = serde_json::to_vec(&eski)?;
+        let ust = self.geri_yolu.parent().unwrap_or_else(|| Path::new("."));
+        std::fs::create_dir_all(ust)?;
+        // Yarım yazılmış JSON başlangıçtaki geri yüklemeyi engellemesin.
+        let mut dosya = tempfile::NamedTempFile::new_in(ust)?;
+        use std::io::Write;
+        dosya.write_all(&veri)?;
+        dosya.as_file().sync_all()?;
+        dosya.persist_noclobber(&self.geri_yolu)?;
         self.eski = eski;
         for rol in [0, 2] {
             if let Err(e) = self.api.sec(rol, &kayit) {
@@ -120,6 +188,7 @@ impl<A: SesApi> Oturum<A> {
         self.kapanis = None;
         self.tampon.clear();
         self.api.durdur();
+        let geri_alinacak = !self.eski.is_empty();
         let mut kalan = vec![];
         for (rol, id) in self.eski.drain(..) {
             if self.api.sec(rol, &id).is_err() {
@@ -128,6 +197,9 @@ impl<A: SesApi> Oturum<A> {
         }
         self.eski = kalan;
         anyhow::ensure!(self.eski.is_empty(), "Önceki mikrofon geri yüklenemedi.");
+        if geri_alinacak {
+            std::fs::remove_file(&self.geri_yolu)?;
+        }
         Ok(())
     }
 }
@@ -227,7 +299,7 @@ fn isci(
     rx: std::sync::mpsc::Receiver<Komut>,
     hata: std::sync::Arc<std::sync::Mutex<Option<String>>>,
 ) {
-    let api = match win::WindowsSes::yeni() {
+    let mut s = match win::WindowsSes::yeni().and_then(|api| Ok(Oturum::yeni(api, geri_yolu()?))) {
         Ok(a) => a,
         Err(_) => {
             if let Ok(Komut::Ac(tx)) = rx.recv() {
@@ -236,7 +308,6 @@ fn isci(
             return;
         }
     };
-    let mut s = Oturum::yeni(api);
     let mut tick = Instant::now() + Duration::from_millis(10);
     loop {
         match rx.recv_timeout(tick.saturating_duration_since(Instant::now())) {
@@ -561,12 +632,68 @@ mod testler {
     #[derive(Default)]
     struct Durum {
         secimler: Vec<(u32, String)>,
+        geri_yolu: Option<PathBuf>,
         yok: bool,
         hata: bool,
         geri_hatasi: bool,
         yazilan: Vec<i16>,
     }
     struct Sahte(Arc<Mutex<Durum>>);
+    #[test]
+    fn cokmeden_kalan_aygitlar_baslangicta_geri_yuklenir() {
+        let dizin = tempfile::tempdir().unwrap();
+        let yol = dizin.path().join("mikrofon_geri.json");
+        let d = Arc::new(Mutex::new(Durum {
+            geri_yolu: Some(yol.clone()),
+            ..Default::default()
+        }));
+        let mut s = Oturum::yeni(Sahte(d.clone()), yol.clone());
+        s.ac().unwrap();
+        assert!(yol.exists());
+        std::mem::forget(s); // Süreç çöktüğünde Drop çalışmaz.
+        yarim_kalani_geri_yukle(&mut Sahte(d.clone()), &yol).unwrap();
+        assert!(!yol.exists());
+        assert_eq!(
+            d.lock().unwrap().secimler[2..],
+            [(0, "eski-0".into()), (2, "eski-2".into())]
+        );
+    }
+
+    #[test]
+    fn cable_kontrolu_aygitlari_degistirmez() {
+        let d = Arc::new(Mutex::new(Durum::default()));
+        assert!(cable_var_api(&mut Sahte(d.clone())));
+        d.lock().unwrap().yok = true;
+        assert!(!cable_var_api(&mut Sahte(d.clone())));
+        assert!(d.lock().unwrap().secimler.is_empty());
+    }
+
+    #[test]
+    fn kayit_yazilamazsa_aygitlar_degismez() {
+        let dizin = tempfile::tempdir().unwrap();
+        let engel = dizin.path().join("dosya");
+        std::fs::write(&engel, b"engel").unwrap();
+        let d = Arc::new(Mutex::new(Durum::default()));
+        let mut s = Oturum::yeni(Sahte(d.clone()), engel.join("mikrofon_geri.json"));
+        assert!(s.ac().is_err());
+        assert!(d.lock().unwrap().secimler.is_empty());
+    }
+
+    #[test]
+    fn baslangic_geri_yukleme_hatasinda_kayit_korunur() {
+        let dizin = tempfile::tempdir().unwrap();
+        let yol = dizin.path().join("mikrofon_geri.json");
+        let d = Arc::new(Mutex::new(Durum::default()));
+        let mut s = Oturum::yeni(Sahte(d.clone()), yol.clone());
+        s.ac().unwrap();
+        std::mem::forget(s);
+        d.lock().unwrap().geri_hatasi = true;
+        assert!(yarim_kalani_geri_yukle(&mut Sahte(d.clone()), &yol).is_err());
+        assert!(yol.exists());
+        yarim_kalani_geri_yukle(&mut Sahte(d), &yol).unwrap();
+        assert!(!yol.exists());
+    }
+
     impl SesApi for Sahte {
         fn cable(&mut self) -> anyhow::Result<(String, String)> {
             anyhow::ensure!(!self.0.lock().unwrap().yok, SURUCU_UYARISI);
@@ -577,6 +704,13 @@ mod testler {
         }
         fn sec(&mut self, rol: u32, id: &str) -> anyhow::Result<()> {
             let mut d = self.0.lock().unwrap();
+            if id == "cable-out" {
+                if let Some(yol) = &d.geri_yolu {
+                    let eski: Vec<(u32, String)> =
+                        serde_json::from_slice(&std::fs::read(yol).unwrap()).unwrap();
+                    assert_eq!(eski, [(0, "eski-0".into()), (2, "eski-2".into())]);
+                }
+            }
             if d.hata && rol == 2 && id == "cable-out" {
                 anyhow::bail!("hata");
             }
@@ -607,20 +741,24 @@ mod testler {
     #[test]
     fn kapatma_300ms_ve_drop_geri_yukler() {
         let d = Arc::new(Mutex::new(Durum::default()));
-        let mut s = Oturum::yeni(Sahte(d.clone()));
+        let dizin = tempfile::tempdir().unwrap();
+        let mut s = Oturum::yeni(Sahte(d.clone()), dizin.path().join("mikrofon_geri.json"));
         let t = std::time::Instant::now();
         s.ac().unwrap();
         s.kapat(t);
         s.tick(t + std::time::Duration::from_millis(299)).unwrap();
         assert_eq!(d.lock().unwrap().secimler.len(), 2);
         s.tick(t + std::time::Duration::from_millis(300)).unwrap();
+        assert!(!s.geri_yolu.exists());
         assert_eq!(
             d.lock().unwrap().secimler[2..],
             [(0, "eski-0".into()), (2, "eski-2".into())]
         );
         s.ac().unwrap();
         s.ac().unwrap();
+        let yol = s.geri_yolu.clone();
         drop(s);
+        assert!(!yol.exists());
         assert_eq!(d.lock().unwrap().secimler.len(), 8);
     }
     #[test]
@@ -629,7 +767,8 @@ mod testler {
             yok: true,
             ..Default::default()
         }));
-        let mut s = Oturum::yeni(Sahte(d.clone()));
+        let dizin = tempfile::tempdir().unwrap();
+        let mut s = Oturum::yeni(Sahte(d.clone()), dizin.path().join("mikrofon_geri.json"));
         assert!(s.ac().unwrap_err().to_string().contains("VB-CABLE"));
         assert!(d.lock().unwrap().secimler.is_empty());
         {
@@ -642,7 +781,11 @@ mod testler {
     }
     #[test]
     fn pcm_sinirli_ve_kapaliyken_atilir() {
-        let mut s = Oturum::yeni(Sahte(Arc::new(Mutex::new(Durum::default()))));
+        let dizin = tempfile::tempdir().unwrap();
+        let mut s = Oturum::yeni(
+            Sahte(Arc::new(Mutex::new(Durum::default()))),
+            dizin.path().join("mikrofon_geri.json"),
+        );
         assert!(s.ses(&[0; 640]).is_ok());
         s.ac().unwrap();
         assert!(s.ses(&[0; 639]).is_err());
@@ -655,7 +798,8 @@ mod testler {
     #[test]
     fn hizli_yeniden_acma_eski_aygitlari_korur() {
         let d = Arc::new(Mutex::new(Durum::default()));
-        let mut s = Oturum::yeni(Sahte(d.clone()));
+        let dizin = tempfile::tempdir().unwrap();
+        let mut s = Oturum::yeni(Sahte(d.clone()), dizin.path().join("mikrofon_geri.json"));
         let t = Instant::now();
         s.ac().unwrap();
         s.kapat(t);
@@ -668,7 +812,8 @@ mod testler {
     #[test]
     fn geri_yukleme_hatasinda_drop_yeniden_dener() {
         let d = Arc::new(Mutex::new(Durum::default()));
-        let mut s = Oturum::yeni(Sahte(d.clone()));
+        let dizin = tempfile::tempdir().unwrap();
+        let mut s = Oturum::yeni(Sahte(d.clone()), dizin.path().join("mikrofon_geri.json"));
         s.ac().unwrap();
         d.lock().unwrap().geri_hatasi = true;
         let t = Instant::now();
@@ -681,7 +826,8 @@ mod testler {
     #[test]
     fn pcm_little_endian_ve_surucu_uyarisi() {
         let d = Arc::new(Mutex::new(Durum::default()));
-        let mut s = Oturum::yeni(Sahte(d.clone()));
+        let dizin = tempfile::tempdir().unwrap();
+        let mut s = Oturum::yeni(Sahte(d.clone()), dizin.path().join("mikrofon_geri.json"));
         s.ac().unwrap();
         s.ses(&[0x34, 0x12].repeat(320)).unwrap();
         s.tick(Instant::now()).unwrap();

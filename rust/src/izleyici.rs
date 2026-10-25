@@ -38,11 +38,13 @@ pub(crate) fn saat_cevabini_isle(
     alim_ms: u64,
     ses_izinli: bool,
     ses_yetenegi: &AtomicBool,
+    ses_surucu_yok: &AtomicBool,
     saat_farki: &AtomicI64,
     saat_esitlendi: &AtomicBool,
 ) {
     if izleyici_ms == protokol::SES_SOR {
         ses_yetenegi.store(ses_izinli && host_ms == protokol::SES_VAR, Ordering::SeqCst);
+        ses_surucu_yok.store(host_ms == protokol::SES_SURUCU_YOK, Ordering::SeqCst);
         return;
     }
     saat_farki.store(zaman::saat_farki(izleyici_ms, host_ms, alim_ms), Ordering::Relaxed);
@@ -113,6 +115,7 @@ pub struct Izleyici {
     terminal_nesli: Arc<AtomicU64>,
     terminal_hazir: Arc<AtomicBool>,
     ses_yetenegi: Arc<AtomicBool>,
+    ses_surucu_yok: Arc<AtomicBool>,
     /// Yeniden bağlanınca değişir.
     baglanti: Arc<Mutex<Baglanti>>,
     kapatildi: Arc<AtomicBool>,
@@ -126,6 +129,9 @@ impl Izleyici {
     /// FFI bu değeri okur; her bağlantıda ses yoklaması yanıtlanana kadar false.
     pub fn ses_destegi(&self) -> bool {
         self.ses_yetenegi.load(Ordering::SeqCst)
+    }
+    pub fn ses_surucu_yok(&self) -> bool {
+        self.ses_surucu_yok.load(Ordering::SeqCst)
     }
     fn simdiki(&self) -> Baglanti {
         self.baglanti.lock().expect("kilit").clone()
@@ -162,6 +168,8 @@ impl Izleyici {
     }
 
     pub fn kapat(&self) {
+        self.ses_yetenegi.store(false, Ordering::SeqCst);
+        self.ses_surucu_yok.store(false, Ordering::SeqCst);
         self.kapatildi.store(true, Ordering::SeqCst);
         self.simdiki().close(0u32.into(), b"izleyici");
         let ep = self.ep.clone();
@@ -171,6 +179,8 @@ impl Izleyici {
     /// Bağlantıyı bırakıp aynı oturuma yeniden bağlanır (ör. ağ değişti). Host bunu
     /// kopuş sayar ve onay sormadan geri alır.
     pub fn yeniden_baglan(&self) {
+        self.ses_yetenegi.store(false, Ordering::SeqCst);
+        self.ses_surucu_yok.store(false, Ordering::SeqCst);
         self.yeniden_iste.store(true, Ordering::SeqCst);
         self.simdiki().close(KOPUS_KODU.into(), b"ag-degisti");
     }
@@ -382,6 +392,7 @@ async fn oturum_ac(
     let terminal_nesli = Arc::new(AtomicU64::new(0));
     let terminal_hazir = Arc::new(AtomicBool::new(false));
     let ses_yetenegi = Arc::new(AtomicBool::new(false));
+    let ses_surucu_yok = Arc::new(AtomicBool::new(false));
     let _ = olay_tx
         .send(IzleyiciOlay::OnayBekleniyor {
             karsi_ad: karsi_ad.to_owned(),
@@ -417,6 +428,7 @@ async fn oturum_ac(
         terminal_nesli: terminal_nesli.clone(),
         terminal_hazir: terminal_hazir.clone(),
         ses_yetenegi: ses_yetenegi.clone(),
+        ses_surucu_yok: ses_surucu_yok.clone(),
         pano: PanoDurumu {
             kaynak: pano,
             es: None,
@@ -436,6 +448,7 @@ async fn oturum_ac(
         terminal_nesli,
         terminal_hazir,
         ses_yetenegi,
+        ses_surucu_yok,
         baglanti,
         kapatildi,
         yeniden_iste,
@@ -473,6 +486,7 @@ struct Gozetmen {
     terminal_nesli: Arc<AtomicU64>,
     terminal_hazir: Arc<AtomicBool>,
     ses_yetenegi: Arc<AtomicBool>,
+    ses_surucu_yok: Arc<AtomicBool>,
     pano: PanoDurumu,
     saat_farki: Arc<AtomicI64>,
     saat_esitlendi: Arc<AtomicBool>,
@@ -496,6 +510,7 @@ impl Gozetmen {
         let sebep = loop {
             let sebep = self.oturum(&c, &mut w, r, &mut jeton).await;
             self.ses_yetenegi.store(false, Ordering::SeqCst);
+            self.ses_surucu_yok.store(false, Ordering::SeqCst);
             terminal_oturumunu_sifirla(
                 &self.terminal_nesli,
                 &self.terminal_hazir,
@@ -622,6 +637,7 @@ impl Gozetmen {
             _ => return "Bağlantı koptu.".into(),
         };
         self.ses_yetenegi.store(false, Ordering::SeqCst);
+        self.ses_surucu_yok.store(false, Ordering::SeqCst);
         // Yoklama ve yanıtı mevcut saat mesajlarını kullanır.
         let ses_yoklama = std::time::Instant::now();
         if protokol::yaz(w, &Kontrol::SaatSor { izleyici_ms: protokol::SES_SOR }).await.is_err() {
@@ -788,7 +804,7 @@ impl Gozetmen {
                         saat_cevabini_isle(
                             izleyici_ms, host_ms, unix_ms(),
                             izinler.kontrol && ses_yoklama.elapsed() < Duration::from_secs(2),
-                            &self.ses_yetenegi, &self.saat_farki, &self.saat_esitlendi,
+                            &self.ses_yetenegi, &self.ses_surucu_yok, &self.saat_farki, &self.saat_esitlendi,
                         );
                     }
                     Some(Kontrol::Pano(metin)) => {

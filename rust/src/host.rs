@@ -207,6 +207,8 @@ impl Drop for Host {
 }
 
 pub async fn baslat(ayar: HostAyar, fabrika: Arc<dyn Fabrika>) -> Result<Host> {
+    #[cfg(windows)]
+    tokio::task::spawn_blocking(crate::sanal_mikrofon::baslangicta_geri_yukle).await??;
     let (olay_tx, olaylar) = mpsc::channel(32);
     let (komut, komut_rx) = mpsc::channel(8);
     let (durdur_tx, durdur_rx) = oneshot::channel();

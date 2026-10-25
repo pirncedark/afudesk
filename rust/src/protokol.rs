@@ -173,15 +173,23 @@ pub enum Kontrol {
 pub const SES_SOR: u64 = u64::MAX - 2;
 /// Normal host saati bu değeri alamaz.
 pub const SES_VAR: u64 = u64::MAX;
+pub const SES_SURUCU_YOK: u64 = u64::MAX - 1;
 
 pub fn ses_girdisi(g: &Girdi) -> bool {
     matches!(g, Girdi::SesAc | Girdi::Ses(_) | Girdi::SesKapat)
 }
 
 pub fn yetenek_yaniti(izleyici_ms: u64) -> Option<Kontrol> {
-    (izleyici_ms == SES_SOR).then_some(Kontrol::SaatCevap {
+    yetenek_yaniti_ile(izleyici_ms, crate::sanal_mikrofon::cable_var)
+}
+
+fn yetenek_yaniti_ile(izleyici_ms: u64, cable_var: impl FnOnce() -> bool) -> Option<Kontrol> {
+    if izleyici_ms != SES_SOR { return None; }
+    Some(Kontrol::SaatCevap {
         izleyici_ms: SES_SOR,
-        host_ms: if cfg!(windows) { SES_VAR } else { 0 },
+        host_ms: if cfg!(windows) {
+            if cable_var() { SES_VAR } else { SES_SURUCU_YOK }
+        } else { 0 },
     })
 }
 
@@ -241,23 +249,43 @@ mod testler {
     use super::*;
     use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 
+    fn sahte_yetenek_yaniti(ms: u64) -> Option<Kontrol> {
+        yetenek_yaniti_ile(ms, || true)
+    }
+
+    #[test]
+    fn surucu_yokken_ses_destegi_bildirilmez() {
+        assert_eq!(
+            yetenek_yaniti_ile(SES_SOR, || false),
+            Some(Kontrol::SaatCevap {
+                izleyici_ms: SES_SOR,
+                host_ms: if cfg!(windows) { SES_SURUCU_YOK } else { 0 },
+            })
+        );
+        assert_eq!(yetenek_yaniti_ile(123, || panic!("Normal saat aygıt yoklamaz")), None);
+    }
+
     #[test]
     fn ses_saat_cevabi_saat_olcumunu_degistirmez() {
         for esit in [false, true] {
-            for (host_ms, izinli, beklenen_ses) in [
-                (u64::MAX, true, true),
-                (u64::MAX, false, false),
-                (0, true, false),
-                (1720000000000, true, false),
+            for (host_ms, izinli, beklenen_ses, beklenen_yok) in [
+                (SES_VAR, true, true, false),
+                (SES_VAR, false, false, false),
+                (SES_SURUCU_YOK, true, false, true),
+                (SES_SURUCU_YOK, false, false, true),
+                (0, true, false, false),
+                (1720000000000, true, false, false),
             ] {
-                let ses = AtomicBool::new(false);
+                let surucu_yok = AtomicBool::new(!beklenen_yok);
+                let ses = AtomicBool::new(!beklenen_ses);
                 let fark = AtomicI64::new(-42);
                 let esitlendi = AtomicBool::new(esit);
                 crate::izleyici::saat_cevabini_isle(
                     SES_SOR, host_ms, 1720000000050, izinli,
-                    &ses, &fark, &esitlendi,
+                    &ses, &surucu_yok, &fark, &esitlendi,
                 );
                 assert_eq!(ses.load(Ordering::SeqCst), beklenen_ses);
+                assert_eq!(surucu_yok.load(Ordering::SeqCst), beklenen_yok);
                 assert_eq!(fark.load(Ordering::Relaxed), -42);
                 assert_eq!(esitlendi.load(Ordering::Relaxed), esit);
             }
@@ -266,10 +294,11 @@ mod testler {
 
     #[test]
     fn normal_saat_cevabi_olcumu_gunceller_sesi_degistirmez() {
+        let surucu_yok = AtomicBool::new(false);
         let ses = AtomicBool::new(true);
         let fark = AtomicI64::new(-42);
         let esitlendi = AtomicBool::new(false);
-        crate::izleyici::saat_cevabini_isle(100, 120, 110, false, &ses, &fark, &esitlendi);
+        crate::izleyici::saat_cevabini_isle(100, 120, 110, false, &ses, &surucu_yok, &fark, &esitlendi);
         assert!(ses.load(Ordering::SeqCst));
         assert_eq!(fark.load(Ordering::Relaxed), 15);
         assert!(esitlendi.load(Ordering::Relaxed));
@@ -278,7 +307,7 @@ mod testler {
     #[test]
     fn ses_yoklamasi_mevcut_saat_cevabini_kullanir() {
         assert_eq!(
-            yetenek_yaniti(u64::MAX - 2),
+            sahte_yetenek_yaniti(u64::MAX - 2),
             Some(Kontrol::SaatCevap {
                 izleyici_ms: u64::MAX - 2,
                 host_ms: if cfg!(windows) { u64::MAX } else { 0 },
@@ -289,16 +318,17 @@ mod testler {
     #[tokio::test]
     async fn yeni_host_ses_yanitini_mevcut_tel_biciminde_gonderir() {
         let (mut host, mut izleyici) = tokio::io::duplex(256);
-        yaz(&mut host, &yetenek_yaniti(SES_SOR).unwrap()).await.unwrap();
+        yaz(&mut host, &sahte_yetenek_yaniti(SES_SOR).unwrap()).await.unwrap();
         let Some(Kontrol::SaatCevap { izleyici_ms, host_ms }) =
             oku::<_, Kontrol>(&mut izleyici).await.unwrap() else { panic!("SaatCevap bekleniyordu") };
         assert_eq!(izleyici_ms, u64::MAX - 2);
         assert_eq!(host_ms, if cfg!(windows) { u64::MAX } else { 0 });
+        let surucu_yok = AtomicBool::new(false);
         let ses = AtomicBool::new(false);
         let fark = AtomicI64::new(42);
         let esitlendi = AtomicBool::new(false);
         crate::izleyici::saat_cevabini_isle(
-            izleyici_ms, host_ms, 150, true, &ses, &fark, &esitlendi,
+            izleyici_ms, host_ms, 150, true, &ses, &surucu_yok, &fark, &esitlendi,
         );
         assert_eq!(ses.load(Ordering::SeqCst), cfg!(windows));
         assert_eq!(fark.load(Ordering::Relaxed), 42);
@@ -436,11 +466,12 @@ mod testler {
         .unwrap();
         let Some(Kontrol::SaatCevap { izleyici_ms, host_ms }) =
             oku::<_, Kontrol>(&mut yeni).await.unwrap() else { panic!("SaatCevap bekleniyordu") };
+        let surucu_yok = AtomicBool::new(false);
         let ses = AtomicBool::new(false);
         let fark = AtomicI64::new(42);
         let esitlendi = AtomicBool::new(false);
         crate::izleyici::saat_cevabini_isle(
-            izleyici_ms, host_ms, 150, true, &ses, &fark, &esitlendi,
+            izleyici_ms, host_ms, 150, true, &ses, &surucu_yok, &fark, &esitlendi,
         );
         assert!(!ses.load(Ordering::SeqCst));
         let mut gonderilen = 0;
@@ -511,7 +542,7 @@ mod testler {
             Some(eski_kabul)
         );
         for izleyici_ms in [0, 1, 1720000000000, u64::MAX] {
-            assert_eq!(yetenek_yaniti(izleyici_ms), None);
+            assert_eq!(sahte_yetenek_yaniti(izleyici_ms), None);
             yaz(
                 &mut host,
                 &Kontrol::SaatCevap {
@@ -534,7 +565,7 @@ mod testler {
             Some(EskiKontrol::Pano("hâlâ bağlı".into()))
         );
         // Yeni hostun yoklama yanıtını eski okuyucu da çözebilir.
-        let yanit = yetenek_yaniti(SES_SOR).unwrap();
+        let yanit = sahte_yetenek_yaniti(SES_SOR).unwrap();
         assert_eq!(
             bincode::deserialize::<EskiKontrol>(&bincode::serialize(&yanit).unwrap()).unwrap(),
             EskiKontrol::SaatCevap {
