@@ -761,6 +761,7 @@ impl Gozetmen {
         kol_yenile.tick().await;
         const KOPTU: &str = "Bağlantı koptu.";
         const KAPANDI: &str = "Bağlantı kapandı.";
+        let mut telmik = crate::telmik_sayac::Sayac::yeni("telefon", "gonderilen");
         let sonuc: String = loop {
             let pano = if izinler.pano {
                 self.pano.es.as_mut()
@@ -791,7 +792,8 @@ impl Gozetmen {
                             continue;
                         }
                         if !izinler.kontrol { continue; }
-                        if protokol::yaz(w, &Kontrol::Girdi(g)).await.is_err() { break KOPTU.into(); }
+                        // Count only after the framed message was written successfully.
+                        if telmik.gonder(w, g).await.is_err() { break KOPTU.into(); }
                     }
                     None => break KAPANDI.into(),
                 },

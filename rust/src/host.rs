@@ -1311,8 +1311,7 @@ async fn oturum(
     let mut terminal_secili = false;
     let mut terminal_uyari_zamani: Option<std::time::Instant> = None;
     let mut bekleyen_birakmalar = Vec::new();
-    let mut telmik_alinan = 0u64;
-    let mut telmik_son_log = std::time::Instant::now();
+    let mut telmik = crate::telmik_sayac::Sayac::yeni("host", "alinan");
     let mut titresim_araligi = tokio::time::interval(Duration::from_millis(50));
     titresim_araligi.tick().await;
     let mut yol_olcum = tokio::time::interval(Duration::from_secs(1));
@@ -1380,14 +1379,7 @@ async fn oturum(
                     // Ses odak/terminal dönüşümünden bağımsızdır; kontrol izni gerekir.
                     if protokol::ses_girdisi(&g) {
                         if !izinler.kontrol { continue; }
-                        if let protokol::Girdi::Ses(b) = &g {
-                            telmik_alinan += b.len() as u64;
-                        }
-                        if telmik_son_log.elapsed() >= Duration::from_secs(1)
-                            || matches!(g, protokol::Girdi::SesKapat) {
-                            log::info!("telmik host alinan={telmik_alinan}");
-                            telmik_son_log = std::time::Instant::now();
-                        }
+                        telmik.isle(&g);
                         if let Some(e) = enjektor.as_mut() {
                             if let Err(hata) = tokio::task::block_in_place(|| e.uygula(&g)) {
                                 let mesaj = crate::sanal_mikrofon::kullanici_uyarisi(&hata);

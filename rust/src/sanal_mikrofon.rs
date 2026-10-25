@@ -1,6 +1,8 @@
 //! Telefon PCM16/16 kHz/mono sesini VB-CABLE'a taşır; Windows işlemleri işçi üzerindedir.
 
 use crate::protokol::Girdi;
+#[cfg(test)]
+mod kanit_testleri;
 use anyhow::Result;
 use std::{
     collections::VecDeque,
