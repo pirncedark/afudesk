@@ -208,8 +208,30 @@ impl Drop for Host {
 
 pub async fn baslat(ayar: HostAyar, fabrika: Arc<dyn Fabrika>) -> Result<Host> {
     #[cfg(windows)]
-    tokio::task::spawn_blocking(crate::sanal_mikrofon::baslangicta_geri_yukle).await??;
+    let geri_yukle = crate::sanal_mikrofon::baslangicta_geri_yukle;
+    #[cfg(not(windows))]
+    let geri_yukle = || Ok(());
+    baslat_geri_yuklemeyle(ayar, fabrika, geri_yukle).await
+}
+
+async fn baslat_geri_yuklemeyle(
+    ayar: HostAyar,
+    fabrika: Arc<dyn Fabrika>,
+    geri_yukle: impl FnOnce() -> Result<()> + Send + 'static,
+) -> Result<Host> {
+    let geri_yukleme = tokio::task::spawn_blocking(geri_yukle)
+        .await
+        .map_err(anyhow::Error::from)
+        .and_then(|sonuc| sonuc);
     let (olay_tx, olaylar) = mpsc::channel(32);
+    if let Err(e) = geri_yukleme {
+        log::warn!("Önceki mikrofon geri yüklenemedi: {e:#}");
+        let _ = olay_tx
+            .send(HostOlay::Uyari(
+                "Önceki mikrofon geri yüklenemedi, Ses ayarlarından mikrofonunu seç.".into(),
+            ))
+            .await;
+    }
     let (komut, komut_rx) = mpsc::channel(8);
     let (durdur_tx, durdur_rx) = oneshot::channel();
     let kurulum = if ayar.yalniz_yerel {
@@ -301,6 +323,47 @@ fn hatali_bilet_say(denemeler: &mut usize) -> bool {
 #[cfg(test)]
 mod guvenlik_testleri {
     use super::*;
+
+    async fn mikrofon_hatasiyla_host_baslat(
+        geri_yukle: impl FnOnce() -> Result<()> + Send + 'static,
+    ) {
+        let mut host = baslat_geri_yuklemeyle(
+            HostAyar {
+                ad: "Mikrofon kurtarma testi".into(),
+                upnp: false,
+                parola: "1234567890".into(),
+                yalniz_yerel: true,
+                dosya_klasoru: None,
+                veri_klasoru: None,
+                kod_acik: true,
+            },
+            Arc::new(crate::platform::sahte::SahteFabrika::new(80, 60)),
+            geri_yukle,
+        )
+        .await
+        .expect("Mikrofon kurtarma hatası host başlangıcını engellememeli");
+        assert_eq!(
+            host.olaylar.recv().await,
+            Some(HostOlay::Uyari(
+                "Önceki mikrofon geri yüklenemedi, Ses ayarlarından mikrofonunu seç.".into()
+            ))
+        );
+        let olay = tokio::time::timeout(Duration::from_secs(10), host.olaylar.recv())
+            .await
+            .unwrap();
+        assert!(matches!(olay, Some(HostOlay::Hazir { .. })), "{olay:?}");
+        host.durdur();
+    }
+
+    #[tokio::test]
+    async fn mikrofon_kurtarma_hatasi_hostu_engellemez() {
+        mikrofon_hatasiyla_host_baslat(|| anyhow::bail!("Geçici COM hatası")).await;
+    }
+
+    #[tokio::test]
+    async fn mikrofon_kurtarma_join_hatasi_hostu_engellemez() {
+        mikrofon_hatasiyla_host_baslat(|| panic!("Kurtarma işçisi çöktü")).await;
+    }
 
     struct IzlenenFabrika {
         sahte: crate::platform::sahte::SahteFabrika,

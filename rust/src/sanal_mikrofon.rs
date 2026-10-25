@@ -55,18 +55,31 @@ fn geri_yolu() -> Result<PathBuf> {
         .join("mikrofon_geri.json"))
 }
 
-/// Başarısız geri yüklemede dosya korunur; sonraki başlangıç yeniden deneyebilir.
+/// Geçici hatada kayıt korunur; bozuk kayıt ve artık bulunmayan aygıtlar atlanır.
 pub fn yarim_kalani_geri_yukle(api: &mut impl SesApi, yol: &Path) -> Result<()> {
     let veri = match std::fs::read(yol) {
         Ok(veri) => veri,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
         Err(e) => return Err(e.into()),
     };
-    let eski: Vec<(u32, String)> = serde_json::from_slice(&veri)?;
+    let eski: Vec<(u32, String)> = match serde_json::from_slice(&veri) {
+        Ok(eski) => eski,
+        Err(e) => {
+            log::warn!("Bozuk mikrofon geri yükleme kaydı siliniyor: {e}");
+            std::fs::remove_file(yol)?;
+            return Ok(());
+        }
+    };
     let mut hata = None;
     for (rol, id) in eski {
         if let Err(e) = api.sec(rol, &id) {
-            hata = Some(e);
+            if e.downcast_ref::<std::io::Error>()
+                .is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound)
+            {
+                log::warn!("Önceki mikrofon artık bulunamıyor, rol {rol} atlanıyor: {e}");
+            } else {
+                hata = Some(e);
+            }
         }
     }
     if let Some(e) = hata {
@@ -556,7 +569,18 @@ mod win {
         }
         fn sec(&mut self, rol: u32, id: &str) -> Result<()> {
             let id = wide(id);
-            unsafe { hr(call!(self.policy, 13, (*const u16, u32) -> i32, id.as_ptr(), rol)) }
+            let sonuc =
+                unsafe { call!(self.policy, 13, (*const u16, u32) -> i32, id.as_ptr(), rol) };
+            // HRESULT_FROM_WIN32(ERROR_NOT_FOUND / ERROR_FILE_NOT_FOUND).
+            // Diğer HRESULT'ler geçici olabilir; kurtarma kaydı korunmalı.
+            if matches!(sonuc as u32, 0x80070490 | 0x80070002) {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("Windows ses aygıtı bulunamadı: {sonuc:#x}"),
+                )
+                .into());
+            }
+            hr(sonuc)
         }
         fn baslat(&mut self, id: &str) -> Result<()> {
             self.durdur();
@@ -636,9 +660,35 @@ mod testler {
         yok: bool,
         hata: bool,
         geri_hatasi: bool,
+        kayip_aygit: bool,
         yazilan: Vec<i16>,
     }
     struct Sahte(Arc<Mutex<Durum>>);
+    #[test]
+    fn kayip_aygit_atlanir_diger_rol_yuklenir_ve_kayit_silinir() {
+        let dizin = tempfile::tempdir().unwrap();
+        let yol = dizin.path().join("mikrofon_geri.json");
+        std::fs::write(&yol, br#"[[0,"eski-0"],[2,"eski-2"]]"#).unwrap();
+        let d = Arc::new(Mutex::new(Durum {
+            kayip_aygit: true,
+            ..Default::default()
+        }));
+        yarim_kalani_geri_yukle(&mut Sahte(d.clone()), &yol).unwrap();
+        assert!(!yol.exists());
+        assert_eq!(d.lock().unwrap().secimler, [(2, "eski-2".into())]);
+    }
+
+    #[test]
+    fn bozuk_json_silinir_ve_aygitlara_dokunulmaz() {
+        let dizin = tempfile::tempdir().unwrap();
+        let yol = dizin.path().join("mikrofon_geri.json");
+        std::fs::write(&yol, b"{bozuk").unwrap();
+        let d = Arc::new(Mutex::new(Durum::default()));
+        yarim_kalani_geri_yukle(&mut Sahte(d.clone()), &yol).unwrap();
+        assert!(!yol.exists());
+        assert!(d.lock().unwrap().secimler.is_empty());
+    }
+
     #[test]
     fn cokmeden_kalan_aygitlar_baslangicta_geri_yuklenir() {
         let dizin = tempfile::tempdir().unwrap();
@@ -704,6 +754,11 @@ mod testler {
         }
         fn sec(&mut self, rol: u32, id: &str) -> anyhow::Result<()> {
             let mut d = self.0.lock().unwrap();
+            if d.kayip_aygit && id == "eski-0" {
+                return Err(
+                    std::io::Error::new(std::io::ErrorKind::NotFound, "Aygıt bulunamadı").into(),
+                );
+            }
             if id == "cable-out" {
                 if let Some(yol) = &d.geri_yolu {
                     let eski: Vec<(u32, String)> =
