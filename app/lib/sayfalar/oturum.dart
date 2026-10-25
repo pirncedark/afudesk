@@ -54,6 +54,8 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   bool _terminal = false,
       _terminalBekliyor = false,
       _terminalListeBekliyor = false;
+  List<Map<String, dynamic>> _terminaller = [];
+  String? _secilenTerminal;
   bool _terminalCtrl = false;
   bool _terminalIlkKare = false;
   int _kareNesli = 0;
@@ -117,6 +119,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
         );
         return;
       }
+      setState(() => _terminaller = liste);
       final terminaller = liste.where(_isTerminal).toList();
       final pencereler = liste.where((t) => !_isTerminal(t)).toList();
 
@@ -142,23 +145,34 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
           _yeniden != null) {
         return;
       }
-      final boyut = MediaQuery.sizeOf(context);
-      final en = boyut.width;
-      final boy = boyut.height;
-      _tuslariBirak();
-      setState(() => _terminalBekliyor = true);
-      widget.motor.girdi(
-        Girdi(
-          'terminal_ac',
-          metin: '${secilen['id']}',
-          dx: en.round(),
-          dy: boy.round(),
-        ),
-      );
-      _terminalZamanAsimi();
+      _terminalSec(secilen);
     } catch (_) {
       if (mounted) _terminalBilgi('Pencereler listelenemedi. Yeniden dene.');
     }
+  }
+
+  void _terminalSec(Map<String, dynamic> secilen) {
+    if (!_kontrol ||
+        _asama != _Asama.bagli ||
+        _yeniden != null ||
+        _terminalBekliyor) {
+      return;
+    }
+    final boyut = MediaQuery.sizeOf(context);
+    _tuslariBirak();
+    setState(() {
+      _terminalBekliyor = true;
+      _secilenTerminal = '${secilen['id']}';
+    });
+    widget.motor.girdi(
+      Girdi(
+        'terminal_ac',
+        metin: '${secilen['id']}',
+        dx: boyut.width.round(),
+        dy: boyut.height.round(),
+      ),
+    );
+    _terminalZamanAsimi();
   }
 
   void _terminalDurumu(String metin) {
@@ -1215,6 +1229,11 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     if (_terminal && _asama == _Asama.bagli) {
       return _klavyeOdak(
         TerminalModu(
+          terminaller: _terminaller,
+          secilenTerminal: _secilenTerminal,
+          terminalSec: _kontrol && _yeniden == null && !_terminalBekliyor
+              ? _terminalSec
+              : null,
           kare: _kare,
           ctrl: _terminalCtrl,
           klavyeAcik: _klavyeAcik,
