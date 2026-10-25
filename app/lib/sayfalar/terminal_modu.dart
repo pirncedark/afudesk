@@ -8,6 +8,7 @@ class TerminalModu extends StatelessWidget {
   final List<Map<String, dynamic>> terminaller;
   final String? secilenTerminal;
   final ValueChanged<Map<String, dynamic>>? terminalSec;
+  final VoidCallback? gorselGonder;
   final ui.Image? kare;
   final Widget yaziAlani;
   final bool ctrl;
@@ -24,6 +25,7 @@ class TerminalModu extends StatelessWidget {
     this.terminaller = const [],
     this.secilenTerminal,
     this.terminalSec,
+    this.gorselGonder,
     required this.kare,
     required this.yaziAlani,
     required this.ctrl,
@@ -203,6 +205,14 @@ class TerminalModu extends StatelessWidget {
                               dugme('ctrl_c', 'Ctrl+C', kopyayiKes),
                               dugme('ctrl_p', 'Ctrl+P', ctrlP),
                               dugme('yapistir', 'Yapıştır', yapistir),
+                              IconButton(
+                                key: const Key('oturum_gorsel_gonder'),
+                                tooltip: 'Görsel gönder',
+                                onPressed: gorselGonder,
+                                icon: const Icon(
+                                  Icons.add_photo_alternate_outlined,
+                                ),
+                              ),
                             ],
                           ),
                         ),

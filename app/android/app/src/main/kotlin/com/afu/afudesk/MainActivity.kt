@@ -1,11 +1,13 @@
 package com.afu.afudesk
 
 import android.os.Build
+import android.os.Bundle
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import java.io.File
+import java.util.concurrent.Executors
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.view.InputDevice
@@ -34,6 +36,94 @@ class MainActivity : FlutterActivity() {
     private var sesIsci: Thread? = null
     @Volatile private var sesCalisiyor = false
     @Volatile private var sesNesli = 0
+    private var gorselKanal: MethodChannel? = null
+    private var gorselHazir = false
+    private val bekleyenGorseller = mutableListOf<String>()
+    private val gorselIsci = Executors.newSingleThreadExecutor()
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        paylasilanGorseliAl(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        paylasilanGorseliAl(intent)
+    }
+
+    private fun paylasilanGorseliAl(gelen: Intent?) {
+        if (gelen?.action != Intent.ACTION_SEND || gelen.type?.startsWith("image/") != true) return
+        val uri = try {
+            if (Build.VERSION.SDK_INT >= 33) {
+                gelen.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                gelen.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+            }
+        } catch (_: RuntimeException) {
+            gorselUyarisi("Görsel açılamadı. Galeriden yeniden paylaş.")
+            return
+        }
+        // Aynı Activity yeniden oluşursa eski paylaşımı tekrar gönderme.
+        gelen.removeExtra(Intent.EXTRA_STREAM)
+        if (uri?.scheme != "content") {
+            gorselUyarisi("Görsel açılamadı. Galeriden yeniden paylaş.")
+            return
+        }
+        gorselIsci.execute {
+            var hedef: File? = null
+            try {
+                val klasor = File(cacheDir, "paylasilan_gorseller").apply { mkdirs() }
+                // Adı/uzantıyı dışarıdan alma; dosya imzasından belirle.
+                val gecici = File.createTempFile("gorsel_", ".tmp", klasor)
+                hedef = gecici
+                contentResolver.openInputStream(uri).use { kaynak ->
+                    requireNotNull(kaynak)
+                    gecici.outputStream().use { cikti ->
+                        val tampon = ByteArray(64 * 1024)
+                        var toplam = 0L
+                        while (true) {
+                            val n = kaynak.read(tampon)
+                            if (n < 0) break
+                            toplam += n
+                            require(toplam <= 20L * 1024 * 1024) { "boyut" }
+                            cikti.write(tampon, 0, n)
+                        }
+                    }
+                }
+                val baslik = ByteArray(12)
+                val n = gecici.inputStream().use { it.read(baslik) }
+                val uzanti = when {
+                    n >= 8 && baslik.take(8).toByteArray().contentEquals(
+                        byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) -> "png"
+                    n >= 3 && baslik[0] == 0xff.toByte() && baslik[1] == 0xd8.toByte() && baslik[2] == 0xff.toByte() -> "jpg"
+                    n >= 12 && String(baslik, 0, 4, Charsets.US_ASCII) == "RIFF" &&
+                        String(baslik, 8, 4, Charsets.US_ASCII) == "WEBP" -> "webp"
+                    else -> throw IllegalArgumentException("bicim")
+                }
+                val dosya = File(klasor, gecici.nameWithoutExtension + "." + uzanti)
+                check(gecici.renameTo(dosya))
+                hedef = dosya
+                runOnUiThread {
+                    if (gorselHazir) gorselKanal?.invokeMethod("gorsel", dosya.absolutePath)
+                    else bekleyenGorseller.add(dosya.absolutePath)
+                }
+            } catch (e: Exception) {
+                hedef?.delete()
+                val mesaj = when (e.message) {
+                    "boyut" -> "Görsel çok büyük. 20 MB'den küçük bir görsel seç."
+                    "bicim" -> "Görsel desteklenmiyor. PNG, JPG veya WebP seç."
+                    else -> "Görsel açılamadı. Galeriden yeniden paylaş."
+                }
+                runOnUiThread { gorselUyarisi(mesaj) }
+            }
+        }
+    }
+
+    private fun gorselUyarisi(mesaj: String) {
+        android.widget.Toast.makeText(this, mesaj, android.widget.Toast.LENGTH_LONG).show()
+    }
 
     private fun mikrofonDurdur() {
         sesNesli++
@@ -107,6 +197,15 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        gorselKanal = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "afudesk/gorsel").also { kanal ->
+            kanal.setMethodCallHandler { call, result ->
+                if (call.method == "bekleyenleriAl") {
+                    gorselHazir = true
+                    result.success(bekleyenGorseller.toList())
+                    bekleyenGorseller.clear()
+                } else result.notImplemented()
+            }
+        }
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, "afudesk/mikrofon/ses")
             .setStreamHandler(object : EventChannel.StreamHandler {
                 override fun onListen(args: Any?, sink: EventChannel.EventSink) { sesAkisi = sink }
@@ -173,6 +272,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        gorselIsci.shutdown()
         mikrofonDurdur()
         mikrofonIzni?.success(false)
         mikrofonIzni = null
