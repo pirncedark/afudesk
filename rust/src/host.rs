@@ -1306,6 +1306,17 @@ async fn oturum(
                     if protokol::yaz(&mut w, &mesaj).await.is_err() { break kopus("Bağlantı koptu."); }
                 }
                 Some(Kontrol::Girdi(mut g)) => {
+                    // Ses odak/terminal dönüşümünden bağımsızdır; kontrol izni gerekir.
+                    if protokol::ses_girdisi(&g) {
+                        if !izinler.kontrol { continue; }
+                        if let Some(e) = enjektor.as_mut() {
+                            if let Err(hata) = tokio::task::block_in_place(|| e.uygula(&g)) {
+                                let mesaj = crate::sanal_mikrofon::kullanici_uyarisi(&hata);
+                                let _ = olay.send(HostOlay::Uyari(mesaj.into())).await;
+                            }
+                        }
+                        continue;
+                    }
                     if let protokol::Girdi::Kol(k) = &g {
                         if terminal_secili { continue; }
                         if sanal_kol.is_none() || !sira_yeni(kol_siralari.get(&k.slot).copied(), k.sira) { continue; }
@@ -1355,6 +1366,11 @@ async fn oturum(
                     }
                 }
                 Some(Kontrol::SaatSor { izleyici_ms }) => {
+                    // Ses yanıtı da eski istemcilerin okuyabildiği SaatCevap biçimindedir.
+                    if let Some(yanit) = protokol::yetenek_yaniti(izleyici_ms) {
+                        if protokol::yaz(&mut w, &yanit).await.is_err() { break kopus("Bağlantı koptu."); }
+                        continue;
+                    }
                     let host_ms = unix_ms();
                     let _ = protokol::yaz(&mut w, &Kontrol::SaatCevap { izleyici_ms, host_ms }).await;
                 }

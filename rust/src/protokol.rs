@@ -49,6 +49,10 @@ pub enum Girdi {
     /// Doğrudan metin yazma (mobil klavye için).
     Metin(String),
     Kol(KolDurumu),
+    /// PCM16 little endian, mono, 16 kHz; her Ses tam 20 ms (640 bayt).
+    SesAc,
+    Ses(Vec<u8>),
+    SesKapat,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -164,6 +168,27 @@ pub enum Kontrol {
     },
 }
 
+/// Eski host bunu normal SaatSor olarak yanıtlar. Eski istemci bu değeri üretmez.
+/// Hız yoklaması (u64::MAX - 1) ile çakışmaz; yeni Kontrol varyantı gerektirmez.
+pub const SES_SOR: u64 = u64::MAX - 2;
+/// Normal host saati bu değeri alamaz.
+pub const SES_VAR: u64 = u64::MAX;
+
+pub fn ses_girdisi(g: &Girdi) -> bool {
+    matches!(g, Girdi::SesAc | Girdi::Ses(_) | Girdi::SesKapat)
+}
+
+pub fn yetenek_yaniti(izleyici_ms: u64) -> Option<Kontrol> {
+    (izleyici_ms == SES_SOR).then_some(Kontrol::SaatCevap {
+        izleyici_ms: SES_SOR,
+        host_ms: if cfg!(windows) { SES_VAR } else { 0 },
+    })
+}
+
+pub fn ses_gonderilebilir(yetenek: bool, g: &Girdi) -> bool {
+    !ses_girdisi(g) || yetenek
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Doseme {
     pub x: u32,
@@ -214,6 +239,339 @@ pub async fn oku<R: AsyncReadExt + Unpin, T: for<'de> Deserialize<'de>>(
 #[cfg(test)]
 mod testler {
     use super::*;
+    use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
+
+    #[test]
+    fn ses_saat_cevabi_saat_olcumunu_degistirmez() {
+        for esit in [false, true] {
+            for (host_ms, izinli, beklenen_ses) in [
+                (u64::MAX, true, true),
+                (u64::MAX, false, false),
+                (0, true, false),
+                (1720000000000, true, false),
+            ] {
+                let ses = AtomicBool::new(false);
+                let fark = AtomicI64::new(-42);
+                let esitlendi = AtomicBool::new(esit);
+                crate::izleyici::saat_cevabini_isle(
+                    SES_SOR, host_ms, 1720000000050, izinli,
+                    &ses, &fark, &esitlendi,
+                );
+                assert_eq!(ses.load(Ordering::SeqCst), beklenen_ses);
+                assert_eq!(fark.load(Ordering::Relaxed), -42);
+                assert_eq!(esitlendi.load(Ordering::Relaxed), esit);
+            }
+        }
+    }
+
+    #[test]
+    fn normal_saat_cevabi_olcumu_gunceller_sesi_degistirmez() {
+        let ses = AtomicBool::new(true);
+        let fark = AtomicI64::new(-42);
+        let esitlendi = AtomicBool::new(false);
+        crate::izleyici::saat_cevabini_isle(100, 120, 110, false, &ses, &fark, &esitlendi);
+        assert!(ses.load(Ordering::SeqCst));
+        assert_eq!(fark.load(Ordering::Relaxed), 15);
+        assert!(esitlendi.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn ses_yoklamasi_mevcut_saat_cevabini_kullanir() {
+        assert_eq!(
+            yetenek_yaniti(u64::MAX - 2),
+            Some(Kontrol::SaatCevap {
+                izleyici_ms: u64::MAX - 2,
+                host_ms: if cfg!(windows) { u64::MAX } else { 0 },
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn yeni_host_ses_yanitini_mevcut_tel_biciminde_gonderir() {
+        let (mut host, mut izleyici) = tokio::io::duplex(256);
+        yaz(&mut host, &yetenek_yaniti(SES_SOR).unwrap()).await.unwrap();
+        let Some(Kontrol::SaatCevap { izleyici_ms, host_ms }) =
+            oku::<_, Kontrol>(&mut izleyici).await.unwrap() else { panic!("SaatCevap bekleniyordu") };
+        assert_eq!(izleyici_ms, u64::MAX - 2);
+        assert_eq!(host_ms, if cfg!(windows) { u64::MAX } else { 0 });
+        let ses = AtomicBool::new(false);
+        let fark = AtomicI64::new(42);
+        let esitlendi = AtomicBool::new(false);
+        crate::izleyici::saat_cevabini_isle(
+            izleyici_ms, host_ms, 150, true, &ses, &fark, &esitlendi,
+        );
+        assert_eq!(ses.load(Ordering::SeqCst), cfg!(windows));
+        assert_eq!(fark.load(Ordering::Relaxed), 42);
+        assert!(!esitlendi.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn kontrol_son_indeksi_22_yeni_varyant_yok() {
+        let son = Kontrol::TerminalDurum { acik: false, hata: None };
+        assert_eq!(&bincode::serialize(&son).unwrap()[..4], &[22, 0, 0, 0]);
+        assert!(bincode::deserialize::<Kontrol>(&[23, 0, 0, 0, 1]).is_err());
+    }
+
+    #[test]
+    fn eski_tel_baytlari_aynen_kalir() {
+        let kabul = Kontrol::Kabul {
+            izinler: Izinler { kontrol: true, pano: false, dosya: true, oyun_kolu: false },
+            genislik: 800,
+            yukseklik: 600,
+        };
+        assert_eq!(bincode::serialize(&kabul).unwrap(), [
+            1, 0, 0, 0, 1, 0, 1, 0, 32, 3, 0, 0, 88, 2, 0, 0,
+        ]);
+        let saat = Kontrol::SaatCevap { izleyici_ms: 1, host_ms: 2 };
+        assert_eq!(bincode::serialize(&saat).unwrap(), [
+            7, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0,
+        ]);
+    }
+
+    // Ses eklenmeden önceki tel şeması; yeni tipten türetilmez.
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
+    enum EskiGirdi {
+        FareKonum { x: f32, y: f32 },
+        FareTus { tus: FareTusu, basili: bool },
+        Kaydir { dx: i32, dy: i32 },
+        Tus { hid: u32, ad: String, basili: bool },
+        Metin(String),
+        Kol(KolDurumu),
+    }
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
+    enum EskiKontrol {
+        Merhaba {
+            bilet: String,
+            ad: String,
+        },
+        Kabul {
+            izinler: Izinler,
+            genislik: u32,
+            yukseklik: u32,
+        },
+        Red(String),
+        Girdi(EskiGirdi),
+        Pano(String),
+        Kapat(String),
+        SaatSor {
+            izleyici_ms: u64,
+        },
+        SaatCevap {
+            izleyici_ms: u64,
+            host_ms: u64,
+        },
+        DosyaBaslik {
+            kimlik: [u8; 16],
+            ad: String,
+            boyut: u64,
+            sha256: [u8; 32],
+        },
+        DosyaDevam {
+            baslangic: u64,
+        },
+        DosyaParca(Vec<u8>),
+        DosyaTamam,
+        DosyaHata(String),
+        Titresim {
+            slot: u8,
+            buyuk: u8,
+            kucuk: u8,
+        },
+        DevamJetonu(String),
+        Devam {
+            jeton: String,
+            ad: String,
+        },
+        MerhabaKayitli {
+            jeton: String,
+            ad: String,
+        },
+        KayitJetonu {
+            host_ad: String,
+            adresler: Vec<String>,
+            relaylar: Vec<String>,
+            jeton: String,
+        },
+        MerhabaGoogle {
+            kanit: crate::google_baglanti::Kanit,
+            ad: String,
+        },
+        TerminalListesi,
+        TerminalPencereleri(Vec<crate::terminal::Pencere>),
+        TerminalModu {
+            ac: Option<u64>,
+            en: u32,
+            boy: u32,
+        },
+        TerminalDurum {
+            acik: bool,
+            hata: Option<String>,
+        },
+    }
+
+    #[tokio::test]
+    async fn eski_hosta_ses_gitmez_space_devam_eder() {
+        let (mut yeni, mut eski) = tokio::io::duplex(4096);
+        let yoklama = Kontrol::SaatSor {
+            izleyici_ms: SES_SOR,
+        };
+        yaz(&mut yeni, &yoklama).await.unwrap();
+        assert_eq!(
+            oku::<_, EskiKontrol>(&mut eski).await.unwrap(),
+            Some(EskiKontrol::SaatSor {
+                izleyici_ms: SES_SOR
+            })
+        );
+        // Eski hostun normal saat yanıtı yetenek bildirmez.
+        let simdi = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
+        yaz(
+            &mut eski,
+            &EskiKontrol::SaatCevap {
+                izleyici_ms: SES_SOR,
+                host_ms: simdi,
+            },
+        )
+        .await
+        .unwrap();
+        let Some(Kontrol::SaatCevap { izleyici_ms, host_ms }) =
+            oku::<_, Kontrol>(&mut yeni).await.unwrap() else { panic!("SaatCevap bekleniyordu") };
+        let ses = AtomicBool::new(false);
+        let fark = AtomicI64::new(42);
+        let esitlendi = AtomicBool::new(false);
+        crate::izleyici::saat_cevabini_isle(
+            izleyici_ms, host_ms, 150, true, &ses, &fark, &esitlendi,
+        );
+        assert!(!ses.load(Ordering::SeqCst));
+        let mut gonderilen = 0;
+        for g in [
+            Girdi::SesAc,
+            Girdi::Tus {
+                hid: 0,
+                ad: "Space".into(),
+                basili: true,
+            },
+            Girdi::Ses(vec![0; 640]),
+            Girdi::Tus {
+                hid: 0,
+                ad: "Space".into(),
+                basili: false,
+            },
+            Girdi::SesKapat,
+        ] {
+            if ses_gonderilebilir(ses.load(Ordering::SeqCst), &g) {
+                yaz(&mut yeni, &Kontrol::Girdi(g)).await.unwrap();
+                gonderilen += 1;
+            }
+        }
+        drop(yeni);
+        assert_eq!(gonderilen, 2);
+        for basili in [true, false] {
+            assert_eq!(
+                oku::<_, EskiKontrol>(&mut eski).await.unwrap(),
+                Some(EskiKontrol::Girdi(EskiGirdi::Tus {
+                    hid: 0,
+                    ad: "Space".into(),
+                    basili
+                }))
+            );
+        }
+        assert_eq!(oku::<_, EskiKontrol>(&mut eski).await.unwrap(), None);
+        assert!(ses_gonderilebilir(true, &Girdi::SesAc));
+        assert!(ses_gonderilebilir(true, &Girdi::Ses(vec![0; 640])));
+        assert!(ses_gonderilebilir(true, &Girdi::SesKapat));
+    }
+
+    #[tokio::test]
+    async fn eski_istemci_yeni_host_ile_kopmaz() {
+        let (mut host, mut eski) = tokio::io::duplex(4096);
+        let izinler = Izinler {
+            kontrol: true,
+            pano: false,
+            dosya: false,
+            oyun_kolu: false,
+        };
+        let kabul = Kontrol::Kabul {
+            izinler: izinler.clone(),
+            genislik: 800,
+            yukseklik: 600,
+        };
+        let eski_kabul = EskiKontrol::Kabul {
+            izinler,
+            genislik: 800,
+            yukseklik: 600,
+        };
+        assert_eq!(
+            bincode::serialize(&kabul).unwrap(),
+            bincode::serialize(&eski_kabul).unwrap()
+        );
+        yaz(&mut host, &kabul).await.unwrap();
+        assert_eq!(
+            oku::<_, EskiKontrol>(&mut eski).await.unwrap(),
+            Some(eski_kabul)
+        );
+        for izleyici_ms in [0, 1, 1720000000000, u64::MAX] {
+            assert_eq!(yetenek_yaniti(izleyici_ms), None);
+            yaz(
+                &mut host,
+                &Kontrol::SaatCevap {
+                    izleyici_ms,
+                    host_ms: 456,
+                },
+            )
+            .await
+            .unwrap();
+            assert!(matches!(
+                oku::<_, EskiKontrol>(&mut eski).await.unwrap(),
+                Some(EskiKontrol::SaatCevap { .. })
+            ));
+        }
+        yaz(&mut host, &Kontrol::Pano("hâlâ bağlı".into()))
+            .await
+            .unwrap();
+        assert_eq!(
+            oku::<_, EskiKontrol>(&mut eski).await.unwrap(),
+            Some(EskiKontrol::Pano("hâlâ bağlı".into()))
+        );
+        // Yeni hostun yoklama yanıtını eski okuyucu da çözebilir.
+        let yanit = yetenek_yaniti(SES_SOR).unwrap();
+        assert_eq!(
+            bincode::deserialize::<EskiKontrol>(&bincode::serialize(&yanit).unwrap()).unwrap(),
+            EskiKontrol::SaatCevap {
+                izleyici_ms: SES_SOR,
+                host_ms: if cfg!(windows) { SES_VAR } else { 0 },
+            }
+        );
+        assert_eq!(SURUM, 8);
+    }
+
+    #[test]
+    fn ses_sozlesmesi_ve_eski_indeksler() {
+        for g in [Girdi::SesAc, Girdi::Ses(vec![0; 640]), Girdi::SesKapat] {
+            let m = Kontrol::Girdi(g);
+            assert_eq!(
+                bincode::deserialize::<Kontrol>(&bincode::serialize(&m).unwrap()).unwrap(),
+                m
+            );
+        }
+        assert_eq!(
+            bincode::serialize(&Girdi::Metin("".into())).unwrap()[..4],
+            4u32.to_le_bytes()
+        );
+        assert_eq!(
+            bincode::serialize(&Girdi::SesAc).unwrap(),
+            6u32.to_le_bytes()
+        );
+        assert_eq!(
+            bincode::serialize(&Kontrol::TerminalListesi).unwrap(),
+            19u32.to_le_bytes()
+        );
+        assert_eq!(
+            &bincode::serialize(&Girdi::Ses(vec![])).unwrap()[..4],
+            &7u32.to_le_bytes()
+        );
+        assert_eq!(bincode::serialize(&Girdi::SesKapat).unwrap(), 8u32.to_le_bytes());
+    }
 
     #[test]
     fn terminal_mesajlari_gidis_donus() {

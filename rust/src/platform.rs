@@ -213,6 +213,7 @@ pub mod masaustu {
     pub struct EnigoEnjektor {
         e: Enigo,
         boyut: (i32, i32),
+        mikrofon: crate::sanal_mikrofon::Mikrofon,
         #[cfg(windows)]
         numpad_enter_basili: bool,
     }
@@ -224,6 +225,7 @@ pub mod masaustu {
             Ok(Self {
                 e,
                 boyut,
+                mikrofon: Default::default(),
                 #[cfg(windows)]
                 numpad_enter_basili: false,
             })
@@ -531,6 +533,7 @@ pub mod masaustu {
                     }
                 }
                 Girdi::Kol(_) => {}
+                Girdi::SesAc | Girdi::Ses(_) | Girdi::SesKapat => self.mikrofon.uygula(g)?,
             }
             Ok(())
         }

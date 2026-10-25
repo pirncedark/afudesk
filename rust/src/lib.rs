@@ -22,6 +22,7 @@ pub mod platform;
 pub mod terminal;
 pub mod protokol;
 pub mod sanal_kol;
+pub mod sanal_mikrofon;
 pub mod zaman;
 
 #[cfg(test)]

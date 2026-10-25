@@ -31,6 +31,24 @@ pub const BAGLANMA_SURESI: Duration = Duration::from_secs(20);
 /// (20 sn) fark edip `host::DEVAM_SURESI` (60 sn) bekler; bu ikisini kapsar.
 pub const YENIDEN_SURESI: Duration = Duration::from_secs(90);
 
+/// Ses yoklaması saat eşitlemesini değiştirmez; geç yanıt ses izni vermez.
+pub(crate) fn saat_cevabini_isle(
+    izleyici_ms: u64,
+    host_ms: u64,
+    alim_ms: u64,
+    ses_izinli: bool,
+    ses_yetenegi: &AtomicBool,
+    saat_farki: &AtomicI64,
+    saat_esitlendi: &AtomicBool,
+) {
+    if izleyici_ms == protokol::SES_SOR {
+        ses_yetenegi.store(ses_izinli && host_ms == protokol::SES_VAR, Ordering::SeqCst);
+        return;
+    }
+    saat_farki.store(zaman::saat_farki(izleyici_ms, host_ms, alim_ms), Ordering::Relaxed);
+    saat_esitlendi.store(true, Ordering::Relaxed);
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum IzleyiciOlay {
     /// Bağlandı, karşı tarafın onayı bekleniyor.
@@ -94,6 +112,7 @@ pub struct Izleyici {
     terminal: mpsc::Sender<(u64, Kontrol)>,
     terminal_nesli: Arc<AtomicU64>,
     terminal_hazir: Arc<AtomicBool>,
+    ses_yetenegi: Arc<AtomicBool>,
     /// Yeniden bağlanınca değişir.
     baglanti: Arc<Mutex<Baglanti>>,
     kapatildi: Arc<AtomicBool>,
@@ -104,12 +123,17 @@ pub struct Izleyici {
 }
 
 impl Izleyici {
+    /// FFI bu değeri okur; her bağlantıda ses yoklaması yanıtlanana kadar false.
+    pub fn ses_destegi(&self) -> bool {
+        self.ses_yetenegi.load(Ordering::SeqCst)
+    }
     fn simdiki(&self) -> Baglanti {
         self.baglanti.lock().expect("kilit").clone()
     }
 
     /// Girdi kuyruğu doluysa (yavaş ağ) fare hareketleri düşürülür, diğerleri beklenir.
     pub async fn gonder(&self, g: Girdi) {
+        if !protokol::ses_gonderilebilir(self.ses_destegi(), &g) { return; }
         if matches!(g, Girdi::FareKonum { .. }) {
             let _ = self.girdi.try_send(g);
         } else {
@@ -357,6 +381,7 @@ async fn oturum_ac(
     let (terminal, terminal_rx) = mpsc::channel(16);
     let terminal_nesli = Arc::new(AtomicU64::new(0));
     let terminal_hazir = Arc::new(AtomicBool::new(false));
+    let ses_yetenegi = Arc::new(AtomicBool::new(false));
     let _ = olay_tx
         .send(IzleyiciOlay::OnayBekleniyor {
             karsi_ad: karsi_ad.to_owned(),
@@ -391,6 +416,7 @@ async fn oturum_ac(
         terminal: terminal_rx,
         terminal_nesli: terminal_nesli.clone(),
         terminal_hazir: terminal_hazir.clone(),
+        ses_yetenegi: ses_yetenegi.clone(),
         pano: PanoDurumu {
             kaynak: pano,
             es: None,
@@ -409,6 +435,7 @@ async fn oturum_ac(
         terminal,
         terminal_nesli,
         terminal_hazir,
+        ses_yetenegi,
         baglanti,
         kapatildi,
         yeniden_iste,
@@ -445,6 +472,7 @@ struct Gozetmen {
     terminal: mpsc::Receiver<(u64, Kontrol)>,
     terminal_nesli: Arc<AtomicU64>,
     terminal_hazir: Arc<AtomicBool>,
+    ses_yetenegi: Arc<AtomicBool>,
     pano: PanoDurumu,
     saat_farki: Arc<AtomicI64>,
     saat_esitlendi: Arc<AtomicBool>,
@@ -467,6 +495,7 @@ impl Gozetmen {
         let mut jeton: Option<String> = None;
         let sebep = loop {
             let sebep = self.oturum(&c, &mut w, r, &mut jeton).await;
+            self.ses_yetenegi.store(false, Ordering::SeqCst);
             terminal_oturumunu_sifirla(
                 &self.terminal_nesli,
                 &self.terminal_hazir,
@@ -592,6 +621,12 @@ impl Gozetmen {
             Err(_) => return "Karşı taraf yanıt vermedi.".into(),
             _ => return "Bağlantı koptu.".into(),
         };
+        self.ses_yetenegi.store(false, Ordering::SeqCst);
+        // Yoklama ve yanıtı mevcut saat mesajlarını kullanır.
+        let ses_yoklama = std::time::Instant::now();
+        if protokol::yaz(w, &Kontrol::SaatSor { izleyici_ms: protokol::SES_SOR }).await.is_err() {
+            return "Bağlantı koptu.".into();
+        }
         let (gelen_tx, mut gelen_rx) = mpsc::channel::<Kontrol>(16);
         let okuyucu = tokio::spawn(async move {
             while let Ok(Some(m)) = protokol::oku::<_, Kontrol>(&mut r).await {
@@ -704,6 +739,7 @@ impl Gozetmen {
                 s = &mut goruntu => break match s { Ok(Err(e)) => format!("Görüntü akışı kesildi: {e}"), _ => KAPANDI.into() },
                 g = self.girdi.recv() => match g {
                     Some(g) => {
+                        if !protokol::ses_gonderilebilir(self.ses_yetenegi.load(Ordering::SeqCst), &g) { continue; }
                         if let Girdi::Kol(k) = &g {
                             if !izinler.oyun_kolu { continue; }
                             son_kol = Some(g.clone());
@@ -749,9 +785,11 @@ impl Gozetmen {
                         }
                     }
                     Some(Kontrol::SaatCevap { izleyici_ms, host_ms }) => {
-                        let alim_ms = unix_ms();
-                        self.saat_farki.store(zaman::saat_farki(izleyici_ms, host_ms, alim_ms), Ordering::Relaxed);
-                        self.saat_esitlendi.store(true, Ordering::Relaxed);
+                        saat_cevabini_isle(
+                            izleyici_ms, host_ms, unix_ms(),
+                            izinler.kontrol && ses_yoklama.elapsed() < Duration::from_secs(2),
+                            &self.ses_yetenegi, &self.saat_farki, &self.saat_esitlendi,
+                        );
                     }
                     Some(Kontrol::Pano(metin)) => {
                         if !izinler.pano || metin.is_empty() || !pano::sinir_icinde(&metin) { continue; }
