@@ -270,7 +270,20 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
     sesDestegi: () => widget.motor.sesDestegi,
     sesSurucuYok: () => widget.motor.sesSurucuYok,
     surucuUyarisi: _mikrofonSurucuUyarisi,
+    sesHostEski: () => widget.motor.sesHostEski,
+    hostEskiUyarisi: _mikrofonHostEskiUyarisi,
   );
+
+  void _mikrofonHostEskiUyarisi() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          "PC'deki AfuDesk eski. Güncellemek için PC'de AfuDesk'i aç.",
+        ),
+      ),
+    );
+  }
 
   void _mikrofonSurucuUyarisi() {
     if (!mounted) return;
@@ -297,6 +310,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
       ),
     );
   }
+
   bool _konusmaModu = false;
   bool _klavyeAcik = false;
   bool _oyunKoluIzni = false, _kolAcik = false;

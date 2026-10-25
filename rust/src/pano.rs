@@ -14,6 +14,7 @@ pub trait Pano: Send {
     /// Panodaki metin; boşsa ya da metin değilse `None`.
     fn oku(&mut self) -> Option<String>;
     fn yaz(&mut self, metin: &str) -> Result<()>;
+    fn resim_yaz(&mut self, genislik: usize, yukseklik: usize, rgba: Vec<u8>) -> Result<()>;
 }
 
 /// Satır sonu farkları (Windows panosu `\r\n` yazabilir) değişiklik sayılmaz.
@@ -73,6 +74,54 @@ impl Esitleyici {
         self.son = Some(metin.to_owned());
         Ok(())
     }
+
+    /// Dosya izniyle alınmış görseli aynı oturumun panosuna koyar.
+    /// Boyut sınırı veya desteklenmeyen tür için dosya korunur ve `false` döner.
+    pub fn gelen_gorsel(&mut self, yol: &std::path::Path) -> Result<bool> {
+        use std::io::{Read, Seek};
+        let mut f = std::fs::File::open(yol)?;
+        if !crate::dosya::gorsel_pano_sinirinda(f.metadata()?.len()) {
+            return Ok(false);
+        }
+        let mut baslik = [0; 12];
+        let n = f.read(&mut baslik)?;
+        let Some(bicim) = crate::dosya::gorsel_bicimi(yol, &baslik[..n]) else {
+            return Ok(false);
+        };
+        f.rewind()?;
+        // Okuma sırasında büyüyen dosya da sınırsız belleğe alınmaz.
+        let mut veri = Vec::new();
+        f.by_ref()
+            .take(crate::dosya::AZAMI_GORSEL_PANO + 1)
+            .read_to_end(&mut veri)?;
+        if !crate::dosya::gorsel_pano_sinirinda(veri.len() as u64) {
+            return Ok(false);
+        }
+        let (genislik, yukseklik) =
+            image::ImageReader::with_format(std::io::Cursor::new(&veri), bicim)
+                .into_dimensions()?;
+        anyhow::ensure!(
+            genislik <= 16384
+                && yukseklik <= 16384
+                && u64::from(genislik) * u64::from(yukseklik) * 4
+                    <= crate::dosya::AZAMI_GORSEL_PANO * 16,
+            "Görselin çözülmüş boyutu çok büyük."
+        );
+        let mut okuyucu = image::ImageReader::with_format(std::io::Cursor::new(veri), bicim);
+        let mut sinir = image::Limits::default();
+        sinir.max_image_width = Some(16384);
+        sinir.max_image_height = Some(16384);
+        sinir.max_alloc = Some(crate::dosya::AZAMI_GORSEL_PANO * 16);
+        okuyucu.limits(sinir);
+        let resim = okuyucu.decode()?.to_rgba8();
+        self.pano.resim_yaz(
+            resim.width() as usize,
+            resim.height() as usize,
+            resim.into_raw(),
+        )?;
+        self.son = self.pano.oku();
+        Ok(true)
+    }
 }
 
 /// Masaüstü panosu (arboard).
@@ -95,6 +144,14 @@ impl Pano for ArboardPano {
         self.0.set_text(metin)?;
         Ok(())
     }
+    fn resim_yaz(&mut self, genislik: usize, yukseklik: usize, rgba: Vec<u8>) -> Result<()> {
+        self.0.set_image(arboard::ImageData {
+            width: genislik,
+            height: yukseklik,
+            bytes: std::borrow::Cow::Owned(rgba),
+        })?;
+        Ok(())
+    }
 }
 
 /// Testler için bellekte pano. Klonlar aynı hücreyi paylaşır; test içeriği dışarıdan
@@ -103,9 +160,13 @@ impl Pano for ArboardPano {
 pub struct SahtePano {
     icerik: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     yazilanlar: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+    resimler: std::sync::Arc<std::sync::Mutex<Vec<(usize, usize, Vec<u8>)>>>,
 }
 
 impl SahtePano {
+    pub fn resimler(&self) -> Vec<(usize, usize, Vec<u8>)> {
+        self.resimler.lock().unwrap().clone()
+    }
     /// Kullanıcı panoya bir şey kopyalamış gibi (yazım sayılmaz).
     pub fn ayarla(&self, metin: &str) {
         *self.icerik.lock().unwrap() = Some(metin.to_owned());
@@ -128,11 +189,76 @@ impl Pano for SahtePano {
         self.ayarla(metin);
         Ok(())
     }
+    fn resim_yaz(&mut self, genislik: usize, yukseklik: usize, rgba: Vec<u8>) -> Result<()> {
+        self.resimler
+            .lock()
+            .unwrap()
+            .push((genislik, yukseklik, rgba));
+        *self.icerik.lock().unwrap() = None;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod testler {
     use super::*;
+
+    fn png() -> Vec<u8> {
+        let mut veri = std::io::Cursor::new(Vec::new());
+        image::RgbaImage::from_pixel(2, 1, image::Rgba([12, 34, 56, 255]))
+            .write_to(&mut veri, image::ImageFormat::Png)
+            .unwrap();
+        veri.into_inner()
+    }
+
+    #[test]
+    fn gelen_gorsel_sahte_panoya_rgba_yazar() {
+        let k = tempfile::tempdir().unwrap();
+        let yol = k.path().join("ekran.PNG");
+        std::fs::write(&yol, png()).unwrap();
+        let p = SahtePano::default();
+        let mut e = Esitleyici::new(Box::new(p.clone()));
+        assert!(e.gelen_gorsel(&yol).unwrap());
+        assert_eq!(
+            p.resimler(),
+            vec![(2, 1, vec![12, 34, 56, 255, 12, 34, 56, 255])]
+        );
+        assert_eq!(e.yokla(), None);
+    }
+
+    #[test]
+    fn buyuk_gorsel_kayitli_kalir_panoya_yazilmaz() {
+        let k = tempfile::tempdir().unwrap();
+        let yol = k.path().join("buyuk.png");
+        std::fs::write(&yol, png()).unwrap();
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&yol)
+            .unwrap()
+            .set_len(crate::dosya::AZAMI_GORSEL_PANO + 1)
+            .unwrap();
+        let p = SahtePano::default();
+        let mut e = Esitleyici::new(Box::new(p.clone()));
+        assert!(!e.gelen_gorsel(&yol).unwrap());
+        assert!(p.resimler().is_empty());
+        assert!(yol.exists());
+        assert!(crate::dosya::gorsel_pano_sinirinda(
+            crate::dosya::AZAMI_GORSEL_PANO
+        ));
+    }
+
+    #[test]
+    fn sahte_uzanti_ve_bozuk_gorsel_panoya_yazilmaz() {
+        let k = tempfile::tempdir().unwrap();
+        let yol = k.path().join("sahte.png");
+        let p = SahtePano::default();
+        let mut e = Esitleyici::new(Box::new(p.clone()));
+        std::fs::write(&yol, b"bu bir resim degil").unwrap();
+        assert!(!e.gelen_gorsel(&yol).unwrap());
+        std::fs::write(&yol, b"\x89PNG\r\n\x1a\n").unwrap();
+        assert!(e.gelen_gorsel(&yol).is_err());
+        assert!(p.resimler().is_empty());
+    }
 
     fn s(m: &str) -> Option<String> {
         Some(m.to_owned())

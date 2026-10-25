@@ -27,3 +27,8 @@ pub mod zaman;
 
 #[cfg(test)]
 mod uctan_uca;
+
+/// Bridge access to the connected PC microphone capability status.
+pub fn izleyici_ses_host_eski(izleyici: &izleyici::Izleyici) -> bool {
+    izleyici.ses_host_eski()
+}

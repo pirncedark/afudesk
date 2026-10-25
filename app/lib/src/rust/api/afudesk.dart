@@ -118,6 +118,9 @@ bool izleyiciSesDestegi() =>
 bool izleyiciSesSurucuYok() =>
     RustLib.instance.api.crateApiAfudeskIzleyiciSesSurucuYok();
 
+bool izleyiciSesHostEski() =>
+    RustLib.instance.api.crateApiAfudeskIzleyiciSesHostEski();
+
 Future<void> izleyiciGirdi({required GirdiOlayi g}) =>
     RustLib.instance.api.crateApiAfudeskIzleyiciGirdi(g: g);
 

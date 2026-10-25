@@ -134,6 +134,7 @@ class Girdi {
 abstract class Motor {
   bool get sesDestegi;
   bool get sesSurucuYok;
+  bool get sesHostEski;
   String cihazAdi();
 
   /// Bu cihaz ekranını paylaşabilir mi (şimdilik yalnız masaüstü).
@@ -207,6 +208,8 @@ class RustMotor implements Motor {
   bool get sesDestegi => Platform.isAndroid && rust.izleyiciSesDestegi();
   @override
   bool get sesSurucuYok => Platform.isAndroid && rust.izleyiciSesSurucuYok();
+  @override
+  bool get sesHostEski => Platform.isAndroid && rust.izleyiciSesHostEski();
   @override
   bool get baglantiVerilebilir =>
       Platform.isWindows || Platform.isLinux || Platform.isMacOS;

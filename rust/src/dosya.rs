@@ -23,6 +23,32 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 /// Tek parçanın azami boyu.
 pub const PARCA: usize = 256 * 1024;
+/// Sıkıştırılmış görsel 20 MiB üzerindeyse dosya saklanır, panoya konmaz.
+pub const AZAMI_GORSEL_PANO: u64 = 20 * 1024 * 1024;
+
+pub fn gorsel_pano_sinirinda(boyut: u64) -> bool {
+    boyut <= AZAMI_GORSEL_PANO
+}
+
+/// Uzantı ve dosya imzası aynı desteklenen görsel türünü belirtmeli.
+pub fn gorsel_bicimi(yol: &Path, baslik: &[u8]) -> Option<image::ImageFormat> {
+    let beklenen = match yol.extension()?.to_str()?.to_ascii_lowercase().as_str() {
+        "png" => image::ImageFormat::Png,
+        "jpg" | "jpeg" => image::ImageFormat::Jpeg,
+        "webp" => image::ImageFormat::WebP,
+        _ => return None,
+    };
+    (image::guess_format(baslik).ok()? == beklenen).then_some(beklenen)
+}
+
+/// Windows'un yönlendirilmiş/OneDrive masaüstü yolunu da dikkate alır.
+pub fn gorsel_klasoru() -> PathBuf {
+    dirs::desktop_dir()
+        .or_else(|| std::env::var_os("USERPROFILE").map(|h| PathBuf::from(h).join("Desktop")))
+        .or_else(|| dirs::home_dir().map(|h| h.join("Desktop")))
+        .unwrap_or_else(std::env::temp_dir)
+        .join("AfuDesk Gelen")
+}
 /// Yarım dosyaların uzantısı: `<kimlik-hex>.afudesk-parca`.
 pub const YARIM_UZANTI: &str = "afudesk-parca";
 pub const IZIN_YOK: &str = "Karşı taraf dosya almaya izin vermedi.";
@@ -201,6 +227,7 @@ impl Drop for SurenKaydi<'_> {
 }
 
 /// Kullanıcıya gösterilecek hata (akışa `DosyaHata` olarak yazılır).
+#[derive(Debug)]
 struct Ret(String);
 
 impl<E: std::fmt::Display> From<E> for Ret {
@@ -315,10 +342,36 @@ async fn al_ic(
         let _ = tokio::fs::remove_file(&yarim).await;
         return Err(ret(BOZUK));
     }
-    let klasor = alici.klasor.clone();
-    let son_ad = cakismasiz_ad(&ad, |a| klasor.join(a).exists());
-    let hedef = alici.klasor.join(&son_ad);
-    tokio::fs::rename(&yarim, &hedef).await?;
+    tamamla(&yarim, &ad, &alici.klasor, &gorsel_klasoru()).await
+}
+
+/// Yalnız izin kontrolü ve SHA-256 doğrulaması tamamlandıktan sonra çağrılır.
+async fn tamamla(
+    yarim: &Path,
+    ad: &str,
+    normal: &Path,
+    gorseller: &Path,
+) -> Result<(String, PathBuf), Ret> {
+    let mut f = tokio::fs::File::open(yarim).await?;
+    let mut baslik = [0; 12];
+    let n = f.read(&mut baslik).await?;
+    drop(f);
+    let klasor = if gorsel_bicimi(Path::new(ad), &baslik[..n]).is_some() {
+        gorseller
+    } else {
+        normal
+    };
+    tokio::fs::create_dir_all(klasor).await?;
+    let son_ad = cakismasiz_ad(ad, |a| klasor.join(a).exists());
+    let hedef = klasor.join(&son_ad);
+    if let Err(e) = tokio::fs::rename(yarim, &hedef).await {
+        // İndirilenler ile yönlendirilmiş Masaüstü farklı diskte olabilir.
+        if e.kind() != std::io::ErrorKind::CrossesDevices && e.raw_os_error() != Some(17) {
+            return Err(e.into());
+        }
+        tokio::fs::copy(yarim, &hedef).await?;
+        tokio::fs::remove_file(yarim).await?;
+    }
     Ok((son_ad, hedef))
 }
 
@@ -415,6 +468,51 @@ pub(crate) async fn gonder(
 #[cfg(test)]
 mod testler {
     use super::*;
+
+    #[tokio::test]
+    async fn gorsel_afudesk_gelen_klasorune_kaydedilir() {
+        let k = tempfile::tempdir().unwrap();
+        let normal = k.path().join("Downloads");
+        let gelen = k.path().join("Desktop").join("AfuDesk Gelen");
+        let yarim = k.path().join("aktarim.afudesk-parca");
+        std::fs::write(&yarim, b"\x89PNG\r\n\x1a\n").unwrap();
+        let (_, yol) = tamamla(&yarim, "ekran.png", &normal, &gelen).await.unwrap();
+        assert_eq!(yol, gelen.join("ekran.png"));
+        assert!(yol.exists());
+        assert!(!yarim.exists());
+        assert!(gorsel_klasoru().ends_with("AfuDesk Gelen"));
+        std::fs::write(&yarim, b"\x89PNG\r\n\x1a\n").unwrap();
+        let (_, yol2) = tamamla(&yarim, "ekran.png", &normal, &gelen).await.unwrap();
+        assert_eq!(yol2, gelen.join("ekran (1).png"));
+        std::fs::write(&yarim, b"metin").unwrap();
+        let (_, yol3) = tamamla(&yarim, "sahte.png", &normal, &gelen).await.unwrap();
+        assert_eq!(yol3, normal.join("sahte.png"));
+    }
+
+    #[test]
+    fn gorsel_uzanti_ve_baslik_eslesmelidir() {
+        assert_eq!(
+            gorsel_bicimi(Path::new("a.PNG"), b"\x89PNG\r\n\x1a\n"),
+            Some(image::ImageFormat::Png)
+        );
+        assert_eq!(
+            gorsel_bicimi(Path::new("a.jpeg"), b"\xff\xd8\xff"),
+            Some(image::ImageFormat::Jpeg)
+        );
+        assert_eq!(
+            gorsel_bicimi(Path::new("a.jpg"), b"\xff\xd8\xff"),
+            Some(image::ImageFormat::Jpeg)
+        );
+        assert_eq!(
+            gorsel_bicimi(Path::new("a.webp"), b"RIFF1234WEBP"),
+            Some(image::ImageFormat::WebP)
+        );
+        assert_eq!(gorsel_bicimi(Path::new("a.png"), b"\xff\xd8\xff"), None);
+        assert_eq!(
+            gorsel_bicimi(Path::new("a.txt"), b"\x89PNG\r\n\x1a\n"),
+            None
+        );
+    }
 
     #[test]
     fn guvenli_ad_temizler() {

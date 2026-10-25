@@ -282,7 +282,7 @@ mod testler {
                 let esitlendi = AtomicBool::new(esit);
                 crate::izleyici::saat_cevabini_isle(
                     SES_SOR, host_ms, 1720000000050, izinli,
-                    &ses, &surucu_yok, &fark, &esitlendi,
+                    &ses, &surucu_yok, &AtomicBool::new(false), &fark, &esitlendi,
                 );
                 assert_eq!(ses.load(Ordering::SeqCst), beklenen_ses);
                 assert_eq!(surucu_yok.load(Ordering::SeqCst), beklenen_yok);
@@ -298,7 +298,7 @@ mod testler {
         let ses = AtomicBool::new(true);
         let fark = AtomicI64::new(-42);
         let esitlendi = AtomicBool::new(false);
-        crate::izleyici::saat_cevabini_isle(100, 120, 110, false, &ses, &surucu_yok, &fark, &esitlendi);
+        crate::izleyici::saat_cevabini_isle(100, 120, 110, false, &ses, &surucu_yok, &AtomicBool::new(false), &fark, &esitlendi);
         assert!(ses.load(Ordering::SeqCst));
         assert_eq!(fark.load(Ordering::Relaxed), 15);
         assert!(esitlendi.load(Ordering::Relaxed));
@@ -328,7 +328,7 @@ mod testler {
         let fark = AtomicI64::new(42);
         let esitlendi = AtomicBool::new(false);
         crate::izleyici::saat_cevabini_isle(
-            izleyici_ms, host_ms, 150, true, &ses, &surucu_yok, &fark, &esitlendi,
+            izleyici_ms, host_ms, 150, true, &ses, &surucu_yok, &AtomicBool::new(false), &fark, &esitlendi,
         );
         assert_eq!(ses.load(Ordering::SeqCst), cfg!(windows));
         assert_eq!(fark.load(Ordering::Relaxed), 42);
@@ -471,7 +471,7 @@ mod testler {
         let fark = AtomicI64::new(42);
         let esitlendi = AtomicBool::new(false);
         crate::izleyici::saat_cevabini_isle(
-            izleyici_ms, host_ms, 150, true, &ses, &surucu_yok, &fark, &esitlendi,
+            izleyici_ms, host_ms, 150, true, &ses, &surucu_yok, &AtomicBool::new(false), &fark, &esitlendi,
         );
         assert!(!ses.load(Ordering::SeqCst));
         let mut gonderilen = 0;

@@ -9,6 +9,8 @@ class SahteMotor implements Motor {
   bool sesDestegi = false;
   @override
   bool sesSurucuYok = false;
+  @override
+  bool sesHostEski = false;
   final host = StreamController<HostOlay>.broadcast(sync: true);
   final izleyici = StreamController<IzleyiciOlay>.broadcast(sync: true);
   final cagrilar = <String>[];
