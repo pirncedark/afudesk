@@ -4,6 +4,7 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `host_adresleri`, `host_dto`, `host_komut`, `izleyici_pompala`, `kayitlar`, `rt`, `terminal_komutu`, `veri`
@@ -109,6 +110,14 @@ void izleyiciCanlandir() =>
 void izleyiciYenidenBaglan() =>
     RustLib.instance.api.crateApiAfudeskIzleyiciYenidenBaglan();
 
+/// Bağlı host telefon mikrofonunu kabul edebilir mi?
+bool izleyiciSesDestegi() =>
+    RustLib.instance.api.crateApiAfudeskIzleyiciSesDestegi();
+
+/// Windows hostta telefon mikrofonu sürücüsü eksik mi?
+bool izleyiciSesSurucuYok() =>
+    RustLib.instance.api.crateApiAfudeskIzleyiciSesSurucuYok();
+
 Future<void> izleyiciGirdi({required GirdiOlayi g}) =>
     RustLib.instance.api.crateApiAfudeskIzleyiciGirdi(g: g);
 
@@ -168,6 +177,9 @@ class GirdiOlayi {
   final int dy;
   final String metin;
 
+  /// PCM16 mono 16 kHz; her ses parçası 640 bayt.
+  final Uint8List veri;
+
   const GirdiOlayi({
     required this.tur,
     required this.x,
@@ -178,6 +190,7 @@ class GirdiOlayi {
     required this.dx,
     required this.dy,
     required this.metin,
+    required this.veri,
   });
 
   static Future<GirdiOlayi> default_() =>
@@ -193,7 +206,8 @@ class GirdiOlayi {
       basili.hashCode ^
       dx.hashCode ^
       dy.hashCode ^
-      metin.hashCode;
+      metin.hashCode ^
+      veri.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -208,7 +222,8 @@ class GirdiOlayi {
           basili == other.basili &&
           dx == other.dx &&
           dy == other.dy &&
-          metin == other.metin;
+          metin == other.metin &&
+          veri == other.veri;
 }
 
 /// Host olayı. `tur`: hazir | istek | baglandi | koptu | hata | dosya | uyari | yeniden.

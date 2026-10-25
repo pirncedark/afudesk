@@ -5,6 +5,10 @@ import 'package:afudesk/oyun_kolu.dart';
 
 /// Testler için motor: olayları testin kendisi basar, çağrıları kaydeder.
 class SahteMotor implements Motor {
+  @override
+  bool sesDestegi = false;
+  @override
+  bool sesSurucuYok = false;
   final host = StreamController<HostOlay>.broadcast(sync: true);
   final izleyici = StreamController<IzleyiciOlay>.broadcast(sync: true);
   final cagrilar = <String>[];

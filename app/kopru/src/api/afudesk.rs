@@ -208,6 +208,8 @@ pub struct GirdiOlayi {
     pub dx: i32,
     pub dy: i32,
     pub metin: String,
+    /// PCM16 mono 16 kHz; her ses parçası 640 bayt.
+    pub veri: Vec<u8>,
 }
 
 fn host_dto(o: HostOlay) -> HostOlayi {
@@ -604,6 +606,26 @@ pub fn izleyici_yeniden_baglan() {
     }
 }
 
+/// Bağlı host telefon mikrofonunu kabul edebilir mi?
+#[flutter_rust_bridge::frb(sync)]
+pub fn izleyici_ses_destegi() -> bool {
+    IZLEYICI
+        .lock()
+        .unwrap()
+        .as_ref()
+        .is_some_and(|iz| iz.ses_destegi())
+}
+
+/// Windows hostta telefon mikrofonu sürücüsü eksik mi?
+#[flutter_rust_bridge::frb(sync)]
+pub fn izleyici_ses_surucu_yok() -> bool {
+    IZLEYICI
+        .lock()
+        .unwrap()
+        .as_ref()
+        .is_some_and(|iz| iz.ses_surucu_yok())
+}
+
 pub fn izleyici_girdi(g: GirdiOlayi) {
     let Some(iz) = IZLEYICI.lock().unwrap().clone() else {
         return;
@@ -634,6 +656,9 @@ pub fn izleyici_girdi(g: GirdiOlayi) {
             basili: g.basili,
         },
         "metin" => Girdi::Metin(g.metin),
+        "ses_ac" => Girdi::SesAc,
+        "ses" if g.veri.len() == 640 => Girdi::Ses(g.veri),
+        "ses_kapat" => Girdi::SesKapat,
         _ => return,
     };
     rt().spawn(async move { iz.gonder(girdi).await });

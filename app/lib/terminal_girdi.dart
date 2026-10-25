@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'motor.dart';
+import 'telefon_mikrofonu.dart';
 
 /// IME tamponunu sıfırlamadan, değişen kuyruğu terminalde yeniden yazar.
 /// Terminal imleci son gönderilen metnin sonundadır; ortak son ek de yenilenir.
@@ -22,7 +23,25 @@ List<Girdi> imeGirdileri(String onceki, String simdiki) {
 
 /// Holds Space with terminal key-repeat until the final source releases it.
 class BasKonusGirdisi {
-  BasKonusGirdisi(this.gonder);
+  BasKonusGirdisi(
+    this.gonder, {
+    bool Function()? sesDestegi,
+    bool Function()? sesSurucuYok,
+    this.surucuUyarisi,
+    TelefonMikrofonu? mikrofon,
+  }) : sesDestegi = sesDestegi ?? (() => false),
+       sesSurucuYok = sesSurucuYok ?? (() => false),
+       mikrofon = mikrofon ?? AndroidTelefonMikrofonu();
+  final bool Function() sesDestegi;
+  final bool Function() sesSurucuYok;
+  final void Function()? surucuUyarisi;
+  bool _surucuUyarildi = false;
+  final TelefonMikrofonu mikrofon;
+  StreamSubscription? _sesAkisi;
+  Future<void> _mikIslem = Future.value();
+  Timer? _sesBekle;
+  int _nesil = 0;
+  bool _sesAcik = false, _tusBasili = false;
   final void Function(List<Girdi>) gonder;
   final _kaynaklar = <String>{};
   Timer? _bekle;
@@ -31,21 +50,89 @@ class BasKonusGirdisi {
 
   void _tut(String kaynak) {
     if (!_kaynaklar.add(kaynak)) return;
-    if (_kaynaklar.length == 1) {
-      gonder([const Girdi('tus', ad: 'Space', basili: true)]);
-      // Terminal hold detection needs repeat DOWN events, not repeated taps.
-      _tekrarBaslangic = Timer(const Duration(milliseconds: 500), () {
-        _tekrarla();
-        _tekrarSaat = Timer.periodic(
-          const Duration(milliseconds: 50),
-          (_) => _tekrarla(),
-        );
-      });
+    if (_kaynaklar.length != 1) return;
+    final nesil = ++_nesil;
+    if (sesDestegi() && !sesSurucuYok()) {
+      _sesHazirla(nesil);
+    } else {
+      _yalnizSpace();
     }
   }
 
+  void _yalnizSpace() {
+    _spaceIndir();
+    if (sesSurucuYok() && !_surucuUyarildi) {
+      _surucuUyarildi = true;
+      surucuUyarisi?.call();
+    }
+  }
+
+  Future<void> _sesHazirla(int nesil) async {
+    var izin = false;
+    try {
+      izin = await mikrofon.izinIste();
+    } catch (_) {}
+    if (nesil != _nesil || _kaynaklar.isEmpty) return;
+    if (!izin || !sesDestegi() || sesSurucuYok()) {
+      _yalnizSpace();
+      return;
+    }
+    _sesAcik = true;
+    gonder([const Girdi('ses_ac')]);
+    _sesBekle = Timer(const Duration(milliseconds: 150), () {
+      if (nesil != _nesil || _kaynaklar.isEmpty) return;
+      _spaceIndir();
+      _sesAkisi = mikrofon.parcalar.listen((veri) {
+        if (nesil == _nesil && _sesAcik && _tusBasili && veri.length == 640) {
+          gonder([Girdi('ses', veri: veri)]);
+        }
+      }, onError: (Object _) => _sesiKapat());
+      _mikIslem = _mikIslem
+          .then((_) async {
+            if (nesil == _nesil && _sesAcik) await mikrofon.baslat();
+          })
+          .catchError((Object _) {
+            if (nesil == _nesil) _sesiKapat();
+          });
+    });
+  }
+
+  void _spaceIndir() {
+    _tusBasili = true;
+    gonder([const Girdi('tus', ad: 'Space', basili: true)]);
+    _tekrarBaslangic = Timer(const Duration(milliseconds: 500), () {
+      _tekrarla();
+      _tekrarSaat = Timer.periodic(
+        const Duration(milliseconds: 50),
+        (_) => _tekrarla(),
+      );
+    });
+  }
+
+  void _sesiKapat() {
+    _sesBekle?.cancel();
+    _sesAkisi?.cancel();
+    _sesAkisi = null;
+    if (!_sesAcik) return;
+    _sesAcik = false;
+    gonder([const Girdi('ses_kapat')]);
+    _mikIslem = _mikIslem
+        .then((_) => mikrofon.durdur())
+        .catchError((Object _) {});
+  }
+
+  void _bitir() {
+    _nesil++;
+    _tekrariDurdur();
+    if (_tusBasili) {
+      _tusBasili = false;
+      gonder([const Girdi('tus', ad: 'Space', basili: false)]);
+    }
+    _sesiKapat();
+  }
+
   void _tekrarla() {
-    if (_kaynaklar.isNotEmpty) {
+    if (_kaynaklar.isNotEmpty && _tusBasili) {
       gonder([const Girdi('tus', ad: 'Space', basili: true)]);
     }
   }
@@ -57,8 +144,7 @@ class BasKonusGirdisi {
 
   void _birak(String kaynak) {
     if (_kaynaklar.remove(kaynak) && _kaynaklar.isEmpty) {
-      _tekrariDurdur();
-      gonder([const Girdi('tus', ad: 'Space', basili: false)]);
+      _bitir();
     }
   }
 
@@ -94,7 +180,7 @@ class BasKonusGirdisi {
     _space = false;
     if (_kaynaklar.isNotEmpty) {
       _kaynaklar.clear();
-      gonder([const Girdi('tus', ad: 'Space', basili: false)]);
+      _bitir();
     }
   }
 }

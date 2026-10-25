@@ -113,6 +113,7 @@ class Girdi {
   final bool basili;
   final int dx, dy;
   final String metin;
+  final Uint8List? veri;
   const Girdi(
     this.tur, {
     this.x = 0,
@@ -123,6 +124,7 @@ class Girdi {
     this.dx = 0,
     this.dy = 0,
     this.metin = '',
+    this.veri,
   });
   @override
   String toString() =>
@@ -130,6 +132,8 @@ class Girdi {
 }
 
 abstract class Motor {
+  bool get sesDestegi;
+  bool get sesSurucuYok;
   String cihazAdi();
 
   /// Bu cihaz ekranını paylaşabilir mi (şimdilik yalnız masaüstü).
@@ -199,6 +203,10 @@ abstract class Motor {
 
 /// Gerçek motor: Rust çekirdeği (flutter_rust_bridge).
 class RustMotor implements Motor {
+  @override
+  bool get sesDestegi => Platform.isAndroid && rust.izleyiciSesDestegi();
+  @override
+  bool get sesSurucuYok => Platform.isAndroid && rust.izleyiciSesSurucuYok();
   @override
   bool get baglantiVerilebilir =>
       Platform.isWindows || Platform.isLinux || Platform.isMacOS;
@@ -380,6 +388,7 @@ class RustMotor implements Motor {
         dx: g.dx,
         dy: g.dy,
         metin: g.metin,
+        veri: g.veri ?? Uint8List(0),
       ),
     );
   }

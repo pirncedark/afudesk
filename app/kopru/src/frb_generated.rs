@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1546542127;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1149107990;
 
 // Section: executor
 
@@ -912,6 +912,64 @@ fn wire__crate__api__afudesk__izleyici_olayi_default_impl(
         },
     )
 }
+fn wire__crate__api__afudesk__izleyici_ses_destegi_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "izleyici_ses_destegi",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Ok::<_, ()>(crate::api::afudesk::izleyici_ses_destegi())?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__afudesk__izleyici_ses_surucu_yok_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "izleyici_ses_surucu_yok",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Ok::<_, ()>(crate::api::afudesk::izleyici_ses_surucu_yok())?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__afudesk__izleyici_yeniden_baglan_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -1226,6 +1284,7 @@ impl SseDecode for crate::api::afudesk::GirdiOlayi {
         let mut var_dx = <i32>::sse_decode(deserializer);
         let mut var_dy = <i32>::sse_decode(deserializer);
         let mut var_metin = <String>::sse_decode(deserializer);
+        let mut var_veri = <Vec<u8>>::sse_decode(deserializer);
         return crate::api::afudesk::GirdiOlayi {
             tur: var_tur,
             x: var_x,
@@ -1236,6 +1295,7 @@ impl SseDecode for crate::api::afudesk::GirdiOlayi {
             dx: var_dx,
             dy: var_dy,
             metin: var_metin,
+            veri: var_veri,
         };
     }
 }
@@ -1474,7 +1534,7 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        27 => {
+        29 => {
             wire__crate__api__afudesk__kayitli_cihaz_default_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),
@@ -1495,13 +1555,15 @@ fn pde_ffi_dispatcher_sync_impl(
         7 => wire__crate__api__afudesk__guvenilen_yeniden_adla_impl(ptr, rust_vec_len, data_len),
         12 => wire__crate__api__afudesk__host_kod_ac_impl(ptr, rust_vec_len, data_len),
         17 => wire__crate__api__afudesk__izleyici_canlandir_impl(ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__afudesk__izleyici_yeniden_baglan_impl(ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__afudesk__kare_cizildi_impl(ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__afudesk__kayitli_cihazlar_impl(ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__afudesk__kayitli_unut_impl(ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__afudesk__kayitli_yeniden_adla_impl(ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__afudesk__surum_impl(ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__afudesk__veri_klasoru_ayarla_impl(ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__afudesk__izleyici_ses_destegi_impl(ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__afudesk__izleyici_ses_surucu_yok_impl(ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__afudesk__izleyici_yeniden_baglan_impl(ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__afudesk__kare_cizildi_impl(ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__afudesk__kayitli_cihazlar_impl(ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__afudesk__kayitli_unut_impl(ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__afudesk__kayitli_yeniden_adla_impl(ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__afudesk__surum_impl(ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__afudesk__veri_klasoru_ayarla_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1521,6 +1583,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::afudesk::GirdiOlayi {
             self.dx.into_into_dart().into_dart(),
             self.dy.into_into_dart().into_dart(),
             self.metin.into_into_dart().into_dart(),
+            self.veri.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -1689,6 +1752,7 @@ impl SseEncode for crate::api::afudesk::GirdiOlayi {
         <i32>::sse_encode(self.dx, serializer);
         <i32>::sse_encode(self.dy, serializer);
         <String>::sse_encode(self.metin, serializer);
+        <Vec<u8>>::sse_encode(self.veri, serializer);
     }
 }
 

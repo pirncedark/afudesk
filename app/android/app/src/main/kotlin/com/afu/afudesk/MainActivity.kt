@@ -14,6 +14,12 @@ import android.view.MotionEvent
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugin.common.EventChannel
+import android.Manifest
+import android.content.pm.PackageManager
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
 
 class MainActivity : FlutterActivity() {
     private lateinit var channel: MethodChannel
@@ -22,9 +28,111 @@ class MainActivity : FlutterActivity() {
     private var kolVibrator: Vibrator? = null
     private var pendingApk: File? = null
     private var googleHesap: GoogleHesap? = null
+    private var mikrofonIzni: MethodChannel.Result? = null
+    private var sesAkisi: EventChannel.EventSink? = null
+    private var kayit: AudioRecord? = null
+    private var sesIsci: Thread? = null
+    @Volatile private var sesCalisiyor = false
+    @Volatile private var sesNesli = 0
+
+    private fun mikrofonDurdur() {
+        sesNesli++
+        sesCalisiyor = false
+        val eski = kayit
+        try { eski?.stop() } catch (_: Exception) { }
+        sesIsci?.join(500)
+        sesIsci = null
+        // Worker releases its own recorder after the blocking read ends.
+        kayit = null
+    }
+
+    private fun mikrofonBaslat() {
+        if (sesCalisiyor) return
+        check(sesAkisi != null)
+        val tampon = maxOf(2560, AudioRecord.getMinBufferSize(16000,
+            AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT))
+        val yeni = AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+            16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, tampon)
+        try {
+            check(yeni.state == AudioRecord.STATE_INITIALIZED)
+            yeni.startRecording()
+            check(yeni.recordingState == AudioRecord.RECORDSTATE_RECORDING)
+        } catch (e: Exception) { yeni.release(); throw e }
+        kayit = yeni
+        sesCalisiyor = true
+        val nesil = ++sesNesli
+        sesIsci = Thread({
+            try {
+                var parca = ByteArray(640)
+                var dolu = 0
+                while (sesCalisiyor && sesNesli == nesil) {
+                    val n = yeni.read(parca, dolu, 640 - dolu)
+                    if (n <= 0) break
+                    dolu += n
+                    if (dolu == 640) {
+                        val hazir = parca
+                        runOnUiThread {
+                            if (sesNesli == nesil && sesCalisiyor) sesAkisi?.success(hazir)
+                        }
+                        parca = ByteArray(640)
+                        dolu = 0
+                    }
+                }
+            } catch (_: Exception) {
+                // Report on the platform thread below, never crash the audio worker.
+            } finally {
+                yeni.release()
+                runOnUiThread {
+                    if (sesNesli == nesil && sesCalisiyor) {
+                        sesCalisiyor = false
+                        sesAkisi?.error("mikrofon", "Mikrofon durdu. Yeniden basılı tut.", null)
+                    }
+                }
+            }
+        }, "AfuDesk-mikrofon").also { it.start() }
+    }
+
+    override fun onRequestPermissionsResult(code: Int, permissions: Array<out String>, grants: IntArray) {
+        super.onRequestPermissionsResult(code, permissions, grants)
+        if (code == 805) {
+            mikrofonIzni?.success(grants.isNotEmpty() && grants[0] == PackageManager.PERMISSION_GRANTED)
+            mikrofonIzni = null
+        }
+    }
+
+    override fun onPause() {
+        mikrofonDurdur()
+        super.onPause()
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, "afudesk/mikrofon/ses")
+            .setStreamHandler(object : EventChannel.StreamHandler {
+                override fun onListen(args: Any?, sink: EventChannel.EventSink) { sesAkisi = sink }
+                override fun onCancel(args: Any?) { mikrofonDurdur(); sesAkisi = null }
+            })
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "afudesk/mikrofon")
+            .setMethodCallHandler { call, result ->
+                try {
+                    when (call.method) {
+                        "izin" -> {
+                            if (Build.VERSION.SDK_INT < 23 || checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                                result.success(true)
+                            } else if (mikrofonIzni != null) result.success(false)
+                            else {
+                                mikrofonIzni = result
+                                requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 805)
+                            }
+                        }
+                        "baslat" -> { mikrofonBaslat(); result.success(null) }
+                        "durdur" -> { mikrofonDurdur(); result.success(null) }
+                        else -> result.notImplemented()
+                    }
+                } catch (_: Exception) {
+                    result.error("mikrofon", "Mikrofon açılamadı. Yeniden basılı tut.", null)
+                }
+            }
         googleHesap = GoogleHesap(this)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "afudesk/google")
             .setMethodCallHandler { call, result -> googleHesap!!.handle(call, result) }
@@ -65,6 +173,9 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        mikrofonDurdur()
+        mikrofonIzni?.success(false)
+        mikrofonIzni = null
         googleHesap?.close()
         super.onDestroy()
     }

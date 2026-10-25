@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../dokunma.dart';
 import '../yakinlastirma.dart';
@@ -264,7 +265,38 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   final Set<String> _basiliFare = {};
   final _yazi = TextEditingController(text: _gozcu);
   String _oncekiYazi = _gozcu;
-  late final _basKonus = BasKonusGirdisi(_gonder);
+  late final _basKonus = BasKonusGirdisi(
+    _gonder,
+    sesDestegi: () => widget.motor.sesDestegi,
+    sesSurucuYok: () => widget.motor.sesSurucuYok,
+    surucuUyarisi: _mikrofonSurucuUyarisi,
+  );
+
+  void _mikrofonSurucuUyarisi() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: InkWell(
+          onTap: () async {
+            try {
+              final acildi = await launchUrl(
+                Uri.parse('https://vb-audio.com/Cable/'),
+                mode: LaunchMode.externalApplication,
+              );
+              if (!acildi && mounted) {
+                _terminalBilgi('Bağlantı açılamadı. Yeniden dokun.');
+              }
+            } catch (_) {
+              if (mounted) _terminalBilgi('Bağlantı açılamadı. Yeniden dokun.');
+            }
+          },
+          child: const Text(
+            "Telefon mikrofonu için PC'ye VB-CABLE kur. Kurmak için dokun.",
+          ),
+        ),
+      ),
+    );
+  }
   bool _konusmaModu = false;
   bool _klavyeAcik = false;
   bool _oyunKoluIzni = false, _kolAcik = false;

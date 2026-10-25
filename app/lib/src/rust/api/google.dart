@@ -4,6 +4,7 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `adresleri_yenile`, `cihaz`, `etkin_hesap`, `guvenli_islem_hatasi`, `guvenli_panik_mesaji`, `hesap`, `islem_yap`, `istemciler`, `kalici_yenile`, `masaustu_sir`, `oku`, `oturum_sonucu`, `panik_tanisini_kur`, `taze_hesap`, `web_istemci`, `yaz`, `yenileme_gerekli`
