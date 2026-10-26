@@ -4,7 +4,7 @@ import 'dart:math';
 
 import 'guncelleme.dart';
 
-const sayacUrl = 'https://afu-sayac.REPLACE.workers.dev';
+const sayacUrl = 'https://afu-sayac.afu-sayac.workers.dev';
 typedef SayacIstek = Future<Map<String, dynamic>> Function(String method, Uri uri, [Map<String, dynamic>? body]);
 
 class AktifSayac {
