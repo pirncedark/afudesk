@@ -4,6 +4,98 @@ use std::f64::consts::TAU;
 
 const HIZ: usize = 16_000;
 
+#[cfg(test)]
+mod kopru_birim {
+    use crate::sanal_mikrofon::{kopru_adim, kopru_kaynak_sec, Yakalayici, TELEFON_KONUSUYOR};
+    use anyhow::Result;
+    use std::sync::atomic::Ordering;
+
+    struct SahteYakalayici {
+        hata: bool,
+        deger: i16,
+    }
+    impl Yakalayici for SahteYakalayici {
+        fn ac(&mut self, _: &str) -> Result<()> {
+            Ok(())
+        }
+        fn oku(&mut self, out: &mut [i16]) -> Result<usize> {
+            if self.hata {
+                anyhow::bail!("kaynak koptu");
+            }
+            out.fill(self.deger);
+            Ok(out.len())
+        }
+        fn kapat(&mut self) {}
+    }
+
+    #[test]
+    fn kaynak_secimi_varsayilan_cable_olsa_da_cable_secmez() {
+        let devices = vec![
+            (
+                "cable".into(),
+                "CABLE Output (VB-Audio Virtual Cable)".into(),
+            ),
+            ("mic".into(), "Mikrofon (Razer Seiren V3 Mini)".into()),
+        ];
+        assert_eq!(
+            kopru_kaynak_sec(Some("cable"), None, &devices).as_deref(),
+            Some("mic")
+        );
+        assert_eq!(
+            kopru_kaynak_sec(Some("cable"), Some("mic"), &devices).as_deref(),
+            Some("mic")
+        );
+    }
+
+    #[test]
+    fn telefon_konusurken_yazmaz_birakinca_ilk_adimda_yazar() {
+        let mut fake = SahteYakalayici {
+            hata: false,
+            deger: 1200,
+        };
+        let mut out = [0; 16];
+        let mut writes = 0;
+        TELEFON_KONUSUYOR.store(true, Ordering::SeqCst);
+        assert_eq!(
+            kopru_adim(&mut fake, &mut out, |_| {
+                writes += 1;
+                Ok(())
+            })
+            .unwrap(),
+            16
+        );
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        assert_eq!(writes, 0);
+        TELEFON_KONUSUYOR.store(false, Ordering::SeqCst);
+        kopru_adim(&mut fake, &mut out, |_| {
+            writes += 1;
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(
+            writes, 1,
+            "telefon bırakılınca ilk 10 ms adımında ses yazılmalı"
+        );
+    }
+
+    #[test]
+    fn kaynak_hatasi_isci_adimina_hata_doner_hostu_durdurmaz() {
+        let mut fake = SahteYakalayici {
+            hata: true,
+            deger: 0,
+        };
+        let mut out = [0; 16];
+        let sonuc = kopru_adim(&mut fake, &mut out, |_| Ok(()));
+        assert!(sonuc.is_err());
+        // A capture failure is returned only to the isolated bridge worker, never its host caller.
+        assert!(resulta_devam_ettir(sonuc).is_none());
+    }
+
+    fn resulta_devam_ettir<T>(sonuc: Result<T>) -> Option<T> {
+        sonuc.ok()
+    }
+}
+
 fn sinus(hz: f64, genlik: f64) -> Vec<i16> {
     (0..2 * HIZ)
         .map(|n| (genlik * i16::MAX as f64 * (TAU * hz * n as f64 / HIZ as f64).sin()) as i16)
@@ -121,6 +213,31 @@ mod donanim {
 
     static DONANIM: Mutex<()> = Mutex::new(());
 
+    struct IzoleAfuDeskVerisi {
+        onceki: Option<std::ffi::OsString>,
+        _dizin: tempfile::TempDir,
+    }
+    impl IzoleAfuDeskVerisi {
+        fn yeni() -> Result<Self> {
+            let dizin = tempfile::tempdir()?;
+            let onceki = std::env::var_os("AFUDESK_TEST_DATA_DIR");
+            std::env::set_var("AFUDESK_TEST_DATA_DIR", dizin.path());
+            Ok(Self {
+                onceki,
+                _dizin: dizin,
+            })
+        }
+    }
+    impl Drop for IzoleAfuDeskVerisi {
+        fn drop(&mut self) {
+            if let Some(onceki) = self.onceki.take() {
+                std::env::set_var("AFUDESK_TEST_DATA_DIR", onceki);
+            } else {
+                std::env::remove_var("AFUDESK_TEST_DATA_DIR");
+            }
+        }
+    }
+
     struct Kayit {
         islem: Child,
         dizin: tempfile::TempDir,
@@ -215,6 +332,126 @@ mod donanim {
             let _ = self.islem.kill();
             let _ = self.islem.wait();
         }
+    }
+
+    struct DshowKaydi {
+        child: Child,
+        dir: tempfile::TempDir,
+    }
+    impl DshowKaydi {
+        fn baslat(ad: &str) -> Result<Self> {
+            let dir = tempfile::tempdir()?;
+            let log = std::fs::File::create(dir.path().join("ffmpeg.log"))?;
+            let child = Command::new("ffmpeg")
+                .args([
+                    "-nostdin",
+                    "-hide_banner",
+                    "-y",
+                    "-f",
+                    "dshow",
+                    "-audio_buffer_size",
+                    "20",
+                    "-i",
+                    &format!("audio={ad}"),
+                    "-t",
+                    "3",
+                    "-ar",
+                    "16000",
+                    "-ac",
+                    "1",
+                    "-c:a",
+                    "pcm_s16le",
+                    "-f",
+                    "s16le",
+                ])
+                .arg(dir.path().join("kayit.pcm"))
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(log)
+                .spawn()
+                .context("ffmpeg eşzamanlı kayıt başlatılamadı")?;
+            Ok(Self { child, dir })
+        }
+        fn bitir(mut self) -> Result<Vec<i16>> {
+            let status = self.child.wait()?;
+            let log =
+                std::fs::read_to_string(self.dir.path().join("ffmpeg.log")).unwrap_or_default();
+            anyhow::ensure!(status.success(), "ffmpeg kaydı başarısız: {status}\n{log}");
+            let bytes = std::fs::read(self.dir.path().join("kayit.pcm"))?;
+            anyhow::ensure!(bytes.len() % 2 == 0, "PCM16 kayıt boyutu bozuk");
+            Ok(bytes
+                .chunks_exact(2)
+                .map(|b| i16::from_le_bytes([b[0], b[1]]))
+                .collect())
+        }
+    }
+    impl Drop for DshowKaydi {
+        fn drop(&mut self) {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+    }
+
+    fn rms(pcm: &[i16]) -> f64 {
+        (pcm.iter()
+            .map(|x| (*x as f64 / 32768.0).powi(2))
+            .sum::<f64>()
+            / pcm.len().max(1) as f64)
+            .sqrt()
+    }
+    fn en_yuksek_korelasyon(a: &[i16], b: &[i16]) -> (f64, usize) {
+        let n = a.len().min(b.len());
+        let limit = (HIZ * 3 / 10).min(n / 3);
+        (0..=limit)
+            .map(|lag| {
+                let len = n - lag;
+                let (aa, bb) = (&a[..len], &b[lag..lag + len]);
+                let ma = aa.iter().map(|x| *x as f64).sum::<f64>() / len as f64;
+                let mb = bb.iter().map(|x| *x as f64).sum::<f64>() / len as f64;
+                let (mut ab, mut pa, mut pb) = (0.0, 0.0, 0.0);
+                for (&x, &y) in aa.iter().zip(bb) {
+                    let (x, y) = (x as f64 - ma, y as f64 - mb);
+                    ab += x * y;
+                    pa += x * x;
+                    pb += y * y;
+                }
+                (ab / (pa * pb).sqrt().max(1.0), lag)
+            })
+            .max_by(|x, y| x.0.total_cmp(&y.0))
+            .unwrap_or((0.0, 0))
+    }
+
+    #[test]
+    #[ignore = "VB-CABLE, ffmpeg ve duyulur ortam sesi gerekir; gerçek donanım ölçümü"]
+    fn gercek_kopru_korelasyon() -> Result<()> {
+        let _kilit = DONANIM.lock().unwrap();
+        let _veri = IzoleAfuDeskVerisi::yeni()?;
+        anyhow::ensure!(crate::sanal_mikrofon::cable_var(), "VB-CABLE kurulu değil");
+        let api = WindowsSes::yeni()?;
+        let source_id = crate::sanal_mikrofon::kopru_kaynak(&api)?;
+        let source_name = api
+            .etkin_kayitlar()?
+            .into_iter()
+            .find(|(id, _)| *id == source_id)
+            .map(|(_, name)| name)
+            .context("Mikrofon adı bulunamadı")?;
+        let mut kopru = crate::sanal_mikrofon::MikrofonKoprusu::baslat()?;
+        std::thread::sleep(Duration::from_millis(400));
+        let source = DshowKaydi::baslat(&source_name)?;
+        let cable = DshowKaydi::baslat("CABLE Output (VB-Audio Virtual Cable)")?;
+        let a = source.bitir()?;
+        let b = cable.bitir()?;
+        kopru.durdur();
+        let rms_a = rms(&a);
+        let rms_b = rms(&b);
+        let peak_a = a.iter().map(|x| x.unsigned_abs()).max().unwrap_or(0);
+        let peak_b = b.iter().map(|x| x.unsigned_abs()).max().unwrap_or(0);
+        let (corr, lag) = en_yuksek_korelasyon(&a, &b);
+        eprintln!("KANIT kopru: mikrofon={source_name:?} n={} RMS={:.6} tepe={} cable_n={} cable_RMS={:.6} cable_tepe={} korelasyon={:.4} gecikme={} ms",
+            a.len(), rms_a, peak_a, b.len(), rms_b, peak_b, corr, lag * 1000 / HIZ);
+        anyhow::ensure!(rms_a > 0.0005 && rms_b > 0.0005, "Ortam sessiz: mikrofon RMS={rms_a:.6} tepe={peak_a}, CABLE RMS={rms_b:.6} tepe={peak_b}");
+        anyhow::ensure!(corr >= 0.5, "Normalize çapraz korelasyon düşük: {corr:.4}");
+        Ok(())
     }
 
     #[test]
@@ -319,6 +556,7 @@ mod donanim {
     #[ignore = "Gerçek VB-CABLE ve ffmpeg gerekir; varsayılan mikrofonu geçici değiştirir"]
     async fn gercek_cable_protokol_uctan_uca() -> Result<()> {
         let _kilit = DONANIM.lock().unwrap();
+        let _veri = IzoleAfuDeskVerisi::yeni()?;
         anyhow::ensure!(crate::sanal_mikrofon::cable_var(), "VB-CABLE kurulu değil");
         tokio::time::timeout(Duration::from_secs(40), async {
             use crate::{host::{self, HostAyar, HostKomut, HostOlay}, izleyici, protokol::Izinler};
@@ -358,7 +596,9 @@ mod donanim {
             let _pompa = Pompa(pompa);
             i.gonder(Girdi::SesAc).await;
             while !durum.lock().unwrap().acik {
-                anyhow::ensure!(durum.lock().unwrap().hata.is_none(), "Ses açılamadı");
+                let d = durum.lock().unwrap();
+                anyhow::ensure!(d.hata.is_none(), "Ses açılamadı: {:?}", d.hata);
+                drop(d);
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
             let (cable, _) = WindowsSes::yeni()?.cable()?;
