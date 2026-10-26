@@ -92,6 +92,11 @@ void main() {
     },
   );
 
+  test('sayaç /ping boş yanıtı (204) hata sayılmaz', () {
+    expect(sayacYanitiCoz(''), isEmpty);
+    expect(sayacYanitiCoz('{"aktif7":3}')['aktif7'], 3);
+  });
+
   testWidgets('sürüm, güncel durumu ve son denetim gösterilir', (t) async {
     final servis = AyarlarGuncelleyici();
     await t.pumpWidget(MaterialApp(home: AyarlarSayfasi(servis: servis)));
