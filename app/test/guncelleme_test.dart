@@ -37,7 +37,9 @@ void main() {
     tester,
   ) async {
     final servis = SahteGuncelleyici();
-    await tester.pumpWidget(MaterialApp(home: GuncelleKarti(servis: servis)));
+    await tester.pumpWidget(
+      MaterialApp(home: GuncelleKarti(servis: servis, automaticCheck: true)),
+    );
     await tester.pumpAndSettle();
     expect(servis.kontroller, 1);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
@@ -55,6 +57,17 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(days: 1));
     expect(servis.kontroller, 3);
+  });
+  testWidgets('Açılışta kontrol kapalıysa otomatik denetim yapılmaz', (
+    tester,
+  ) async {
+    final servis = SahteGuncelleyici();
+    await tester.pumpWidget(
+      MaterialApp(home: GuncelleKarti(servis: servis, automaticCheck: false)),
+    );
+    await tester.pumpAndSettle();
+    expect(servis.kontroller, 0);
+    await tester.pumpWidget(const SizedBox.shrink());
   });
   testWidgets('Bes dakika sonra donuste yeni yayin karti gorunur', (
     tester,

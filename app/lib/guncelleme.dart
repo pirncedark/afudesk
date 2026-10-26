@@ -13,6 +13,42 @@ const guncelleKanali = MethodChannel('afudesk/guncelle');
 final guncellemeKontrolIstegi = ValueNotifier<int>(0);
 final guncelleyici = Guncelleyici();
 
+Future<String?> yerelAyarOku(String anahtar) async {
+  if (Platform.isAndroid) {
+    return guncelleKanali.invokeMethod<String>('ayarOku', anahtar);
+  }
+  if (Platform.isWindows) {
+    final dizin = Platform.environment['APPDATA'];
+    if (dizin == null) return null;
+    final dosya = File('$dizin/AfuDesk/ayarlar.json');
+    if (!await dosya.exists()) return null;
+    final json = jsonDecode(await dosya.readAsString()) as Map<String, dynamic>;
+    return json[anahtar] as String?;
+  }
+  return null;
+}
+
+Future<void> yerelAyarYaz(String anahtar, String deger) async {
+  if (Platform.isAndroid) {
+    await guncelleKanali.invokeMethod<void>('ayarYaz', {'anahtar': anahtar, 'deger': deger});
+  } else if (Platform.isWindows) {
+    final dizin = Platform.environment['APPDATA'];
+    if (dizin == null) return;
+    final dosya = File('$dizin/AfuDesk/ayarlar.json');
+    await dosya.parent.create(recursive: true);
+    final json = await dosya.exists()
+        ? jsonDecode(await dosya.readAsString()) as Map<String, dynamic>
+        : <String, dynamic>{};
+    json[anahtar] = deger;
+    await dosya.writeAsString(jsonEncode(json));
+  }
+}
+
+Future<bool> acilistaDenetleAcik() async =>
+    (await yerelAyarOku('acilistaDenetle')) != 'false';
+Future<void> acilistaDenetleKaydet(bool acik) =>
+    yerelAyarYaz('acilistaDenetle', '$acik');
+
 class GuncellemeSayfasiAcildi implements Exception {
   const GuncellemeSayfasiAcildi();
 }
