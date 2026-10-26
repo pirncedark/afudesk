@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'package:flutter/services.dart';
 import '../arka_plan/arka_plan.dart';
+import '../aktif_sayac.dart';
 
 import '../guncelleme.dart';
 import '../hesap/hesap_servisi.dart';
@@ -15,12 +17,17 @@ class AyarlarSayfasi extends StatefulWidget {
 }
 
 class _AyarlarSayfasiDurum extends State<AyarlarSayfasi> {
+  static const _paylasKanali = MethodChannel('afudesk/paylas');
+  static const _paylasimMetni = 'AfuDesk ile telefondan bilgisayarını kullan: https://github.com/pirncedark/afudesk/releases/latest';
   late final Guncelleyici _servis;
   String _surum = 'Okunuyor…';
   String? _hata, _bilgi, _hesapHatasi;
   bool _mesgul = false, _cikiliyor = false;
   double? _ilerleme;
   bool _arkaPlan = false, _arkaPlanMesgul = true;
+  bool _acilistaDenetle = true, _sayacaKatil = true;
+  bool _sayacYukleniyor = true;
+  Map<String, dynamic>? _sayac;
 
   @override
   void initState() {
@@ -29,7 +36,51 @@ class _AyarlarSayfasiDurum extends State<AyarlarSayfasi> {
     _servis.addListener(_degisti);
     widget.hesapServisi?.addListener(_degisti);
     _surumuOku();
+    _tercihleriOku();
     if (Platform.isWindows) _arkaPlanOku();
+  }
+
+  Future<void> _tercihleriOku() async {
+    try {
+      _acilistaDenetle = await acilistaDenetleAcik();
+      _sayacaKatil = (await yerelAyarOku('sayacaKatil')) != 'false';
+      if (_sayacaKatil && (Platform.isAndroid || Platform.isWindows)) {
+        await _sayaciYukle();
+      } else { _sayacYukleniyor = false; }
+    } catch (_) { _sayac = null; }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _sayaciYukle() async {
+    try {
+      final ver = await _servis.surum();
+      final sonuc = await AktifSayac().yukle(katil: _sayacaKatil, surum: ver);
+      if (mounted) setState(() { _sayac = sonuc.containsKey('aktif7') ? sonuc : null; _sayacYukleniyor = false; });
+    } catch (_) { if (mounted) setState(() { _sayac = null; _sayacYukleniyor = false; }); }
+  }
+
+  Future<void> _sayacTercihi(bool acik) async {
+    setState(() { _sayacaKatil = acik; _sayacYukleniyor = acik; if (!acik) _sayac = null; });
+    try {
+      await yerelAyarYaz('sayacaKatil', '$acik');
+      if (acik) await _sayaciYukle();
+    } catch (_) { if (mounted) setState(() => _sayac = null); }
+  }
+
+  Future<void> _linkPaylas() async {
+    try {
+      if (Platform.isAndroid) {
+        await _paylasKanali.invokeMethod<void>('metin', _paylasimMetni);
+      } else {
+        await Clipboard.setData(const ClipboardData(text: _paylasimMetni));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Bağlantı kopyalandı.')));
+      }
+    } catch (_) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Paylaşım açılamadı. Yeniden dene.'))); }
+  }
+
+  Future<void> _apkPaylas() async {
+    try { await _paylasKanali.invokeMethod<void>('apk'); }
+    catch (_) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Paylaşım açılamadı. Yeniden dene.'))); }
   }
 
   Future<void> _arkaPlanOku() async {
@@ -184,34 +235,35 @@ class _AyarlarSayfasiDurum extends State<AyarlarSayfasi> {
               child: ListView(
                 padding: const EdgeInsets.all(24),
                 children: [
-                  if (Platform.isWindows)
-                    SwitchListTile(
-                      title: const Text('Bilgisayar açılınca hazır olsun'),
-                      subtitle: const Text('Windows oturumun açıldığında arka planda bekler.'),
-                      value: _arkaPlan,
-                      onChanged: _arkaPlanMesgul ? null : _arkaPlanAyarla,
-                    ),
-                  ListTile(title: const Text('Sürüm'), subtitle: Text(_surum)),
-                  const Divider(),
-                  ListTile(
-                    title: const Text('Güncelleme'),
-                    subtitle: durum == null
-                        ? null
-                        : Semantics(liveRegion: true, child: Text(durum)),
-                  ),
-                  if (_mesgul) LinearProgressIndicator(value: _ilerleme),
-                  FilledButton.icon(
-                    onPressed: _mesgul || _cikiliyor
-                        ? null
-                        : yayin == null
-                        ? _denetle
-                        : _kur,
-                    icon: Icon(
-                      yayin == null ? Icons.refresh : Icons.system_update,
-                    ),
-                    label: Text(
-                      yayin == null ? 'Güncellemeleri denetle' : 'Güncelle',
-                    ),
+                  _kart('Güncelleme', [
+                    ListTile(title: Text('Sürüm $_surum'), subtitle: durum == null ? null : Semantics(liveRegion: true, child: Text(durum))),
+                    if (_mesgul) LinearProgressIndicator(value: _ilerleme),
+                    Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: FilledButton.icon(
+                      onPressed: _mesgul || _cikiliyor ? null : yayin == null ? _denetle : _kur,
+                      icon: Icon(yayin == null ? Icons.refresh : Icons.system_update),
+                      label: Text(yayin == null ? 'Güncellemeleri denetle' : 'Güncelle'),
+                    )),
+                    SwitchListTile(title: const Text('Açılışta kontrol et'), value: _acilistaDenetle,
+                      onChanged: (v) async { setState(() => _acilistaDenetle = v); try { await acilistaDenetleKaydet(v); } catch (_) { if (mounted) setState(() => _acilistaDenetle = !v); } }),
+                  ]),
+                  _kart('Paylaş', [
+                    const ListTile(title: Text("AfuDesk'i arkadaşına gönder")),
+                    Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Wrap(spacing: 8, children: [
+                      OutlinedButton.icon(onPressed: _linkPaylas, icon: const Icon(Icons.link), label: const Text('Link gönder')),
+                      if (Platform.isAndroid) OutlinedButton.icon(onPressed: _apkPaylas, icon: const Icon(Icons.share), label: const Text('APK gönder')),
+                    ])),
+                    if (Platform.isAndroid) const Padding(padding: EdgeInsets.all(16), child: Text('APK, bu telefondaki sürümdür.')),
+                  ]),
+                  _kart('Topluluk', [
+                    if (_sayacYukleniyor && _sayacaKatil) const ListTile(title: Text('Son 7 günde … kişi AfuDesk kullandı')),
+                    if (_sayac != null) ListTile(title: Text('Son 7 günde ${_sayac!['aktif7']} kişi AfuDesk kullandı')),
+                    SwitchListTile(title: const Text('Sayaca katıl'), value: _sayacaKatil, onChanged: _sayacTercihi),
+                    const Padding(padding: EdgeInsets.fromLTRB(16, 0, 16, 16), child: Text('Yalnız rastgele bir numara gönderilir; ad, konum veya hesap bilgisi gitmez.')),
+                  ]),
+                  if (Platform.isWindows) SwitchListTile(
+                    title: const Text('Bilgisayar açılınca hazır olsun'),
+                    subtitle: const Text('Windows oturumun açıldığında arka planda bekler.'),
+                    value: _arkaPlan, onChanged: _arkaPlanMesgul ? null : _arkaPlanAyarla,
                   ),
                   if (yayin != null)
                     TextButton(
@@ -247,4 +299,13 @@ class _AyarlarSayfasiDurum extends State<AyarlarSayfasi> {
       ),
     );
   }
+
+  Widget _kart(String baslik, List<Widget> children) => Card(
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    margin: const EdgeInsets.only(bottom: 16),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Padding(padding: const EdgeInsets.fromLTRB(16, 14, 16, 0), child: Text(baslik, style: Theme.of(context).textTheme.labelLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant))),
+      ...children,
+    ]),
+  );
 }

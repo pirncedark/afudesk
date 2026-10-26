@@ -1,14 +1,17 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 
 import '../guncelleme.dart';
+import '../aktif_sayac.dart';
 
 /// Açılışta, uygulamaya dönüşte ve günde bir denetler; kurulum Ayarlar'dan yapılır.
 class GuncelleKarti extends StatefulWidget {
-  const GuncelleKarti({super.key, this.servis, this.ayarDugmesi = false});
+  const GuncelleKarti({super.key, this.servis, this.ayarDugmesi = false, this.automaticCheck});
   final Guncelleyici? servis;
   final bool ayarDugmesi;
+  final bool? automaticCheck;
   @override
   State<GuncelleKarti> createState() => _GuncelleKartiDurum();
 }
@@ -19,14 +22,34 @@ class _GuncelleKartiDurum extends State<GuncelleKarti>
   Timer? _timer;
   Timer? _donusBekleme;
   bool _kontrolSuruyor = false;
+  bool _ayarOkundu = false;
   @override
   void initState() {
     super.initState();
     _servis = widget.servis ?? guncelleyici;
+    _ayarYukle();
     WidgetsBinding.instance.addObserver(this);
     guncellemeKontrolIstegi.addListener(_bak);
     _bak();
     _timer = Timer.periodic(const Duration(days: 1), (_) => _bak());
+  }
+
+  Future<void> _ayarYukle() async {
+    var acik = true;
+    try { acik = widget.automaticCheck ?? await acilistaDenetleAcik(); } catch (_) { }
+    _ayarOkundu = true;
+    if (mounted && acik) {
+      _bak();
+      if (Platform.isAndroid || Platform.isWindows) {
+        unawaited(() async {
+          try {
+            if (await yerelAyarOku('sayacaKatil') == 'false') return;
+            final surum = await _servis.surum();
+            await AktifSayac().yukle(katil: true, surum: surum);
+          } catch (_) { }
+        }());
+      }
+    }
   }
 
   @override
@@ -46,6 +69,8 @@ class _GuncelleKartiDurum extends State<GuncelleKarti>
   }
 
   Future<void> _bak() async {
+    if (!_ayarOkundu) return;
+    try { if (!(widget.automaticCheck ?? await acilistaDenetleAcik())) return; } catch (_) { }
     if (_kontrolSuruyor) return;
     _kontrolSuruyor = true;
     try {

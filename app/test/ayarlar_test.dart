@@ -1,4 +1,5 @@
 import 'package:afudesk/guncelleme.dart';
+import 'package:afudesk/aktif_sayac.dart';
 import 'package:afudesk/main.dart';
 import 'package:afudesk/sayfalar/ayarlar.dart';
 import 'package:flutter/material.dart';
@@ -34,6 +35,34 @@ void main() {
     Uri.parse('https://github.com/ozet'),
     100,
   );
+
+  testWidgets('üç standart kart görünür, Windows paylaşımında APK seçeneği yok', (t) async {
+    await t.pumpWidget(MaterialApp(home: AyarlarSayfasi(servis: AyarlarGuncelleyici())));
+    await t.pumpAndSettle();
+    for (final baslik in ['Güncelleme', 'Paylaş', 'Topluluk']) {
+      expect(find.text(baslik), findsOneWidget);
+    }
+    expect(find.text('APK gönder'), findsNothing);
+  });
+
+  test('sayaç aynı gün ikinci ping göndermez; kapalıyken ağ isteği yapmaz', () async {
+    final store = <String, String>{};
+    final calls = <String>[];
+    Future<Map<String, dynamic>> fake(String method, Uri uri, [Map<String, dynamic>? body]) async {
+      calls.add(method);
+      return {'aktif7': 12, 'aktif1': 3, 'toplam': 20};
+    }
+    Future<String?> oku(String key) async => store[key];
+    Future<void> yaz(String key, String value) async { store[key] = value; }
+    final sayac = AktifSayac(istek: fake, oku: oku, yaz: yaz, simdi: () => DateTime(2026, 10, 26));
+    await sayac.yukle(katil: false, surum: '1.0');
+    expect(calls, isEmpty);
+    await sayac.yukle(katil: true, surum: '1.0');
+    await sayac.yukle(katil: true, surum: '1.0');
+    expect(calls.where((m) => m == 'POST').length, 1);
+    expect(calls.where((m) => m == 'GET').length, 2);
+    expect(store['sayacKimlik'], matches(RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')));
+  });
 
   testWidgets('sürüm, güncel durumu ve son denetim gösterilir', (t) async {
     final servis = AyarlarGuncelleyici();

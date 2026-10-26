@@ -240,6 +240,13 @@ class MainActivity : FlutterActivity() {
             try {
                 when (call.method) {
                     "surum" -> result.success(packageManager.getPackageInfo(packageName, 0).versionName)
+                    "ayarOku" -> result.success(getSharedPreferences("afudesk_ayarlar", MODE_PRIVATE).getString(call.arguments as String, null))
+                    "ayarYaz" -> {
+                        val args = call.arguments as Map<*, *>
+                        getSharedPreferences("afudesk_ayarlar", MODE_PRIVATE).edit()
+                            .putString(args["anahtar"] as String, args["deger"] as String).apply()
+                        result.success(null)
+                    }
                     "klasor" -> result.success(File(cacheDir, "updates").apply { mkdirs() }.absolutePath)
                     "kur" -> {
                         val apk = File(call.arguments as String).canonicalFile
@@ -254,6 +261,33 @@ class MainActivity : FlutterActivity() {
                 }
             } catch (_: Exception) { result.error("update", "Güncelleme kurulamadı. Yeniden dene.", null) }
         }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "afudesk/paylas")
+            .setMethodCallHandler { call, result ->
+                try {
+                    when (call.method) {
+                        "metin" -> {
+                            val intent = Intent(Intent.ACTION_SEND).setType("text/plain")
+                                .putExtra(Intent.EXTRA_TEXT, call.arguments as String)
+                            startActivity(Intent.createChooser(intent, "AfuDesk'i paylaş"))
+                            result.success(null)
+                        }
+                        "apk" -> {
+                            val info = packageManager.getPackageInfo(packageName, 0)
+                            val version = info.versionName ?: "bilinmiyor"
+                            val folder = File(cacheDir, "paylas").apply { mkdirs() }
+                            val apk = File(folder, "AfuDesk-$version.apk")
+                            File(applicationInfo.sourceDir).copyTo(apk, overwrite = true)
+                            val uri = FileProvider.getUriForFile(this, "$packageName.updates", apk)
+                            val intent = Intent(Intent.ACTION_SEND).setType("application/vnd.android.package-archive")
+                                .putExtra(Intent.EXTRA_STREAM, uri)
+                                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            startActivity(Intent.createChooser(intent, "AfuDesk APK'sını paylaş"))
+                            result.success(null)
+                        }
+                        else -> result.notImplemented()
+                    }
+                } catch (_: Exception) { result.error("paylas", "Paylaşım açılamadı. Yeniden dene.", null) }
+            }
         channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "afudesk/kol")
         channel.setMethodCallHandler { call, result ->
             if (call.method == "vibrate") {
