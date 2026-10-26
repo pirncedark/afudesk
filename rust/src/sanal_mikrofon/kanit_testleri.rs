@@ -29,8 +29,8 @@ fn guc(pcm: &[f64], hz: usize) -> f64 {
 
 fn olc(pcm: &[i16]) -> anyhow::Result<Olcum> {
     anyhow::ensure!(
-        pcm.len() >= 2 * HIZ,
-        "Kayıt iki saniyeden kısa: {} örnek",
+        pcm.len() >= HIZ + HIZ / 2,
+        "Kayıt 1,5 saniyeden kısa: {} örnek",
         pcm.len()
     );
     // Middle second excludes capture startup and stop transients. Hann window
