@@ -55,6 +55,10 @@ Future<Map<String, dynamic>> _httpIstek(String method, Uri uri, [Map<String, dyn
     }
     final response = await request.close().timeout(const Duration(seconds: 15));
     if (response.statusCode < 200 || response.statusCode >= 300) throw const HttpException('Sayaç yanıt vermedi');
-    return jsonDecode(await response.transform(utf8.decoder).join()) as Map<String, dynamic>;
+    return sayacYanitiCoz(await response.transform(utf8.decoder).join());
   } finally { client.close(force: true); }
 }
+
+// /ping 204 ile boş gövde döner; boş yanıt hata sayılmaz.
+Map<String, dynamic> sayacYanitiCoz(String metin) =>
+    metin.trim().isEmpty ? {} : jsonDecode(metin) as Map<String, dynamic>;
