@@ -8,7 +8,12 @@ import '../aktif_sayac.dart';
 
 /// Açılışta, uygulamaya dönüşte ve günde bir denetler; kurulum Ayarlar'dan yapılır.
 class GuncelleKarti extends StatefulWidget {
-  const GuncelleKarti({super.key, this.servis, this.ayarDugmesi = false, this.automaticCheck});
+  const GuncelleKarti({
+    super.key,
+    this.servis,
+    this.ayarDugmesi = false,
+    this.automaticCheck,
+  });
   final Guncelleyici? servis;
   final bool ayarDugmesi;
   final bool? automaticCheck;
@@ -34,21 +39,27 @@ class _GuncelleKartiDurum extends State<GuncelleKarti>
     _timer = Timer.periodic(const Duration(days: 1), (_) => _bak());
   }
 
+  // Test için servis verilmişse kalıcı ayar okunmaz (gerçek dosya erişimi yok).
+  Future<bool> _otomatikDenetim() async =>
+      widget.automaticCheck ??
+      (widget.servis != null || await acilistaDenetleAcik());
+
   Future<void> _ayarYukle() async {
     var acik = true;
-    try { acik = widget.automaticCheck ?? await acilistaDenetleAcik(); } catch (_) { }
+    try {
+      acik = await _otomatikDenetim();
+    } catch (_) {}
     _ayarOkundu = true;
-    if (mounted && acik) {
-      _bak();
-      if (Platform.isAndroid || Platform.isWindows) {
-        unawaited(() async {
-          try {
-            if (await yerelAyarOku('sayacaKatil') == 'false') return;
-            final surum = await _servis.surum();
-            await AktifSayac().yukle(katil: true, surum: surum);
-          } catch (_) { }
-        }());
-      }
+    if (mounted && acik) _bak();
+    // Sayaç güncelleme denetiminden bağımsızdır; yalnız "Sayaca katıl" kapatılınca durur.
+    if (widget.servis == null && (Platform.isAndroid || Platform.isWindows)) {
+      unawaited(() async {
+        try {
+          if (await yerelAyarOku('sayacaKatil') == 'false') return;
+          final surum = await _servis.surum();
+          await AktifSayac().yukle(katil: true, surum: surum);
+        } catch (_) {}
+      }());
     }
   }
 
@@ -70,7 +81,9 @@ class _GuncelleKartiDurum extends State<GuncelleKarti>
 
   Future<void> _bak() async {
     if (!_ayarOkundu) return;
-    try { if (!(widget.automaticCheck ?? await acilistaDenetleAcik())) return; } catch (_) { }
+    try {
+      if (!(await _otomatikDenetim())) return;
+    } catch (_) {}
     if (_kontrolSuruyor) return;
     _kontrolSuruyor = true;
     try {
