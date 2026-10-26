@@ -654,7 +654,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
           content: Text(
             basarili
                 ? (gorseldi
-                      ? "Görsel PC'ye gönderildi; PC'de Ctrl+V ile yapıştırabilirsin."
+                      ? (_terminal
+                            ? 'Görsel yapıştırıldı.'
+                            : "Görsel PC'ye gönderildi; PC'de Ctrl+V (terminalde Alt+V) ile yapıştırabilirsin.")
                       : '${o.ad} gönderildi.')
                 : (gorseldi
                       ? 'Görsel gönderilemedi. Yeniden dene.'
