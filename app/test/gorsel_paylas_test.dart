@@ -54,13 +54,13 @@ void main() {
     await gorsel(t, '/cache/ekran.png');
     expect(motor.gonderilenDosyalar, ['/cache/ekran.png']);
     expect(
-      find.text("Görsel PC'ye gönderildi; PC'de Ctrl+V ile yapıştırabilirsin."),
+      find.text("Görsel PC'ye gönderildi; PC'de Ctrl+V (terminalde Alt+V) ile yapıştırabilirsin."),
       findsNothing,
     );
     motor.izleyici.add(IzleyiciOlay('dosya', ad: 'ekran.png', bitti: true));
     await t.pump();
     expect(
-      find.text("Görsel PC'ye gönderildi; PC'de Ctrl+V ile yapıştırabilirsin."),
+      find.text("Görsel PC'ye gönderildi; PC'de Ctrl+V (terminalde Alt+V) ile yapıştırabilirsin."),
       findsOneWidget,
     );
     await t.pumpWidget(const SizedBox.shrink());
@@ -131,7 +131,7 @@ void main() {
     await t.pump();
     expect(find.text('Görsel gönderilemedi. Yeniden dene.'), findsOneWidget);
     expect(
-      find.text("Görsel PC'ye gönderildi; PC'de Ctrl+V ile yapıştırabilirsin."),
+      find.text("Görsel PC'ye gönderildi; PC'de Ctrl+V (terminalde Alt+V) ile yapıştırabilirsin."),
       findsNothing,
     );
     await t.pumpWidget(const SizedBox.shrink());

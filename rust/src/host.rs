@@ -338,6 +338,26 @@ fn hatali_bilet_say(denemeler: &mut usize) -> bool {
     *denemeler >= AZAMI_PAROLA_DENEMESI
 }
 
+fn alt_v_girdileri() -> [protokol::Girdi; 4] {
+    [
+        protokol::Girdi::Tus { hid: 0, ad: "Alt".into(), basili: true },
+        protokol::Girdi::Tus { hid: 0, ad: "v".into(), basili: true },
+        protokol::Girdi::Tus { hid: 0, ad: "v".into(), basili: false },
+        protokol::Girdi::Tus { hid: 0, ad: "Alt".into(), basili: false },
+    ]
+}
+
+fn gorsel_alt_v_gonder(
+    pano_basarili: bool,
+    terminal_secili: bool,
+    enjektor: &mut Option<Box<dyn crate::platform::Enjektor>>,
+) -> anyhow::Result<()> {
+    if !pano_basarili || !terminal_secili { return Ok(()); }
+    let enjektor = enjektor.as_mut().ok_or_else(|| anyhow::anyhow!("Tuş denetimi kullanılamıyor."))?;
+    for g in alt_v_girdileri() { enjektor.uygula(&g)?; }
+    Ok(())
+}
+
 #[cfg(test)]
 mod guvenlik_testleri {
     use super::*;
@@ -1486,9 +1506,31 @@ async fn oturum(
             }
             Some(yol) = gorsel_rx.recv() => {
                 if let Some(p) = pano.as_mut() {
-                    if let Err(hata) = tokio::task::block_in_place(|| p.gelen_gorsel(&yol)) {
-                        log::warn!("Alınan görsel panoya konamadı: {hata}");
-                        let _ = olay.send(HostOlay::Uyari("Görsel kaydedildi ama panoya konamadı; AfuDesk Gelen klasöründen aç.".into())).await;
+                    match tokio::task::block_in_place(|| p.gelen_gorsel(&yol)) {
+                        Err(hata) => {
+                            log::warn!("Alınan görsel panoya konamadı: {hata}");
+                            let _ = olay.send(HostOlay::Uyari("Görsel kaydedildi ama panoya konamadı; AfuDesk Gelen klasöründen aç.".into())).await;
+                        }
+                        Ok(true) if terminal_secili && izinler.kontrol => {
+                            let sonuc = {
+                                let t = terminal.lock().unwrap();
+                                tokio::task::block_in_place(|| crate::terminal::korumali_girdi(
+                                    true,
+                                    || match &t.oturum {
+                                        Some(o) => o.odakla(),
+                                        None => anyhow::bail!("Terminal kapanmış, yeniden seç."),
+                                    },
+                                    || {
+                                        gorsel_alt_v_gonder(true, true, &mut enjektor)
+                                    },
+                                ))
+                            };
+                            if let Err(hata) = sonuc {
+                                log::warn!("Görsel panoya kondu, terminale Alt+V gönderilemedi: {hata}");
+                                let _ = olay.send(HostOlay::Uyari("Görsel panoda; yapıştırmak için Alt+V'ye bas.".into())).await;
+                            }
+                        }
+                        _ => {}
                     }
                 }
             },
@@ -1590,5 +1632,38 @@ mod uyarlama_testleri {
     #[test]
     fn orta_agda_sabit() {
         assert_eq!(uyarla(60, 30, 120, 0), (60, 30));
+    }
+}
+
+#[cfg(test)]
+mod gorsel_alt_v_testleri {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+
+    struct KayitEnjektor(Arc<Mutex<Vec<protokol::Girdi>>>);
+    impl crate::platform::Enjektor for KayitEnjektor {
+        fn uygula(&mut self, g: &protokol::Girdi) -> anyhow::Result<()> {
+            self.0.lock().unwrap().push(g.clone());
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn pano_basarili_ve_terminal_seciliyken_alt_v_sirasi_gonderilir() {
+        let kayit = Arc::new(Mutex::new(Vec::new()));
+        let enjektor: Box<dyn crate::platform::Enjektor> = Box::new(KayitEnjektor(kayit.clone()));
+        let mut enjektor = Some(enjektor);
+        gorsel_alt_v_gonder(true, true, &mut enjektor).unwrap();
+        assert_eq!(*kayit.lock().unwrap(), alt_v_girdileri());
+    }
+
+    #[test]
+    fn terminal_secili_degilse_veya_pano_basarisizsa_tus_gonderilmez() {
+        let kayit = Arc::new(Mutex::new(Vec::new()));
+        let enjektor: Box<dyn crate::platform::Enjektor> = Box::new(KayitEnjektor(kayit.clone()));
+        let mut enjektor = Some(enjektor);
+        gorsel_alt_v_gonder(true, false, &mut enjektor).unwrap();
+        gorsel_alt_v_gonder(false, true, &mut enjektor).unwrap();
+        assert!(kayit.lock().unwrap().is_empty());
     }
 }
