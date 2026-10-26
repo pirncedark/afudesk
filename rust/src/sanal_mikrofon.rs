@@ -4,11 +4,54 @@ use crate::protokol::Girdi;
 #[cfg(test)]
 mod kanit_testleri;
 use anyhow::Result;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{
     collections::VecDeque,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
+
+static TELEFON_KONUSUYOR: AtomicBool = AtomicBool::new(false);
+
+/// Capture half of the audio API. Kept separate so routing behavior can be tested with fakes.
+pub trait Yakalayici {
+    fn ac(&mut self, id: &str) -> Result<()>;
+    fn oku(&mut self, pcm: &mut [i16]) -> Result<usize>;
+    fn kapat(&mut self);
+}
+
+pub struct MikrofonKoprusu {
+    durdur: std::sync::mpsc::Sender<()>,
+    isci: Option<std::thread::JoinHandle<()>>,
+}
+impl MikrofonKoprusu {
+    pub fn baslat() -> Result<Self> {
+        let (durdur, rx) = std::sync::mpsc::channel();
+        let isci = std::thread::Builder::new()
+            .name("mikrofon-koprusu".into())
+            .spawn(move || {
+                #[cfg(windows)]
+                kopru_isci(rx);
+                #[cfg(not(windows))]
+                let _ = rx;
+            })?;
+        Ok(Self {
+            durdur,
+            isci: Some(isci),
+        })
+    }
+    pub fn durdur(&mut self) {
+        let _ = self.durdur.send(());
+        if let Some(isci) = self.isci.take() {
+            let _ = isci.join();
+        }
+    }
+}
+impl Drop for MikrofonKoprusu {
+    fn drop(&mut self) {
+        self.durdur();
+    }
+}
 
 pub const SURUCU_UYARISI: &str =
     "Telefon mikrofonu için VB-CABLE sürücüsü gerekli, kurmak için aç: https://vb-audio.com/Cable/";
@@ -51,7 +94,12 @@ pub fn cable_var() -> bool {
 }
 
 fn geri_yolu() -> Result<PathBuf> {
-    Ok(dirs::data_dir()
+    #[cfg(test)]
+    let test_data = std::env::var_os("AFUDESK_TEST_DATA_DIR").map(PathBuf::from);
+    #[cfg(not(test))]
+    let test_data: Option<PathBuf> = None;
+    Ok(test_data
+        .or_else(dirs::data_dir)
         .ok_or_else(|| anyhow::anyhow!("Uygulama veri klasörü bulunamadı."))?
         .join("AfuDesk")
         .join("mikrofon_geri.json"))
@@ -115,6 +163,36 @@ fn cable_adi(ad: &str, kayit: bool) -> bool {
         }
 }
 
+fn kopru_kaynak_sec(
+    default: Option<&str>,
+    saved: Option<&str>,
+    devices: &[(String, String)],
+) -> Option<String> {
+    default
+        .into_iter()
+        .chain(saved)
+        .chain(devices.iter().map(|(id, _)| id.as_str()))
+        .find(|id| {
+            devices
+                .iter()
+                .any(|(device_id, name)| device_id == *id && !cable_adi(name, true))
+        })
+        .map(str::to_owned)
+}
+
+#[cfg(test)]
+fn kopru_adim(
+    yakalayici: &mut impl Yakalayici,
+    pcm: &mut [i16],
+    mut yaz: impl FnMut(&[i16]) -> Result<()>,
+) -> Result<usize> {
+    let n = yakalayici.oku(pcm)?.min(pcm.len());
+    if n > 0 && !TELEFON_KONUSUYOR.load(Ordering::SeqCst) {
+        yaz(&pcm[..n])?;
+    }
+    Ok(n)
+}
+
 struct Oturum<A: SesApi> {
     api: A,
     geri_yolu: PathBuf,
@@ -169,6 +247,7 @@ impl<A: SesApi> Oturum<A> {
             }
         }
         self.acik = true;
+        TELEFON_KONUSUYOR.store(true, Ordering::SeqCst);
         Ok(())
     }
     fn ses(&mut self, b: &[u8]) -> Result<()> {
@@ -192,7 +271,8 @@ impl<A: SesApi> Oturum<A> {
     }
     fn sayac_logla(&mut self, simdi: Instant, zorla: bool) {
         if (self.alinan != 0 || self.yazilan != 0)
-            && (zorla || simdi.saturating_duration_since(self.son_log) >= Duration::from_secs(1)) {
+            && (zorla || simdi.saturating_duration_since(self.son_log) >= Duration::from_secs(1))
+        {
             log::info!("telmik alinan={} yazilan={}", self.alinan, self.yazilan);
             self.son_log = simdi;
         }
@@ -215,6 +295,7 @@ impl<A: SesApi> Oturum<A> {
         Ok(())
     }
     fn geri_yukle(&mut self) -> Result<()> {
+        TELEFON_KONUSUYOR.store(false, Ordering::SeqCst);
         self.sayac_logla(Instant::now(), true);
         self.alinan = 0;
         self.yazilan = 0;
@@ -401,6 +482,7 @@ mod win {
     const POLICY_IID: Guid = guid(0xf8679f50_850a_41cf_9c72_430f290290c8);
     const CLIENT_IID: Guid = guid(0x1cb9ad4c_dbfa_4c32_b178_c2f568a703b2);
     const RENDER_IID: Guid = guid(0xf294acfc_3146_4483_a7bf_addca7c260e2);
+    const CAPTURE_IID: Guid = guid(0xc8adbd64_e71e_48a0_a4de_185c395cd317);
     #[link(name = "ole32")]
     unsafe extern "system" {
         fn CoInitializeEx(p: Ptr, flags: u32) -> i32;
@@ -543,6 +625,7 @@ mod win {
         enumerator: Com,
         policy: Com,
         akis: Option<Akis>,
+        yakalama: Option<(Com, Com)>,
         // Alanlar sırayla düşer; COM bütün arayüzler bırakıldıktan sonra kapanır.
         _apartment: Apartment,
     }
@@ -555,6 +638,7 @@ mod win {
                 enumerator,
                 policy,
                 akis: None,
+                yakalama: None,
                 _apartment: apartment,
             })
         }
@@ -575,6 +659,101 @@ mod win {
                 }
             }
             anyhow::bail!(SURUCU_UYARISI)
+        }
+    }
+
+    impl Yakalayici for WindowsSes {
+        fn ac(&mut self, id: &str) -> Result<()> {
+            self.kapat();
+            let id = wide(id);
+            unsafe {
+                let mut p = null_mut();
+                hr(call!(self.enumerator, 5, (*const u16, *mut Ptr) -> i32, id.as_ptr(), &mut p))?;
+                let device = Com(p);
+                let mut p = null_mut();
+                hr(
+                    call!(device, 3, (*const Guid, u32, Ptr, *mut Ptr) -> i32, &CLIENT_IID, 1, null_mut(), &mut p),
+                )?;
+                let client = Com(p);
+                let format = Format {
+                    tag: 1,
+                    kanallar: 1,
+                    hiz: 16000,
+                    bayt_hiz: 32000,
+                    blok: 2,
+                    bit: 16,
+                    ek: 0,
+                };
+                hr(
+                    call!(client, 3, (u32, u32, i64, i64, *const Format, *const Guid) -> i32,
+                    0, 0x88000000, 600000, 0, &format, null()),
+                )?;
+                let mut capture = null_mut();
+                hr(call!(client, 14, (*const Guid, *mut Ptr) -> i32, &CAPTURE_IID, &mut capture))?;
+                hr(call!(client, 10, () -> i32))?;
+                self.yakalama = Some((Com(capture), client));
+            }
+            Ok(())
+        }
+        fn oku(&mut self, pcm: &mut [i16]) -> Result<usize> {
+            let Some((capture, _client)) = self.yakalama.as_ref() else {
+                anyhow::bail!("Yakalama akışı kapalı")
+            };
+            unsafe {
+                let mut frames = 0;
+                hr(call!(capture, 5, (*mut u32) -> i32, &mut frames))?;
+                if frames == 0 {
+                    return Ok(0);
+                }
+                let mut data: *mut u8 = null_mut();
+                let mut flags = 0;
+                let mut device_pos = 0;
+                let mut qpc_pos = 0;
+                hr(
+                    call!(capture, 3, (*mut *mut u8, *mut u32, *mut u32, *mut u64, *mut u64) -> i32,
+                    &mut data, &mut frames, &mut flags, &mut device_pos, &mut qpc_pos),
+                )?;
+                let n = (frames as usize).min(pcm.len());
+                if flags & 2 != 0 {
+                    pcm[..n].fill(0);
+                } else {
+                    std::ptr::copy_nonoverlapping(data.cast::<i16>(), pcm.as_mut_ptr(), n);
+                }
+                hr(call!(capture, 4, (u32) -> i32, frames))?;
+                Ok(n)
+            }
+        }
+        fn kapat(&mut self) {
+            self.yakalama = None;
+        }
+    }
+
+    impl WindowsSes {
+        pub(super) fn varsayilan_kayit(&self) -> Result<String> {
+            let mut p = null_mut();
+            unsafe {
+                hr(call!(self.enumerator, 4, (u32, u32, *mut Ptr) -> i32, 1, 0, &mut p))?;
+            }
+            Com(p).id()
+        }
+        pub(super) fn etkin_kayitlar(&self) -> Result<Vec<(String, String)>> {
+            unsafe {
+                let mut p = null_mut();
+                hr(call!(self.enumerator, 3, (u32, u32, *mut Ptr) -> i32, 1, 1, &mut p))?;
+                let devices = Com(p);
+                let mut count = 0;
+                hr(call!(devices, 3, (*mut u32) -> i32, &mut count))?;
+                let mut out = Vec::new();
+                for i in 0..count {
+                    let mut p = null_mut();
+                    hr(call!(devices, 4, (u32, *mut Ptr) -> i32, i, &mut p))?;
+                    let device = Com(p);
+                    let id = device.id()?;
+                    let ad = device.ad()?;
+                    out.push((id, ad));
+                }
+                Ok(out)
+            }
         }
     }
     impl SesApi for WindowsSes {
@@ -667,6 +846,104 @@ mod win {
             self.akis = None;
         }
     }
+}
+
+#[cfg(windows)]
+fn kopru_isci(rx: std::sync::mpsc::Receiver<()>) {
+    use std::thread;
+    let mut api = match win::WindowsSes::yeni() {
+        Ok(a) => a,
+        Err(e) => {
+            log::warn!("Mikrofon köprüsü açılamadı: {e:#}");
+            return;
+        }
+    };
+    let (_, cable_input) = match api.cable() {
+        Ok(c) => c,
+        Err(e) => {
+            log::warn!("Mikrofon köprüsü CABLE aygıtı bulunamadı: {e:#}");
+            return;
+        }
+    };
+    if let Err(e) = api.baslat(&cable_input) {
+        log::warn!("Mikrofon köprüsü çıkışı açılamadı: {e:#}");
+        return;
+    }
+    let mut kaynak: Option<String> = None;
+    let mut pcm = [0i16; 480];
+    loop {
+        if rx.try_recv().is_ok() {
+            break;
+        }
+        if kaynak.is_none() {
+            match kopru_kaynak(&api) {
+                Ok(id) => match api.ac(&id) {
+                    Ok(()) => {
+                        log::info!("Mikrofon köprüsü kaynağı seçildi");
+                        kaynak = Some(id);
+                    }
+                    Err(e) => log::warn!(
+                        "Mikrofon köprüsü kaynağı açılamadı; 2 sn sonra denenecek: {e:#}"
+                    ),
+                },
+                Err(e) => log::warn!(
+                    "Mikrofon köprüsü kaynak aygıtı bulunamadı; 2 sn sonra denenecek: {e:#}"
+                ),
+            }
+            if kaynak.is_none() {
+                if rx.recv_timeout(Duration::from_secs(2)).is_ok() {
+                    break;
+                }
+                continue;
+            }
+        }
+        match api.oku(&mut pcm) {
+            Ok(0) => thread::sleep(Duration::from_millis(5)),
+            Ok(n) => {
+                if !TELEFON_KONUSUYOR.load(Ordering::SeqCst) {
+                    let mut offset = 0;
+                    while offset < n {
+                        match api.yaz(&pcm[offset..n]) {
+                            Ok(0) => thread::sleep(Duration::from_millis(2)),
+                            Ok(wrote) => offset += wrote,
+                            Err(e) => {
+                                log::warn!("Mikrofon köprüsü çıkışı yazılamadı: {e:#}");
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                log::warn!("Mikrofon köprüsü kaynağı koptu; 2 sn sonra yeniden seçilecek: {e:#}");
+                api.kapat();
+                kaynak = None;
+                if rx.recv_timeout(Duration::from_secs(2)).is_ok() {
+                    break;
+                }
+            }
+        }
+    }
+    api.kapat();
+    api.durdur();
+}
+
+#[cfg(windows)]
+fn kopru_kaynak(api: &win::WindowsSes) -> Result<String> {
+    let default = api.varsayilan_kayit()?;
+    let devices = api.etkin_kayitlar()?;
+    let kaydedilmis = geri_yolu()
+        .ok()
+        .and_then(|path| std::fs::read(path).ok())
+        .and_then(|bytes| serde_json::from_slice::<Vec<(u32, String)>>(&bytes).ok())
+        .and_then(|items| {
+            items
+                .into_iter()
+                .find(|(role, _)| *role == 0)
+                .map(|(_, id)| id)
+        });
+    kopru_kaynak_sec(Some(&default), kaydedilmis.as_deref(), &devices)
+        .ok_or_else(|| anyhow::anyhow!("Kullanılabilir bilgisayar mikrofonu bulunamadı"))
 }
 
 #[cfg(test)]

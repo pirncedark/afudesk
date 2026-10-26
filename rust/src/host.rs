@@ -164,6 +164,8 @@ pub struct Host {
     kod_kapandi: Arc<tokio::sync::Notify>,
     kimlik: EndpointId,
     endpoint: Endpoint,
+    #[cfg(windows)]
+    mikrofon_koprusu: Option<crate::sanal_mikrofon::MikrofonKoprusu>,
 }
 
 impl Host {
@@ -182,6 +184,10 @@ impl Host {
         self.komut.clone()
     }
     pub fn durdur(&mut self) {
+        #[cfg(windows)]
+        if let Some(mut kopru) = self.mikrofon_koprusu.take() {
+            kopru.durdur();
+        }
         if let Some(d) = self.durdur.take() {
             let _ = d.send(());
         }
@@ -211,7 +217,17 @@ pub async fn baslat(ayar: HostAyar, fabrika: Arc<dyn Fabrika>) -> Result<Host> {
     let geri_yukle = crate::sanal_mikrofon::baslangicta_geri_yukle;
     #[cfg(not(windows))]
     let geri_yukle = || Ok(());
-    baslat_geri_yuklemeyle(ayar, fabrika, geri_yukle).await
+    let mut host = baslat_geri_yuklemeyle(ayar, fabrika, geri_yukle).await?;
+    #[cfg(windows)]
+    if crate::sanal_mikrofon::cable_var() {
+        match crate::sanal_mikrofon::MikrofonKoprusu::baslat() {
+            Ok(kopru) => host.mikrofon_koprusu = Some(kopru),
+            Err(e) => {
+                log::warn!("Mikrofon köprüsü başlatılamadı; host çalışmaya devam ediyor: {e:#}")
+            }
+        }
+    }
+    Ok(host)
 }
 
 async fn baslat_geri_yuklemeyle(
@@ -270,6 +286,8 @@ async fn baslat_geri_yuklemeyle(
         kod_kapandi,
         kimlik,
         endpoint,
+        #[cfg(windows)]
+        mikrofon_koprusu: None,
     })
 }
 
