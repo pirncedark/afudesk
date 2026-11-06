@@ -318,7 +318,11 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
                 kayit.erisim = false;
                 // Local access is already revoked; an offline directory cannot
                 // block stop/exit. Its last-seen record expires normally.
-                let _ = g.dizin.yenile(&kayit).await;
+                let _ = tokio::time::timeout(
+                    std::time::Duration::from_secs(2),
+                    g.dizin.yenile(&kayit),
+                )
+                .await;
             }
             Ok(json!({}))
         }
