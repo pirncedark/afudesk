@@ -40,13 +40,11 @@ Future<void> main() async {
   if (Platform.isWindows) {
     ArkaPlan.kanal.setMethodCallHandler((call) async {
       if (call.method == 'durdur' || call.method == 'cik') {
-        try {
-          await hesap.duraklat();
-        } finally {
-          if (call.method == 'cik') {
-            await ArkaPlan.kanal.invokeMethod<void>('kapat');
-          }
-        }
+        await tepsiKomutu(
+          hesap.duraklat,
+          () => ArkaPlan.kanal.invokeMethod<void>('kapat'),
+          cikis: call.method == 'cik',
+        );
       }
     });
   }

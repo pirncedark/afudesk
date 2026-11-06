@@ -14,6 +14,7 @@
 namespace {
 constexpr UINT kTray = WM_APP + 17;
 constexpr UINT kOpen = 1001, kStop = 1002, kExit = 1003;
+constexpr UINT_PTR kExitWatchdog = 77;
 constexpr wchar_t kRun[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 
 std::wstring StartupCommand() {
@@ -91,6 +92,7 @@ bool FlutterWindow::OnCreate() {
         result->Success(flutter::EncodableValue(StartupEnabled()));
       } else if (call.method_name() == "kapat") {
         quitting_ = true;
+        SetTimer(GetHandle(), kExitWatchdog, 3000, nullptr);
         result->Success();
         PostMessageW(GetHandle(), WM_CLOSE, 0, 0);
       } else if (call.method_name() == "ayarla") {
@@ -183,6 +185,11 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  if (message == WM_TIMER && wparam == kExitWatchdog) {
+    RemoveTray();
+    TerminateProcess(GetCurrentProcess(), 0);
+    return 0;
+  }
   if (message == WM_APP + 18) { Show(); SetForegroundWindow(hwnd); return 0; }
   if (message == WM_CLOSE && background_ && tray_added_ && !quitting_) {
     ShowWindow(hwnd, SW_HIDE);
@@ -210,7 +217,11 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
         background_channel_->InvokeMethod("durdur", nullptr);
       if (selected == kExit) {
         // Dart revokes live access before acknowledging exit; no token deletion.
+        // Dart yanıt vermese de süreç 3 sn içinde biter.
+        quitting_ = true;
+        SetTimer(hwnd, kExitWatchdog, 3000, nullptr);
         if (background_channel_) background_channel_->InvokeMethod("cik", nullptr);
+        else PostMessageW(hwnd, WM_CLOSE, 0, 0);
       }
       PostMessage(hwnd, WM_NULL, 0, 0);
     }

@@ -229,4 +229,28 @@ void main() {
     await kasa.sil();
     expect(await kasa.oku(), isNull);
   });
+
+  test('tepsi çıkışı takılan duraklatmayı beklemez, kapat çağrılır', () async {
+    var kapandi = false;
+    await tepsiKomutu(
+      () => Completer<void>().future,
+      () async => kapandi = true,
+      cikis: true,
+      sure: const Duration(milliseconds: 50),
+    );
+    expect(kapandi, isTrue);
+  });
+
+  test('tepsi çıkışı duraklatma hata verse de kapat çağrılır; durdur kapatmaz', () async {
+    var kapandi = false;
+    await tepsiKomutu(
+      () async => throw StateError('x'),
+      () async => kapandi = true,
+      cikis: true,
+    );
+    expect(kapandi, isTrue);
+    kapandi = false;
+    await tepsiKomutu(() async {}, () async => kapandi = true, cikis: false);
+    expect(kapandi, isFalse);
+  });
 }
