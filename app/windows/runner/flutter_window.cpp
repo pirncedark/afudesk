@@ -15,6 +15,8 @@ namespace {
 constexpr UINT kTray = WM_APP + 17;
 constexpr UINT kOpen = 1001, kStop = 1002, kExit = 1003;
 constexpr UINT_PTR kExitWatchdog = 77;
+// Ilk kare geri cagrisi bazen hic gelmez; pencere gorunmez kalir (bkz. acilis.log).
+constexpr UINT_PTR kShowFallback = 78;
 constexpr wchar_t kRun[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 
 std::wstring StartupCommand() {
@@ -160,6 +162,7 @@ bool FlutterWindow::OnCreate() {
   // registered. The following call ensures a frame is pending to ensure the
   // window is shown. It is a no-op if the first frame hasn't completed yet.
   flutter_controller_->ForceRedraw();
+  SetTimer(GetHandle(), kShowFallback, 1500, nullptr);
 
   return true;
 }
@@ -185,6 +188,15 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  if (message == WM_TIMER && wparam == kShowFallback) {
+    KillTimer(hwnd, kShowFallback);
+    // Same rule as the first-frame callback: only --arka-plan keeps the window hidden.
+    if (!quitting_ && (!background_ || !start_hidden_)) {
+      if (!IsWindowVisible(hwnd)) Show();
+      if (flutter_controller_) flutter_controller_->ForceRedraw();
+    }
+    return 0;
+  }
   if (message == WM_TIMER && wparam == kExitWatchdog) {
     RemoveTray();
     TerminateProcess(GetCurrentProcess(), 0);
