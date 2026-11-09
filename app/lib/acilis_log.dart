@@ -2,12 +2,11 @@ import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 
-/// Açılış tanılaması: %LOCALAPPDATA%\AfuDesk\acilis.log (yalnız Windows).
+/// Açılış tanılaması: %LOCALAPPDATA%\AfuDesk\acilis.log ve %TEMP%\afudesk_acilis.log.
 /// Yalnız olay adları yazılır; kimlik, ad ya da token yazılmaz.
 class AcilisLog {
   static void yaz(String olay) {
-    final satir = '${DateTime.now().toIso8601String()} $olay
-';
+    final satir = '${DateTime.now().toIso8601String()} $olay\n';
     final hedefler = <String>[
       '${Platform.environment['LOCALAPPDATA']}/AfuDesk/acilis.log',
       '${Platform.environment['TEMP']}/afudesk_acilis.log',
@@ -20,8 +19,7 @@ class AcilisLog {
       } catch (e) {
         try {
           File('${Platform.environment['TEMP']}/afudesk_acilis_hata.txt')
-              .writeAsStringSync('$yol -> $e
-', mode: FileMode.append);
+              .writeAsStringSync('$yol -> $e\n', mode: FileMode.append);
         } catch (_) {}
       }
     }
