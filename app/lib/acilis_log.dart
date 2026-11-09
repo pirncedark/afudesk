@@ -5,26 +5,26 @@ import 'package:flutter/widgets.dart';
 /// Açılış tanılaması: %LOCALAPPDATA%\AfuDesk\acilis.log (yalnız Windows).
 /// Yalnız olay adları yazılır; kimlik, ad ya da token yazılmaz.
 class AcilisLog {
-  static File? _dosya;
-  static bool _hazir = false;
-
   static void yaz(String olay) {
-    try {
-      if (!_hazir) {
-        _hazir = true;
-        final kok = Platform.environment['LOCALAPPDATA'];
-        if (!Platform.isWindows || kok == null) return;
-        final klasor = Directory('$kok/AfuDesk')..createSync(recursive: true);
-        final f = File('${klasor.path}/acilis.log');
-        if (f.existsSync() && f.lengthSync() > 262144) f.writeAsStringSync('');
-        _dosya = f;
+    final satir = '${DateTime.now().toIso8601String()} $olay
+';
+    final hedefler = <String>[
+      '${Platform.environment['LOCALAPPDATA']}/AfuDesk/acilis.log',
+      '${Platform.environment['TEMP']}/afudesk_acilis.log',
+    ];
+    for (final yol in hedefler) {
+      try {
+        final f = File(yol);
+        f.parent.createSync(recursive: true);
+        f.writeAsStringSync(satir, mode: FileMode.append, flush: true);
+      } catch (e) {
+        try {
+          File('${Platform.environment['TEMP']}/afudesk_acilis_hata.txt')
+              .writeAsStringSync('$yol -> $e
+', mode: FileMode.append);
+        } catch (_) {}
       }
-      _dosya?.writeAsStringSync(
-        '${DateTime.now().toIso8601String()} $olay\n',
-        mode: FileMode.append,
-        flush: true,
-      );
-    } catch (_) {}
+    }
   }
 }
 
