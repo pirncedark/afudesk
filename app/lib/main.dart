@@ -17,10 +17,13 @@ import 'src/rust/api/afudesk.dart' as rust;
 import 'src/rust/frb_generated.dart';
 import 'tema.dart';
 import 'arka_plan/arka_plan.dart';
+import 'acilis_log.dart';
 
 Future<void> main() async {
+  AcilisLog.yaz('main basladi');
   WidgetsFlutterBinding.ensureInitialized();
   await RustLib.init();
+  AcilisLog.yaz('RustLib hazir');
   // Kalıcı cihaz kimliği ve kayıtlı cihazlar: masaüstünde çekirdek kendi bulur
   // (%LOCALAPPDATA%\AfuDesk); Android'de uygulamaya özel klasörü Kotlin verir.
   if (Platform.isAndroid) {
@@ -36,7 +39,13 @@ Future<void> main() async {
   final motor = RustMotor();
   final hesap = GercekHesapServisi.rust(motor);
   // Restore after the UI/host starts; an offline PC must still open immediately.
-  unawaited(hesap.geriYukle());
+  unawaited(
+    hesap
+        .geriYukle()
+        .then((_) => AcilisLog.yaz('geriYukle bitti'))
+        .catchError((Object _) => AcilisLog.yaz('geriYukle hata')),
+  );
+  AcilisLog.yaz('geriYukle basladi');
   if (Platform.isWindows) {
     ArkaPlan.kanal.setMethodCallHandler((call) async {
       if (call.method == 'durdur' || call.method == 'cik') {
@@ -48,6 +57,10 @@ Future<void> main() async {
       }
     });
   }
+  AcilisLog.yaz('runApp cagrildi');
+  WidgetsBinding.instance.addPostFrameCallback(
+    (_) => AcilisLog.yaz('ilk kare cizildi'),
+  );
   runApp(AfuDeskUygulama(motor: motor, hesapServisi: hesap));
 }
 
@@ -103,6 +116,7 @@ class _AfuDeskUygulamaDurum extends State<AfuDeskUygulama> {
   }
 
   void _hostOlay(HostOlay o) {
+    AcilisLog.yaz('hostOlay ${o.tur}');
     switch (o.tur) {
       case 'istek':
         _istekGoster(o);
@@ -122,12 +136,14 @@ class _AfuDeskUygulamaDurum extends State<AfuDeskUygulama> {
     final baglam = _gezgin.currentState?.overlay?.context;
     if (_istekAcik || baglam == null) return;
     _istekAcik = true;
+    AcilisLog.yaz('showDialog acildi kayitli=${o.kayitli}');
     final sonuc = await showDialog<IstekKarari?>(
       context: baglam,
       barrierDismissible: false,
       builder: (_) => IstekPenceresi(ad: o.ad, kayitli: o.kayitli),
     );
     _istekAcik = false;
+    AcilisLog.yaz('showDialog kapandi sonuc=${sonuc == null ? 'red' : 'kabul'}');
     if (sonuc == null) {
       await widget.motor.hostRed();
     } else {
@@ -144,6 +160,7 @@ class _AfuDeskUygulamaDurum extends State<AfuDeskUygulama> {
   Widget build(BuildContext context) {
     return MaterialApp(
       navigatorKey: _gezgin,
+      navigatorObservers: [AcilisGezgini()],
       title: 'AfuDesk',
       debugShowCheckedModeBanner: false,
       theme: afuTema(),
