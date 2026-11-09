@@ -14,8 +14,8 @@ class AcilisLog {
         _hazir = true;
         final kok = Platform.environment['LOCALAPPDATA'];
         if (!Platform.isWindows || kok == null) return;
-        final klasor = Directory('$kok\AfuDesk')..createSync(recursive: true);
-        final f = File('${klasor.path}\acilis.log');
+        final klasor = Directory('$kok/AfuDesk')..createSync(recursive: true);
+        final f = File('${klasor.path}/acilis.log');
         if (f.existsSync() && f.lengthSync() > 262144) f.writeAsStringSync('');
         _dosya = f;
       }
@@ -30,12 +30,12 @@ class AcilisLog {
 
 class AcilisGezgini extends NavigatorObserver {
   @override
-  void didPush(Route<dynamic> route, Route<dynamic>? onceki) =>
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) =>
       AcilisLog.yaz('push ${route.runtimeType} ${route.settings.name ?? ''}');
   @override
-  void didPop(Route<dynamic> route, Route<dynamic>? onceki) =>
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) =>
       AcilisLog.yaz('pop ${route.runtimeType} ${route.settings.name ?? ''}');
   @override
-  void didRemove(Route<dynamic> route, Route<dynamic>? onceki) =>
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) =>
       AcilisLog.yaz('remove ${route.runtimeType}');
 }
