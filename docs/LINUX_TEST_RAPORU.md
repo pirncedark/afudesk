@@ -16,8 +16,8 @@ Kaynak kod: e8d2710. Tam CI43100024620 ve Ubuntu24.04 CI43100030810 sürüyor. �
 | Linux core, bridge ve native Wayland type-check/link | DONE | e42873f CI43094930051: 225 core + 19 bridge; Flutter Linux release PASS. Gerçek Wayland runtime anlamına gelmez |
 | Flutter analyze ve tüm arayüz testleri | DONE | e42873f Windows/Linux ayrı analyze adımları ve 229 arayüz testi PASS; yerel SDK cache yazma izni yok |
 | Linux release | DONE | e42873f CI43094930051/43094934655 Flutter build linux release PASS |
-| Xvfb kare/input/Flutter pencere | UNVERIFIED | e8d2710 son CI sonucu bekleniyor; screenshot üretilmiş sayılmaz |
-| .deb üretim, kurulum, ldd ve kaldırma | UNVERIFIED | Son CI sonucu bekleniyor |
+| Xvfb kare/input/Flutter pencere | DONE | a50404e, CI https://github.com/pirncedark/afudesk/actions/runs/43111365389 linux job success |
+| .deb üretim, kurulum, ldd ve kaldırma | DONE | a50404e, CI https://github.com/pirncedark/afudesk/actions/runs/43111365389 linux job success |
 | Windows DPAPI/release regresyonu | DONE | CI43094930051 DPAPI, core231, bridge19, analyze, Flutter229 ve release PASS; job yalnız artifact servis hatası nedeniyle FAILURE. e8d2710 tekrar koşusu sürüyor |
 | Gerçek Wayland compositor/Google hesabı/Tailscale/Proxmox | UNVERIFIED | Uygun gerçek donanım ve hesap oturumu yok; sunucuya bağlanılmadı |
 
