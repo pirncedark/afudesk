@@ -6,6 +6,8 @@
 #include <openssl/crypto.h>
 #include <sys/stat.h>
 #include <sys/file.h>
+#include <sys/syscall.h>
+#include <linux/fs.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <array>
@@ -134,9 +136,9 @@ void LoadKey(int dir, Key& key, bool create) {
       Check(RAND_bytes(key.bytes.data(), key.bytes.size()) == 1);
       WriteAll(file.fd, key.bytes.data(), key.bytes.size());
       // Publish a complete key atomically without replacing any existing key.
-      const bool published = linkat(dir, temporary.c_str(), dir, "key", 0) == 0;
+      const bool published = syscall(SYS_renameat2, dir, temporary.c_str(), dir, "key", RENAME_NOREPLACE) == 0;
       const int saved_errno = errno;
-      Check(unlinkat(dir, temporary.c_str(), 0) == 0);
+      if (!published) Check(unlinkat(dir, temporary.c_str(), 0) == 0);
       Check(fsync(dir) == 0);
       if (published) return;
       Check(saved_errno == EEXIST);

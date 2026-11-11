@@ -82,6 +82,7 @@ int main(int argc, char** argv) {
     value = afudesk::ReadGoogleSession(&error);
     if (value != nullptr || error == nullptr) return 17;
     g_clear_error(&error);
+    if (!afudesk::WriteGoogleSession("restored-ci-session", &error) || error != nullptr) return 23;
     if (chmod((dir + "/key").c_str(), 0644) != 0) return 20;
     value = afudesk::ReadGoogleSession(&error);
     if (value != nullptr || error == nullptr) return 21;
