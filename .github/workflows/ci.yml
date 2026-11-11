@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       wan:
-        description: "boş = normal CI | linux = yalnız Linux | derle/baglan = WAN"
+        description: "boş = normal CI | linux/ubuntu24 = Linux | derle/baglan = WAN"
         required: false
         default: ""
       derleme_run:
@@ -68,8 +68,8 @@ jobs:
           path: app/build/windows/x64/runner/Release/
 
   linux:
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.wan == '' || inputs.wan == 'linux' }}
-    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.wan == '' || inputs.wan == 'linux' || inputs.wan == 'ubuntu24' }}
+    runs-on: ${{ inputs.wan == 'ubuntu24' && 'ubuntu-24.04' || 'ubuntu-latest' }}
     timeout-minutes: 60
     defaults:
       run:
@@ -79,7 +79,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Linux kanıt dizini
-        run: mkdir -p reports/linux
+        run: |
+          mkdir -p reports/linux-ci
+          cat /etc/os-release > reports/linux-ci/runner-os.txt
+          uname -m >> reports/linux-ci/runner-os.txt
       - name: Linux derleme ve X11 test bağımlılıkları
         timeout-minutes: 8
         run: |
@@ -100,43 +103,43 @@ jobs:
           channel: stable
       - name: Linux betik söz dizimi
         run: |
-          mkdir -p reports/linux
+          mkdir -p reports/linux-ci
           bash -n scripts/linux/build.sh scripts/linux/package.sh scripts/linux/smoke.sh
           python3 -m py_compile scripts/linux/input_receiver.py
       - name: Rust çekirdek testleri (ekransız)
         working-directory: rust
-        run: cargo test --release -- --skip gercek_ 2>&1 | tee ../reports/linux/cargo-test.log
+        run: cargo test --release -- --skip gercek_ 2>&1 | tee ../reports/linux-ci/cargo-test.log
       - name: Rust Flutter köprüsü kontrolü
-        run: cargo check --manifest-path app/kopru/Cargo.toml 2>&1 | tee reports/linux/cargo-check.log
+        run: cargo check --manifest-path app/kopru/Cargo.toml 2>&1 | tee reports/linux-ci/cargo-check.log
       - name: Flutter analiz, test ve Linux release
         env:
           AFUDESK_GOOGLE_DESKTOP_CLIENT_ID: ${{ vars.AFUDESK_GOOGLE_DESKTOP_CLIENT_ID }}
           AFUDESK_GOOGLE_WEB_CLIENT_ID: ${{ vars.AFUDESK_GOOGLE_WEB_CLIENT_ID }}
           AFUDESK_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.AFUDESK_GOOGLE_DESKTOP_CLIENT_SECRET }}
-        run: bash scripts/linux/build.sh 2>&1 | tee reports/linux/flutter-build.log
+        run: bash scripts/linux/build.sh 2>&1 | tee reports/linux-ci/flutter-build.log
       - name: Gerçek ekran ve girdi smoke derlemesi
         run: |
           cargo build --release --manifest-path rust/Cargo.toml --example linux_smoke
           g++ -std=c++14 -Wall -Wextra -Werror app/linux/runner/google_secure_storage.cc \
             app/linux/tests/google_secure_storage_test.cc $(pkg-config --cflags --libs libsecret-1) \
-            -o reports/linux/secure-storage-test
+            -o reports/linux-ci/secure-storage-test
       - name: Debian v0.1.0 paketi
-        run: bash scripts/linux/package.sh 2>&1 | tee reports/linux/package.log
+        run: bash scripts/linux/package.sh "$PWD/app/build/linux/x64/release/bundle" "$PWD/reports/linux-ci" 2>&1 | tee reports/linux-ci/package.log
       - name: Debian kurulum ve kaldırma doğrulaması
         run: |
-          sudo apt-get install -y ./reports/linux/afudesk_0.1.0_amd64.deb
+          sudo apt-get install -y ./reports/linux-ci/afudesk_0.1.0_amd64.deb
           test -x /opt/afudesk/afudesk
           test -x /usr/bin/afudesk
           test -f /usr/share/applications/afudesk.desktop
-          dpkg-query -W afudesk | tee reports/linux/deb-installed.txt
-          ldd /opt/afudesk/afudesk | tee reports/linux/ldd.txt
-          ! grep -q 'not found' reports/linux/ldd.txt
+          dpkg-query -W afudesk | tee reports/linux-ci/deb-installed.txt
+          ldd /opt/afudesk/afudesk | tee reports/linux-ci/ldd.txt
+          ! grep -q 'not found' reports/linux-ci/ldd.txt
       - name: Gerçek Xvfb ekranı, Enigo girdisi, Secret Service ve kurulu Flutter pencere testi
         run: |
           set -o pipefail
           xvfb-run -a -s '-screen 0 1280x800x24 -ac +extension RANDR' \
-            dbus-run-session -- bash scripts/linux/smoke.sh "$PWD/reports/linux" /usr/bin/afudesk \
-            2>&1 | tee reports/linux/session.log
+            dbus-run-session -- bash scripts/linux/smoke.sh "$PWD/reports/linux-ci" /usr/bin/afudesk \
+            2>&1 | tee reports/linux-ci/session.log
       - name: Debian paketini kaldırma
         if: always()
         run: |
@@ -144,22 +147,22 @@ jobs:
             sudo apt-get remove -y afudesk
             test ! -e /opt/afudesk/afudesk
             test ! -e /usr/bin/afudesk
-            printf 'PASS: package removed\n' > reports/linux/deb-removed.txt
+            printf 'PASS: package removed\n' > reports/linux-ci/deb-removed.txt
           fi
       - name: Linux sonuç kaydı
         if: always()
         env:
           JOB_STATUS: ${{ job.status }}
         run: |
-          mkdir -p reports/linux
-          printf 'job_status=%s\nrunner=%s\n' "$JOB_STATUS" "$RUNNER_OS" > reports/linux/job-status.txt
+          mkdir -p reports/linux-ci
+          printf 'job_status=%s\nrunner=%s\n' "$JOB_STATUS" "$RUNNER_OS" > reports/linux-ci/job-status.txt
       - name: Linux paketi, bundle ve kanıtlar
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: AfuDesk-linux-v0.1.0-x64
           path: |
-            reports/linux/
+            reports/linux-ci/
             app/build/linux/x64/release/bundle/
           if-no-files-found: warn
 
