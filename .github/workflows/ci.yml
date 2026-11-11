@@ -23,8 +23,6 @@ jobs:
   test:
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.wan == '' || inputs.wan == 'windows' }}
     runs-on: windows-latest
-    env:
-      CARGO_TARGET_DIR: ${{ github.workspace }}/rust/target
     steps:
       - uses: actions/checkout@v4
       - name: Arka plan betikleri söz dizimi (çalıştırılmaz)
@@ -87,7 +85,6 @@ jobs:
         shell: bash
     env:
       CARGO_TERM_COLOR: always
-      CARGO_TARGET_DIR: ${{ github.workspace }}/rust/target
     steps:
       - uses: actions/checkout@v4
       - name: Linux kanıt dizini
