@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       wan:
-        description: "boş = normal CI | linux/ubuntu24 = Linux | derle/baglan = WAN"
+        description: "boş = tüm CI | windows/linux/ubuntu24 | derle/baglan = WAN"
         required: false
         default: ""
       derleme_run:
@@ -21,7 +21,7 @@ on:
 
 jobs:
   test:
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.wan == '' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.wan == '' || inputs.wan == 'windows' }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -85,17 +85,7 @@ jobs:
           uname -m >> reports/linux-ci/runner-os.txt
       - name: Linux derleme ve X11 test bağımlılıkları
         timeout-minutes: 8
-        run: |
-          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
-          sudo env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=1 \
-            -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 \
-            install -y --no-install-recommends clang libclang-dev cmake ninja-build pkg-config libgtk-3-dev \
-            libsecret-1-dev libudev-dev libdbus-1-dev libpipewire-0.3-dev \
-            libxcb1-dev libxcb-randr0-dev libxcb-shm0-dev libxcb-xfixes0-dev \
-            libxrandr-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
-            libegl1-mesa-dev libgl1-mesa-dri libglu1-mesa-dev libxdo-dev \
-            xvfb xauth xdotool scrot openbox python3-tk dbus-x11 gnome-keyring \
-            dpkg-dev desktop-file-utils
+        run: bash scripts/linux/ci-dependencies.sh 2>&1 | tee reports/linux-ci/dependencies.log
       - uses: dtolnay/rust-toolchain@stable
       - uses: subosito/flutter-action@v2
         with:
@@ -104,7 +94,7 @@ jobs:
       - name: Linux betik söz dizimi
         run: |
           mkdir -p reports/linux-ci
-          bash -n scripts/linux/build.sh scripts/linux/package.sh scripts/linux/smoke.sh
+          bash -n scripts/linux/*.sh
           python3 -m py_compile scripts/linux/input_receiver.py
       - name: Rust çekirdek testleri (ekransız)
         working-directory: rust
