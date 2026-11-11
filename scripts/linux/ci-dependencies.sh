@@ -21,23 +21,7 @@ fi
 printf 'APT mirror: %s (signature verification unchanged)\n' "$mirror"
 # Replace only Ubuntu entries, including runner mirror+file: sources. Keep
 # Signed-By, components, suites and unrelated repositories intact.
-sudo python3 - "$mirror" <<'PY'
-import pathlib, re, sys
-mirror = sys.argv[1]
-for path in [pathlib.Path('/etc/apt/sources.list'), *pathlib.Path('/etc/apt/sources.list.d').glob('*.list'), *pathlib.Path('/etc/apt/sources.list.d').glob('*.sources')]:
-    if not path.exists():
-        continue
-    text = path.read_text()
-    if path.suffix == '.sources':
-        blocks = re.split(r'(\n\s*\n)', text)
-        for i, block in enumerate(blocks):
-            if re.search(r'^URIs:.*(?:ubuntu|apt-mirrors)', block, re.M):
-                blocks[i] = re.sub(r'^URIs:.*$', 'URIs: ' + mirror, block, flags=re.M)
-        text = ''.join(blocks)
-    else:
-        text = re.sub(r'(?m)^(deb(?:-src)?\s+(?:\[[^\]]*\]\s+)?)(\S*(?:ubuntu|apt-mirrors)\S*)(\s+)', lambda m: m[1] + mirror + m[3], text)
-    path.write_text(text)
-PY
+sudo python3 "$(dirname "${BASH_SOURCE[0]}")/apt_sources.py" "$mirror"
 options=(-o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20)
 sudo apt-get "${options[@]}" -o APT::Update::Error-Mode=any update
 sudo env DEBIAN_FRONTEND=noninteractive apt-get "${options[@]}" install -y --no-install-recommends \

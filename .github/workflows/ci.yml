@@ -96,6 +96,7 @@ jobs:
           mkdir -p reports/linux-ci
           bash -n scripts/linux/*.sh
           python3 -m py_compile scripts/linux/input_receiver.py
+          python3 scripts/linux/test_apt_sources.py
       - name: Rust çekirdek testleri (ekransız)
         working-directory: rust
         run: cargo test --release -- --skip gercek_ 2>&1 | tee ../reports/linux-ci/cargo-test.log
