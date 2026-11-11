@@ -133,7 +133,8 @@ jobs:
         run: bash scripts/linux/build.sh 2>&1 | tee reports/linux-ci/flutter-build.log
       - name: Gerçek ekran ve girdi smoke derlemesi
         run: |
-          cargo build --release --manifest-path rust/Cargo.toml --example linux_smoke
+          df -h "$PWD" | tee reports/linux-ci/disk-before-smoke-build.txt
+          cargo build --release --manifest-path rust/Cargo.toml --example linux_smoke 2>&1 | tee reports/linux-ci/smoke-build.log
       - name: Debian v0.1.0 paketi
         run: bash scripts/linux/package.sh "$PWD/app/build/linux/x64/release/bundle" "$PWD/reports/linux-ci" 2>&1 | tee reports/linux-ci/package.log
       - name: Debian kurulum ve kaldırma doğrulaması
@@ -167,14 +168,13 @@ jobs:
         run: |
           mkdir -p reports/linux-ci
           printf 'job_status=%s\nrunner=%s\n' "$JOB_STATUS" "$RUNNER_OS" > reports/linux-ci/job-status.txt
-      - name: Linux paketi, bundle ve kanıtlar
+      - name: Linux paketi ve kanıtlar
         if: always()
+        timeout-minutes: 5
         uses: actions/upload-artifact@v4
         with:
           name: AfuDesk-linux-v0.1.0-x64
-          path: |
-            reports/linux-ci/
-            app/build/linux/x64/release/bundle/
+          path: reports/linux-ci/
           if-no-files-found: warn
 
   # WAN TEST-1: izleyici GitHub'ın makinesinde (farklı makine, farklı ağ), host
