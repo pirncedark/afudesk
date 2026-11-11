@@ -376,6 +376,58 @@ mod guvenlik_testleri {
         assert_eq!(linux_google_karari(crate::google::Karar::Kabul, true), crate::google::Karar::Kabul);
     }
 
+    #[test]
+    fn linux_ilk_onayin_izinleri_yeniden_baglaninca_artmaz() {
+        let ilk = Izinler { kontrol: false, pano: false, dosya: false, oyun_kolu: false };
+        let sonraki = google_izinleri(true, Some(&ilk));
+        assert_eq!(sonraki, ilk);
+        assert_eq!(google_izinleri(false, Some(&ilk)), Izinler {
+            kontrol: true, pano: true, dosya: true, oyun_kolu: false,
+        }, "Windows varsayılanı korunmalı");
+    }
+
+    #[test]
+    fn linux_yerel_onay_silinince_aktif_oturum_yetkisi_biter() {
+        let dizin = tempfile::tempdir().unwrap();
+        let yol = dizin.path().join("kayitlar.json");
+        let izinler = Izinler { kontrol: false, pano: true, dosya: false, oyun_kolu: false };
+        guvenilen::guncelle(&yol, |kk| guvenilen::hosta_ekle(kk, guvenilen::HostKaydi {
+            izleyici_kimlik: "anahtar".into(), ad: "Cihaz".into(), etiket: None,
+            cihaz_izinleri: Some((&izinler).into()), jeton_sha256: "ozet".into(),
+            eklenme: 1, son_gorulme: 2,
+        })).unwrap();
+        assert!(yerel_onay_surer(&yol, "anahtar", &izinler));
+        guvenilen::guncelle(&yol, |kk| guvenilen::hosttan_kaldir(kk, "anahtar")).unwrap();
+        assert!(!yerel_onay_surer(&yol, "anahtar", &izinler));
+    }
+
+    #[tokio::test]
+    async fn linux_anahtar_iptali_quic_oturumunu_kapatir() {
+        let ep = ag::uc_nokta(Kurulum::YalnizYerel, false).await.unwrap();
+        let iz = ag::uc_nokta(Kurulum::YalnizYerel, false).await.unwrap();
+        let hedef = ag::hedef_adres(&ep.id().to_string(),
+            &ep.bound_sockets().iter().map(ToString::to_string).collect::<Vec<_>>(), &[]).unwrap();
+        let al = async { ep.accept().await.unwrap().await.unwrap() };
+        let (host, istemci) = tokio::join!(al, ag::baglan(&iz, hedef, Duration::from_secs(5)));
+        let istemci = istemci.unwrap();
+        let dizin = tempfile::tempdir().unwrap();
+        let yol = dizin.path().join("kayitlar.json");
+        let izinler = Izinler { kontrol: false, pano: false, dosya: false, oyun_kolu: false };
+        let uzak = host.remote_id().to_string();
+        guvenilen::guncelle(&yol, |kk| guvenilen::hosta_ekle(kk, guvenilen::HostKaydi {
+            izleyici_kimlik: uzak.clone(), ad: "Cihaz".into(), etiket: None,
+            cihaz_izinleri: Some((&izinler).into()), jeton_sha256: "ozet".into(),
+            eklenme: 1, son_gorulme: 2,
+        })).unwrap();
+        let izleme = tokio::spawn(yerel_onayi_izle(yol.clone(), uzak.clone(), izinler, host.clone()));
+        guvenilen::guncelle(&yol, |kk| guvenilen::hosttan_kaldir(kk, &uzak)).unwrap();
+        let kapandi = tokio::time::timeout(Duration::from_secs(3), istemci.closed()).await;
+        izleme.abort();
+        assert!(kapandi.is_ok(), "yerel key revoke gerçek QUIC bağlantısını kapatmalı");
+        ep.close().await;
+        iz.close().await;
+    }
+
     #[tokio::test]
     async fn linux_dogru_parola_bile_eslesmemis_cihaza_ekran_acmaz() {
         let ep = ag::uc_nokta(Kurulum::YalnizYerel, false).await.unwrap();
@@ -923,6 +975,32 @@ fn linux_google_karari(karar: crate::google::Karar, eslesmis: bool) -> crate::go
     }
 }
 
+fn google_izinleri(guvenli_linux: bool, kayit: Option<&Izinler>) -> Izinler {
+    if guvenli_linux {
+        return kayit.cloned().unwrap_or(Izinler {
+            kontrol: false, pano: false, dosya: false, oyun_kolu: false,
+        });
+    }
+    Izinler { kontrol: true, pano: true, dosya: true, oyun_kolu: false }
+}
+
+fn yerel_onay_surer(yol: &Path, uzak: &str, izinler: &Izinler) -> bool {
+    guvenilen::onayli_izinler(yol, uzak).as_ref() == Some(izinler)
+}
+
+async fn yerel_onayi_izle(yol: PathBuf, uzak: String, izinler: Izinler, c: Baglanti) {
+    loop {
+        if !yerel_onay_surer(&yol, &uzak, &izinler) {
+            c.close(0u32.into(), b"local device grant revoked");
+            break;
+        }
+        tokio::select! {
+            _ = c.closed() => break,
+            _ = tokio::time::sleep(Duration::from_secs(1)) => {},
+        }
+    }
+}
+
 async fn oturum(
     guvenli_linux: bool,
     yerel_kimlik: &str,
@@ -975,27 +1053,21 @@ async fn oturum(
                 g.yetki(&kanit, &ag::kimlik_metni(c.remote_id())),
             )
             .await;
-            let eslesmis = match &giris {
-                Giris::Yeni { kayit: Some(k), .. } =>
-                    guvenilen::oku(&guvenilen::kayit_yolu(&k.veri)).hostlar.iter()
-                        .any(|h| h.izleyici_kimlik == ag::kimlik_metni(c.remote_id())),
-                Giris::Devam(d) => d.kimlik == c.remote_id(),
-                _ => false,
+            let kayitli_izinler = match &giris {
+                Giris::Yeni { kayit: Some(k), .. } => guvenilen::onayli_izinler(
+                    &guvenilen::kayit_yolu(&k.veri), &ag::kimlik_metni(c.remote_id())),
+                Giris::Devam(d) if d.kimlik == c.remote_id() => Some(d.izinler.clone()),
+                _ => None,
             };
             let yetki = yetki.map(|s| s.map(|(karar, ad)| (
-                if guvenli_linux { linux_google_karari(karar, eslesmis) } else { karar }, ad
+                if guvenli_linux { linux_google_karari(karar, kayitli_izinler.is_some()) } else { karar }, ad
             )));
             match yetki {
                 Ok(Ok((crate::google::Karar::Kabul, cihaz_adi))) => {
                     google_kanit = Some(kanit);
                     (
                         cihaz_adi,
-                        Some(Izinler {
-                            kontrol: true,
-                            pano: true,
-                            dosya: true,
-                            oyun_kolu: false,
-                        }),
+                        Some(google_izinleri(guvenli_linux, kayitli_izinler.as_ref())),
                         Tur::Google,
                     )
                 }
@@ -1106,9 +1178,11 @@ async fn oturum(
             let sonuc = guvenilen::guncelle(&guvenilen::kayit_yolu(&k.veri), |kk| {
                 if let Some(h) = kk.hostlar.iter_mut().find(|h| h.izleyici_kimlik == izleyici) {
                     h.son_gorulme = simdi;
+                    h.cihaz_izinleri = Some((&izinler).into());
                 } else {
                     guvenilen::hosta_ekle(kk, guvenilen::HostKaydi {
                         izleyici_kimlik: izleyici, ad: ad.clone(), etiket: None,
+                        cihaz_izinleri: Some((&izinler).into()),
                         jeton_sha256: guvenilen::jeton_ozeti(&guvenilen::yeni_jeton()),
                         eklenme: simdi, son_gorulme: simdi,
                     });
@@ -1121,6 +1195,16 @@ async fn oturum(
         } else if !matches!(&giris, Giris::Devam(d) if d.kimlik == c.remote_id()) {
             reddet(&mut w, c, "Cihaz onayı kaydedilemedi; yeniden dene.").await;
             return Oturum::Reddedildi;
+        }
+    }
+    // A separate task must close QUIC even while the session loop awaits a
+    // slow Google request. JoinSet aborts it on every return from this session.
+    let mut yerel_onay_gorevleri = tokio::task::JoinSet::new();
+    if guvenli_linux && google_kanit.is_some() {
+        if let Giris::Yeni { kayit: Some(k), .. } = &giris {
+            yerel_onay_gorevleri.spawn(yerel_onayi_izle(
+                guvenilen::kayit_yolu(&k.veri), ag::kimlik_metni(c.remote_id()),
+                izinler.clone(), c.clone()));
         }
     }
     let devam_bilgisi = DevamBilgisi {
@@ -1277,6 +1361,7 @@ async fn oturum(
                 let simdi = guvenilen::simdi();
                 let kayit = guvenilen::HostKaydi {
                     etiket: None,
+                    cihaz_izinleri: None,
                     izleyici_kimlik: izleyici,
                     ad: ad.clone(),
                     jeton_sha256: guvenilen::jeton_ozeti(&jeton),

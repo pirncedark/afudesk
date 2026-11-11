@@ -27,9 +27,36 @@ pub struct HostKaydi {
     pub ad: String,
     #[serde(default)]
     pub etiket: Option<String>,
+    /// Independent Google device grant. Absent legacy entries need a new
+    /// explicit approval; Windows legacy serialization remains unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cihaz_izinleri: Option<CihazIzinleri>,
     pub jeton_sha256: String,
     pub eklenme: i64,
     pub son_gorulme: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CihazIzinleri {
+    pub kontrol: bool,
+    pub pano: bool,
+    pub dosya: bool,
+    pub oyun_kolu: bool,
+}
+impl From<&crate::protokol::Izinler> for CihazIzinleri {
+    fn from(i: &crate::protokol::Izinler) -> Self {
+        Self { kontrol: i.kontrol, pano: i.pano, dosya: i.dosya, oyun_kolu: i.oyun_kolu }
+    }
+}
+impl From<CihazIzinleri> for crate::protokol::Izinler {
+    fn from(i: CihazIzinleri) -> Self {
+        Self { kontrol: i.kontrol, pano: i.pano, dosya: i.dosya, oyun_kolu: i.oyun_kolu }
+    }
+}
+
+pub fn onayli_izinler(yol: &Path, uzak_anahtar: &str) -> Option<crate::protokol::Izinler> {
+    oku(yol).hostlar.into_iter().find(|h| h.izleyici_kimlik == uzak_anahtar)
+        .and_then(|h| h.cihaz_izinleri).map(Into::into)
 }
 
 /// İzleyici tarafı: bağlanılabilecek kayıtlı host.
@@ -214,6 +241,7 @@ pub mod testler {
         Kayitlar {
             hostlar: vec![HostKaydi {
                 etiket: None,
+                cihaz_izinleri: None,
                 izleyici_kimlik: "aa".into(),
                 ad: "Telefon".into(),
                 jeton_sha256: jeton_ozeti("gizli"),
@@ -314,6 +342,7 @@ pub mod testler {
                             k,
                             HostKaydi {
                                 etiket: None,
+                                cihaz_izinleri: None,
                                 izleyici_kimlik: format!("iz{i}"),
                                 ad: String::new(),
                                 jeton_sha256: String::new(),

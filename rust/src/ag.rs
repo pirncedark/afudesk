@@ -105,9 +105,12 @@ pub async fn uc_nokta_kimlikli(
     // Tailscale the direct transport stays on loopback; relay remains fallback.
     #[cfg(target_os = "linux")]
     if kurulum == Kurulum::Internet {
-        b = b.clear_ip_transports().bind_addr(SocketAddr::new(
-            crate::linux_guvenlik::sistem_baglama_ip(), 0,
-        ))?;
+        let ip = crate::linux_guvenlik::sistem_baglama_ip();
+        // Do not use the Tailscale source address as a default Internet route
+        // for QUIC/QAD probes: only the private overlay subnet is eligible.
+        let prefix = if ip.is_loopback() { 8 } else { 10 };
+        b = b.clear_ip_transports().bind_addr_with_opts(SocketAddr::new(ip, 0),
+            iroh::endpoint::BindOpts::default().set_prefix_len(prefix).set_is_default_route(false))?;
     }
     if let Some(g) = gizli {
         b = b.secret_key(g);
