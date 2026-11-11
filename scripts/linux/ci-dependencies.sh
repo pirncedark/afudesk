@@ -26,7 +26,7 @@ options=(-o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::T
 sudo apt-get "${options[@]}" -o APT::Update::Error-Mode=any update
 sudo env DEBIAN_FRONTEND=noninteractive apt-get "${options[@]}" install -y --no-install-recommends \
   clang libclang-dev cmake ninja-build pkg-config libgtk-3-dev \
-  libsecret-1-dev libudev-dev libdbus-1-dev libpipewire-0.3-dev \
+  libsecret-1-dev libssl-dev libudev-dev libdbus-1-dev libpipewire-0.3-dev \
   libxcb1-dev libxcb-randr0-dev libxcb-shm0-dev libxcb-xfixes0-dev \
   libxrandr-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
   libegl1-mesa-dev libgl1-mesa-dri libglu1-mesa-dev libxdo-dev \

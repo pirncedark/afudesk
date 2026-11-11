@@ -97,6 +97,13 @@ jobs:
           bash -n scripts/linux/*.sh
           python3 -m py_compile scripts/linux/input_receiver.py
           python3 scripts/linux/test_apt_sources.py
+      - name: Linux güvenli kasa derlemesi ve şifreli fallback testi
+        run: |
+          g++ -std=c++14 -Wall -Wextra -Werror app/linux/runner/google_secure_storage.cc \
+            app/linux/tests/google_secure_storage_test.cc $(pkg-config --cflags --libs libsecret-1) -lcrypto \
+            -o reports/linux-ci/secure-storage-test
+          XDG_DATA_HOME="$(mktemp -d)" DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent-afudesk-bus \
+            timeout 20s reports/linux-ci/secure-storage-test --unavailable | tee reports/linux-ci/secure-fallback.log
       - name: Rust çekirdek testleri (ekransız)
         working-directory: rust
         run: cargo test --release -- --skip gercek_ 2>&1 | tee ../reports/linux-ci/cargo-test.log
@@ -111,9 +118,6 @@ jobs:
       - name: Gerçek ekran ve girdi smoke derlemesi
         run: |
           cargo build --release --manifest-path rust/Cargo.toml --example linux_smoke
-          g++ -std=c++14 -Wall -Wextra -Werror app/linux/runner/google_secure_storage.cc \
-            app/linux/tests/google_secure_storage_test.cc $(pkg-config --cflags --libs libsecret-1) \
-            -o reports/linux-ci/secure-storage-test
       - name: Debian v0.1.0 paketi
         run: bash scripts/linux/package.sh "$PWD/app/build/linux/x64/release/bundle" "$PWD/reports/linux-ci" 2>&1 | tee reports/linux-ci/package.log
       - name: Debian kurulum ve kaldırma doğrulaması
