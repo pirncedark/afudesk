@@ -3,6 +3,7 @@
 //! sonra NAT delme, olmazsa relay yedeği — kullanıcı IP/port/modem ayarı yapmaz.
 pub mod ag;
 pub mod dosya;
+pub mod cihaz_guveni;
 pub mod google;
 pub mod google_drive;
 pub mod google_baglanti;
@@ -17,6 +18,8 @@ pub mod izleyici;
 pub mod kimlik;
 pub mod kod;
 pub mod linux_guvenlik;
+#[cfg(any(target_os = "linux", test))]
+mod linux_portal;
 pub mod kol;
 pub mod pano;
 pub mod platform;

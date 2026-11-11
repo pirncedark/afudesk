@@ -26,7 +26,9 @@ xprop -root _NET_SUPPORTING_WM_CHECK | grep -q 'window id'
 # The keyring is created only on the disposable CI machine; no real credentials.
 printf 'afudesk-ci-disposable\n' | timeout 20s gnome-keyring-daemon --unlock --components=secrets > "$out/keyring.log" 2>&1
 timeout 20s "$out/secure-storage-test" > "$out/secure-storage.log" 2>&1
-XDG_DATA_HOME="$(mktemp -d)" DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent-afudesk-bus timeout 20s "$out/secure-storage-test" --unavailable >> "$out/secure-storage.log" 2>&1
+fallback_dir=$(mktemp -d)
+XDG_DATA_HOME="$fallback_dir" DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent-afudesk-bus timeout 20s "$out/secure-storage-test" --unavailable >> "$out/secure-storage.log" 2>&1
+XDG_DATA_HOME="$fallback_dir" timeout 20s "$out/secure-storage-test" --sticky >> "$out/secure-storage.log" 2>&1
 rm -f -- "$out/input-target.txt" "$out/input.json"
 python3 "$repo/scripts/linux/input_receiver.py" "$out" > "$out/receiver.log" 2>&1 & receiver=$!; pids+=("$receiver")
 for _ in {1..100}; do

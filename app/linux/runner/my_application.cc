@@ -11,7 +11,7 @@ struct _MyApplication {
 };
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
-// Fail closed when Secret Service is absent or locked; never use plaintext.
+// Secret Service first; an absent service uses authenticated encrypted 0600 files.
 static void secure_storage_call(FlMethodChannel*, FlMethodCall* call, gpointer) {
   const gchar* method = fl_method_call_get_name(call);
   g_autoptr(GError) error = nullptr;
@@ -38,7 +38,7 @@ static void secure_storage_call(FlMethodChannel*, FlMethodCall* call, gpointer) 
   }
   if (response == nullptr) {
     response = FL_METHOD_RESPONSE(fl_method_error_response_new("secure_storage",
-        "Güvenli oturum kaydı açılamadı; masaüstü anahtarlığını açıp yeniden dene.", nullptr));
+        "Oturum güvenle kaydedilemedi; uygulamayı yeniden açıp dene.", nullptr));
   }
   fl_method_call_respond(call, response, nullptr);
 }
@@ -97,5 +97,5 @@ static void my_application_init(MyApplication*) {}
 MyApplication* my_application_new() {
   return MY_APPLICATION(g_object_new(my_application_get_type(),
       "application-id", APPLICATION_ID,
-      "flags", G_APPLICATION_NON_UNIQUE, nullptr));
+      "flags", G_APPLICATION_DEFAULT_FLAGS, nullptr));
 }

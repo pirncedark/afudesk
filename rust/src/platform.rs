@@ -16,7 +16,7 @@ pub trait Yakalayici {
     }
 }
 
-fn unix_ms() -> u64 {
+pub(crate) fn unix_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
@@ -52,6 +52,10 @@ pub mod masaustu {
             cfg!(windows)
         }
         fn yakalayici(&self) -> Result<Box<dyn Yakalayici>> {
+            #[cfg(target_os = "linux")]
+            if crate::linux_portal::wayland_oturumu() {
+                return crate::linux_portal::yakalayici();
+            }
             #[cfg(windows)]
             if let Ok(mut yakalayici) = WgcYakalayici::new() {
                 if yakalayici.yakala().is_ok() {
@@ -61,13 +65,22 @@ pub mod masaustu {
             Ok(Box::new(XcapYakalayici::new()?))
         }
         fn enjektor(&self) -> Result<Box<dyn Enjektor>> {
+            #[cfg(target_os = "linux")]
+            if crate::linux_portal::wayland_oturumu() {
+                return crate::linux_portal::enjektor();
+            }
             Ok(Box::new(EnigoEnjektor::new()?))
         }
         fn pano(&self) -> Result<Box<dyn Pano>> {
             Ok(Box::new(crate::pano::ArboardPano::new()?))
         }
         fn kol_surucusu(&self) -> Result<Box<dyn crate::sanal_kol::KolSurucusu>> {
+            #[cfg(windows)]
+            {
             Ok(Box::new(crate::sanal_kol::ViGEmSurucusu::yeni()?))
+            }
+            #[cfg(not(windows))]
+            anyhow::bail!("Oyun kolu bu cihazda desteklenmiyor; diğer bağlantı özelliklerini kullan.")
         }
     }
 

@@ -74,6 +74,17 @@ pub fn drive_karari(
     kayitlar: &[CihazKaydi],
     simdi: i64,
 ) -> Karar {
+    drive_karari_eslesmis(yerel, karsi, uzak_anahtar, kayitlar, simdi, false)
+}
+
+pub(crate) fn drive_karari_eslesmis(
+    yerel: &Dogrulanmis,
+    karsi: std::result::Result<&Dogrulanmis, ()>,
+    uzak_anahtar: &str,
+    kayitlar: &[CihazKaydi],
+    simdi: i64,
+    eslesmis: bool,
+) -> Karar {
     let Ok(karsi) = karsi else {
         return Karar::Red;
     };
@@ -99,7 +110,8 @@ pub fn drive_karari(
     }
     let bag = anahtar_nonce(&k.host, &k.izleyici);
     let nonce = karsi.nonce();
-    if nonce == bag
+    if (nonce.is_empty() && eslesmis)
+        || nonce == bag
         || nonce.strip_prefix(&format!("{bag}.")).is_some_and(|s| {
             use base64::Engine;
             base64::engine::general_purpose::URL_SAFE_NO_PAD
@@ -157,11 +169,21 @@ impl DriveDizin {
     /// In particular Android authorization must not silently select another account.
     pub async fn hesabi_dogrula(&self) -> Result<()> {
         #[derive(Deserialize)]
-        struct UserInfo { sub: String }
-        let user: UserInfo = json(self.client
-            .get("https://www.googleapis.com/oauth2/v3/userinfo")
-            .bearer_auth(&self.token).send().await.map_err(|_| DogrulamaHatasi)?).await?;
-        if user.sub != self.sub { return Err(DogrulamaHatasi); }
+        struct UserInfo {
+            sub: String,
+        }
+        let user: UserInfo = json(
+            self.client
+                .get("https://www.googleapis.com/oauth2/v3/userinfo")
+                .bearer_auth(&self.token)
+                .send()
+                .await
+                .map_err(|_| DogrulamaHatasi)?,
+        )
+        .await?;
+        if user.sub != self.sub {
+            return Err(DogrulamaHatasi);
+        }
         Ok(())
     }
     /// `hesap` must be the verified identity from the OAuth transaction returning

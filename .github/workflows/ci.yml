@@ -53,6 +53,8 @@ jobs:
         working-directory: rust
         # Gerçek ekran/girdi testleri CI'da (ekransız oturum) atlanır.
         run: cargo test --release -- --skip gercek_
+      - name: Rust hesap köprüsü testleri
+        run: cargo test --release --manifest-path app/kopru/Cargo.toml --lib
       - name: Flutter analiz + arayüz testleri
         working-directory: app
         run: |
@@ -61,7 +63,11 @@ jobs:
           flutter test
       - name: Windows derleme
         working-directory: app
-        run: flutter build windows --release
+        env:
+          AFUDESK_GOOGLE_DESKTOP_CLIENT_ID: ${{ vars.AFUDESK_GOOGLE_DESKTOP_CLIENT_ID }}
+          AFUDESK_GOOGLE_WEB_CLIENT_ID: ${{ vars.AFUDESK_GOOGLE_WEB_CLIENT_ID }}
+          AFUDESK_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.AFUDESK_GOOGLE_DESKTOP_CLIENT_SECRET }}
+        run: flutter build windows --release --dart-define="AFUDESK_GOOGLE_DESKTOP_CLIENT_ID=$env:AFUDESK_GOOGLE_DESKTOP_CLIENT_ID"
       - uses: actions/upload-artifact@v4
         with:
           name: AfuDesk-windows-x64
@@ -104,11 +110,15 @@ jobs:
             -o reports/linux-ci/secure-storage-test
           XDG_DATA_HOME="$(mktemp -d)" DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent-afudesk-bus \
             timeout 20s reports/linux-ci/secure-storage-test --unavailable | tee reports/linux-ci/secure-fallback.log
+          XDG_DATA_HOME="$(mktemp -d)" DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent-afudesk-bus \
+            timeout 20s reports/linux-ci/secure-storage-test --concurrent | tee -a reports/linux-ci/secure-fallback.log
       - name: Rust çekirdek testleri (ekransız)
         working-directory: rust
         run: cargo test --release -- --skip gercek_ 2>&1 | tee ../reports/linux-ci/cargo-test.log
       - name: Rust Flutter köprüsü kontrolü
-        run: cargo check --manifest-path app/kopru/Cargo.toml 2>&1 | tee reports/linux-ci/cargo-check.log
+        run: |
+          cargo check --manifest-path app/kopru/Cargo.toml 2>&1 | tee reports/linux-ci/cargo-check.log
+          cargo test --release --manifest-path app/kopru/Cargo.toml --lib 2>&1 | tee reports/linux-ci/bridge-test.log
       - name: Flutter analiz, test ve Linux release
         env:
           AFUDESK_GOOGLE_DESKTOP_CLIENT_ID: ${{ vars.AFUDESK_GOOGLE_DESKTOP_CLIENT_ID }}

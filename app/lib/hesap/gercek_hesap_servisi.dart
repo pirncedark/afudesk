@@ -12,12 +12,11 @@ import 'google_hatasi.dart';
 import 'oturum_kasasi.dart';
 import '../arka_plan/arka_plan.dart';
 
-typedef GoogleOturumAc =
-    void Function(
-      Cihaz cihaz,
-      Stream<IzleyiciOlay> Function() ac, {
-      required bool terminalleBasla,
-    });
+typedef GoogleOturumAc = void Function(
+  Cihaz cihaz,
+  Stream<IzleyiciOlay> Function() ac, {
+  required bool terminalleBasla,
+});
 
 class GercekHesapServisi extends HesapServisi {
   GercekHesapServisi({
@@ -43,10 +42,12 @@ class GercekHesapServisi extends HesapServisi {
   }
 
   factory GercekHesapServisi.rust(RustMotor motor) => GercekHesapServisi(
-    kasa: (Platform.isWindows || Platform.isAndroid) ? PlatformOturumKasasi() : null,
+    kasa: (Platform.isWindows || Platform.isLinux || Platform.isAndroid)
+        ? PlatformOturumKasasi()
+        : null,
     islem: (islem, veri) async => rust.googleIslem(
       islem: islem,
-      veri: islem == 'baslat' && Platform.isWindows
+      veri: islem == 'baslat' && (Platform.isWindows || Platform.isLinux)
           ? jsonEncode({
               'desktopClientId': const String.fromEnvironment(
                 'AFUDESK_GOOGLE_DESKTOP_CLIENT_ID',
@@ -54,9 +55,8 @@ class GercekHesapServisi extends HesapServisi {
             })
           : islem == 'baslat' && Platform.isAndroid
           ? jsonEncode(
-              await const MethodChannel(
-                'afudesk/google',
-              ).invokeMapMethod<String, dynamic>('ayarlar'),
+              await const MethodChannel('afudesk/google')
+                  .invokeMapMethod<String, dynamic>('ayarlar'),
             )
           : veri,
     ),
@@ -66,11 +66,14 @@ class GercekHesapServisi extends HesapServisi {
       await motor.izleyiciKapat();
     },
     hostOlaylari: motor.hostOlaylari,
-    platformGirisi: (nonce, {bool sessiz = false}) async => Map<String, dynamic>.from(
-      (await const MethodChannel(
-        'afudesk/google',
-      ).invokeMapMethod<String, dynamic>('giris', {'nonce': nonce, 'sessiz': sessiz}))!,
-    ),
+    platformGirisi: (nonce, {bool sessiz = false}) async =>
+        Map<String, dynamic>.from(
+          (await const MethodChannel('afudesk/google')
+              .invokeMapMethod<String, dynamic>('giris', {
+                'nonce': nonce,
+                'sessiz': sessiz,
+              }))!,
+        ),
     tarayiciAc: (url) =>
         launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
   );
@@ -78,7 +81,8 @@ class GercekHesapServisi extends HesapServisi {
   final Future<String> Function(String, String) islem;
   final Stream<IzleyiciOlay> Function(String) googleBaglan;
   final Future<void> Function() kes;
-  final Future<Map<String, dynamic>> Function(String nonce, {bool sessiz}) platformGirisi;
+  final Future<Map<String, dynamic>> Function(String nonce, {bool sessiz})
+  platformGirisi;
   final Future<bool> Function(String) tarayiciAc;
   final Future<void> Function(GoogleHatasi) taniYaz;
   final OturumKasasi? kasa;
@@ -166,6 +170,22 @@ class GercekHesapServisi extends HesapServisi {
     _yayinla();
   }
 
+  // A token rotation can succeed before the next JWKS/Drive request fails.
+  // Preserve that encrypted bundle without presenting a signed-in identity.
+  Future<void> _sonKaydiSakla(int nesil) async {
+    if (kasa == null || _kapali || nesil != _oturumNesli) return;
+    try {
+      final identity = await _cagir('kaliciKayit');
+      if (identity is! Map || identity['oturum'] is! String) return;
+      final oturum = identity['oturum'] as String;
+      await _kasada(() async {
+        if (!_kapali && nesil == _oturumNesli) await kasa!.yaz(oturum);
+      });
+    } catch (_) {
+      // A failed vault must not overwrite the original network failure.
+    }
+  }
+
   Future<void> geriYukle() async {
     if (kasa == null || _mesgul || _hesap != null || _kapali || _duraklatildi) {
       return;
@@ -175,7 +195,8 @@ class GercekHesapServisi extends HesapServisi {
     var etkinlesti = false;
     try {
       final kayit = await kasa!.oku();
-      if (kayit == null || _kapali) return;
+      if (kayit == null || _kapali || _duraklatildi || nesil != _oturumNesli)
+        return;
       Map identity;
       try {
         identity = await _cagir('geriYukle', kayit) as Map;
@@ -205,6 +226,8 @@ class GercekHesapServisi extends HesapServisi {
         await _kasada(() => kasa!.sil());
         durum = _yenidenGiris;
       } else {
+        await _sonKaydiSakla(nesil);
+        if (_kapali || nesil != _oturumNesli) return;
         _sessizTekrar();
       }
       _yayinla();
@@ -308,6 +331,8 @@ class GercekHesapServisi extends HesapServisi {
         }
         durum = _yenidenGiris;
       } else {
+        await _sonKaydiSakla(nesil);
+        if (_kapali || nesil != _oturumNesli) return;
         _sessizTekrar();
       }
       if (!_kapali) _yayinla();
@@ -437,9 +462,8 @@ class GercekHesapServisi extends HesapServisi {
       _yayinla();
       if (Platform.isAndroid) {
         try {
-          await const MethodChannel(
-            'afudesk/google',
-          ).invokeMethod<void>('cikis');
+          await const MethodChannel('afudesk/google')
+              .invokeMethod<void>('cikis');
         } catch (_) {}
       }
     }

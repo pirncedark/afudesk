@@ -245,7 +245,19 @@ impl Dogrulayici {
     }
 
     pub fn dogrula(&self, token: &str, simdi: i64) -> Sonuc<Dogrulanmis> {
-        self.dogrula_ici(token, simdi, None)
+        self.dogrula_ici(token, simdi, None, false)
+    }
+
+    /// Refresh JWTs may omit nonce. Only an independently approved QUIC key
+    /// may use this path; live same-account directory membership is also required.
+    /// Missing nonce remains missing, never presented as a Google-signed binding.
+    pub(crate) fn dogrula_eslesmis(
+        &self,
+        token: &str,
+        simdi: i64,
+        eslesmis: bool,
+    ) -> Sonuc<Dogrulanmis> {
+        self.dogrula_ici(token, simdi, None, eslesmis)
     }
 
     /// Only for a direct token-endpoint refresh of a locally saved grant.
@@ -260,7 +272,7 @@ impl Dogrulayici {
         if sub.is_empty() || nonce.is_empty() || nonce.len() > 256 {
             return Err(DogrulamaHatasi);
         }
-        self.dogrula_ici(token, simdi, Some((sub, nonce)))
+        self.dogrula_ici(token, simdi, Some((sub, nonce)), false)
     }
 
     fn dogrula_ici(
@@ -268,6 +280,7 @@ impl Dogrulayici {
         token: &str,
         simdi: i64,
         yenileme: Option<(&str, &str)>,
+        eslesmis: bool,
     ) -> Sonuc<Dogrulanmis> {
         if token.len() > AZAMI_TOKEN || simdi < 0 {
             return Err(DogrulamaHatasi::nedenli("imza"));
@@ -319,7 +332,7 @@ impl Dogrulayici {
             Some("iss")
         } else if c.sub.is_empty() || c.sub.len() > 255 || c.sub.chars().any(char::is_control) {
             Some("sub")
-        } else if c.nonce.is_empty() || c.nonce.len() > 256 {
+        } else if (!eslesmis && c.nonce.is_empty()) || c.nonce.len() > 256 {
             Some("nonce")
         } else if c.exp <= simdi {
             Some("exp")
@@ -470,6 +483,103 @@ mod dizin_testleri {
         assert!(d
             .dogrula_yenileme(&expired, NOW, "test-account", "test-nonce")
             .is_err());
+    }
+
+    #[test]
+    fn nonce_olmayan_yenileme_yalniz_eslesmis_anahtar_ve_guncel_dizinle() {
+        use crate::google_drive::{drive_karari, CihazKaydi};
+        let d = Dogrulayici::yeni(vec![WEB.into()], TEST_JWKS).unwrap();
+        let token = signed_claims(|c| {
+            c.as_object_mut().unwrap().remove("nonce");
+        });
+        assert!(d.dogrula(&token, NOW).is_err());
+        assert!(d.dogrula_eslesmis(&token, NOW, false).is_err());
+        let karsi = d
+            .dogrula_eslesmis(&token, NOW, true)
+            .expect("paired refresh must verify");
+        let yerel = d.dogrula(&signed_claims(|_| {}), NOW).unwrap();
+        let kayit = CihazKaydi {
+            v: 1,
+            sub: "test-account".into(),
+            host: "host".into(),
+            izleyici: "viewer".into(),
+            ad: "Ev".into(),
+            platform: "linux".into(),
+            adresler: vec![],
+            relaylar: vec![],
+            son_gorulme: NOW,
+            erisim: true,
+        };
+        assert!(
+            karsi.nonce().is_empty(),
+            "missing Google nonce must not be invented"
+        );
+        assert_eq!(
+            drive_karari(&yerel, Ok(&karsi), "viewer", &[kayit.clone()], NOW),
+            Karar::Red
+        );
+        use crate::google_drive::drive_karari_eslesmis;
+        assert_eq!(
+            drive_karari_eslesmis(&yerel, Ok(&karsi), "viewer", &[kayit.clone()], NOW, true),
+            Karar::Kabul
+        );
+        assert_eq!(
+            drive_karari_eslesmis(&yerel, Ok(&karsi), "viewer", &[kayit.clone()], NOW, false),
+            Karar::Red
+        );
+        assert_eq!(
+            drive_karari_eslesmis(&yerel, Ok(&karsi), "other", &[kayit.clone()], NOW, true),
+            Karar::Red
+        );
+        assert_eq!(
+            drive_karari_eslesmis(&yerel, Ok(&karsi), "viewer", &[], NOW, true),
+            Karar::Red
+        );
+        let mut revoked = kayit.clone();
+        revoked.erisim = false;
+        assert_eq!(
+            drive_karari_eslesmis(&yerel, Ok(&karsi), "viewer", &[revoked], NOW, true),
+            Karar::Red
+        );
+        let mut stale = kayit.clone();
+        stale.son_gorulme = NOW - 301;
+        assert_eq!(
+            drive_karari_eslesmis(&yerel, Ok(&karsi), "viewer", &[stale], NOW, true),
+            Karar::Red
+        );
+        assert_eq!(
+            drive_karari_eslesmis(
+                &yerel,
+                Ok(&karsi),
+                "viewer",
+                &[kayit.clone(), kayit],
+                NOW,
+                true
+            ),
+            Karar::Red
+        );
+        let foreign = d
+            .dogrula_eslesmis(
+                &signed_claims(|c| {
+                    c["sub"] = "other-account".into();
+                    c.as_object_mut().unwrap().remove("nonce");
+                }),
+                NOW,
+                true,
+            )
+            .unwrap();
+        assert_ne!(
+            drive_karari_eslesmis(&yerel, Ok(&foreign), "viewer", &[], NOW, true),
+            Karar::Kabul
+        );
+        for field in ["aud", "iss"] {
+            let invalid = signed_claims(|c| {
+                c.as_object_mut().unwrap().remove("nonce");
+                c[field] = "wrong".into();
+            });
+            assert!(d.dogrula_eslesmis(&invalid, NOW, true).is_err());
+        }
+        assert!(d.dogrula_eslesmis(&token, NOW + 3600, true).is_err());
     }
 
     #[tokio::test]

@@ -381,9 +381,8 @@ mod guvenlik_testleri {
         let ilk = Izinler { kontrol: false, pano: false, dosya: false, oyun_kolu: false };
         let sonraki = google_izinleri(true, Some(&ilk));
         assert_eq!(sonraki, ilk);
-        assert_eq!(google_izinleri(false, Some(&ilk)), Izinler {
-            kontrol: true, pano: true, dosya: true, oyun_kolu: false,
-        }, "Windows varsayılanı korunmalı");
+        assert_eq!(google_izinleri(false, Some(&ilk)), ilk,
+            "EK4: Windows Google girişi de bağımsız cihaz izinlerini korumalı");
     }
 
     #[test]
@@ -399,6 +398,18 @@ mod guvenlik_testleri {
         assert!(yerel_onay_surer(&yol, "anahtar", &izinler));
         guvenilen::guncelle(&yol, |kk| guvenilen::hosttan_kaldir(kk, "anahtar")).unwrap();
         assert!(!yerel_onay_surer(&yol, "anahtar", &izinler));
+    }
+
+    #[test]
+    fn google_dogrulama_sirasinda_silinen_onay_yeniden_olusturulmaz() {
+        let dizin = tempfile::tempdir().unwrap();
+        let yol = dizin.path().join("kayitlar.json");
+        let izinler = Izinler { kontrol: false, pano: true, dosya: false, oyun_kolu: false };
+        google_onayini_yaz(&yol, "anahtar", "Cihaz", &izinler, None).unwrap();
+        let onceki = guvenilen::onayli_izinler(&yol, "anahtar").unwrap();
+        guvenilen::guncelle(&yol, |kk| guvenilen::hosttan_kaldir(kk, "anahtar")).unwrap();
+        assert!(google_onayini_yaz(&yol, "anahtar", "Cihaz", &izinler, Some(&onceki)).is_err());
+        assert!(guvenilen::oku(&yol).hostlar.is_empty());
     }
 
     #[tokio::test]
@@ -975,17 +986,39 @@ fn linux_google_karari(karar: crate::google::Karar, eslesmis: bool) -> crate::go
     }
 }
 
-fn google_izinleri(guvenli_linux: bool, kayit: Option<&Izinler>) -> Izinler {
-    if guvenli_linux {
-        return kayit.cloned().unwrap_or(Izinler {
-            kontrol: false, pano: false, dosya: false, oyun_kolu: false,
-        });
-    }
-    Izinler { kontrol: true, pano: true, dosya: true, oyun_kolu: false }
+fn google_izinleri(_guvenli_linux: bool, kayit: Option<&Izinler>) -> Izinler {
+    // EK4 applies to Google sign-in on both desktops. Legacy Windows code/
+    // password sessions follow their original, separate permission path.
+    kayit.cloned().unwrap_or(Izinler {
+        kontrol: false, pano: false, dosya: false, oyun_kolu: false,
+    })
 }
 
 fn yerel_onay_surer(yol: &Path, uzak: &str, izinler: &Izinler) -> bool {
     guvenilen::onayli_izinler(yol, uzak).as_ref() == Some(izinler)
+}
+
+fn google_onayini_yaz(yol: &Path, uzak: &str, ad: &str, izinler: &Izinler, onceki: Option<&Izinler>) -> Result<()> {
+    let simdi = guvenilen::simdi();
+    guvenilen::guncelle(yol, |kk| -> Result<()> {
+        if let Some(beklenen) = onceki {
+            let kayitlar: Vec<_> = kk.hostlar.iter().filter(|h| h.izleyici_kimlik == uzak).collect();
+            anyhow::ensure!(kayitlar.len() == 1 && kayitlar[0].cihaz_izinleri.as_ref().map(|i| Izinler::from(i.clone())).as_ref() == Some(beklenen), "Cihaz onayı iptal edildi; yeniden onay iste.");
+        }
+        if let Some(h) = kk.hostlar.iter_mut().find(|h| h.izleyici_kimlik == uzak) {
+            h.son_gorulme = simdi;
+            h.cihaz_izinleri = Some(izinler.into());
+        } else {
+            guvenilen::hosta_ekle(kk, guvenilen::HostKaydi {
+                izleyici_kimlik: uzak.into(), ad: ad.into(), etiket: None,
+                cihaz_izinleri: Some(izinler.into()),
+                jeton_sha256: guvenilen::jeton_ozeti(&guvenilen::yeni_jeton()),
+                eklenme: simdi, son_gorulme: simdi,
+            });
+        }
+        Ok(())
+    })??;
+    Ok(())
 }
 
 async fn yerel_onayi_izle(yol: PathBuf, uzak: String, izinler: Izinler, c: Baglanti) {
@@ -1031,6 +1064,7 @@ async fn oturum(
     const MESGUL: &str = "Karşı taraf şu an başka bir bağlantıda. Biraz sonra yeniden dene.";
     // (ad, önceden verilmiş izinler, tür): devam eden oturumda onay yeniden sorulmaz.
     let mut google_kanit = None;
+    let mut google_onceki_izinler = None;
     let (ad, onceki, tur) = match (ilk, &giris) {
         (Ok(Ok(Some(Kontrol::Merhaba { bilet: gelen, ad }))), Giris::Yeni { bilet, .. }) => {
             if !kod_acik.load(Ordering::SeqCst) {
@@ -1043,24 +1077,31 @@ async fn oturum(
             }
             (ad, None, Tur::Kod)
         }
-        (Ok(Ok(Some(Kontrol::MerhabaGoogle { kanit, ad }))), _) => {
+        (Ok(Ok(Some(Kontrol::MerhabaGoogle { kanit, ad: _ }))), _) => {
             let Some(g) = crate::google_baglanti::bul(yerel_kimlik) else {
                 reddet(&mut w, c, "Google hesabı kapalı, kodla bağlantıyı kullan.").await;
                 return Oturum::Reddedildi;
             };
-            let yetki = tokio::time::timeout(
-                Duration::from_secs(30),
-                g.yetki(&kanit, &ag::kimlik_metni(c.remote_id())),
-            )
-            .await;
             let kayitli_izinler = match &giris {
                 Giris::Yeni { kayit: Some(k), .. } => guvenilen::onayli_izinler(
                     &guvenilen::kayit_yolu(&k.veri), &ag::kimlik_metni(c.remote_id())),
                 Giris::Devam(d) if d.kimlik == c.remote_id() => Some(d.izinler.clone()),
                 _ => None,
             };
+            let yetki = tokio::time::timeout(
+                Duration::from_secs(30),
+                g.yetki(&kanit, &ag::kimlik_metni(c.remote_id()), kayitli_izinler.is_some()),
+            )
+            .await;
+            if let (Some(onceki), Giris::Yeni { kayit: Some(k), .. }) = (&kayitli_izinler, &giris) {
+                if !yerel_onay_surer(&guvenilen::kayit_yolu(&k.veri), &ag::kimlik_metni(c.remote_id()), onceki) {
+                    reddet(&mut w, c, "Cihaz onayı iptal edildi; yeniden onay iste.").await;
+                    return Oturum::Reddedildi;
+                }
+            }
+            google_onceki_izinler = kayitli_izinler.clone();
             let yetki = yetki.map(|s| s.map(|(karar, ad)| (
-                if guvenli_linux { linux_google_karari(karar, kayitli_izinler.is_some()) } else { karar }, ad
+                linux_google_karari(karar, kayitli_izinler.is_some()), ad
             )));
             match yetki {
                 Ok(Ok((crate::google::Karar::Kabul, cihaz_adi))) => {
@@ -1072,14 +1113,10 @@ async fn oturum(
                     )
                 }
                 Ok(Ok((crate::google::Karar::OnaySor, cihaz_adi))) => {
-                    if guvenli_linux {
-                        // Same-account Google proof is valid, but the independent
-                        // local key grant still needs the user's first approval.
-                        google_kanit = Some(kanit);
-                        (cihaz_adi, None, Tur::Google)
-                    } else {
-                        (ad, None, Tur::Google)
-                    }
+                    // Same-account Google proof is valid, but the independent
+                    // local key grant still needs the user's first approval.
+                    google_kanit = Some(kanit);
+                    (cihaz_adi, None, Tur::Google)
                 },
                 _ => {
                     reddet(
@@ -1171,23 +1208,10 @@ async fn oturum(
             }
         }
     };
-    if guvenli_linux && tur == Tur::Google {
+    if tur == Tur::Google {
         if let Giris::Yeni { kayit: Some(k), .. } = &giris {
             let izleyici = ag::kimlik_metni(c.remote_id());
-            let simdi = guvenilen::simdi();
-            let sonuc = guvenilen::guncelle(&guvenilen::kayit_yolu(&k.veri), |kk| {
-                if let Some(h) = kk.hostlar.iter_mut().find(|h| h.izleyici_kimlik == izleyici) {
-                    h.son_gorulme = simdi;
-                    h.cihaz_izinleri = Some((&izinler).into());
-                } else {
-                    guvenilen::hosta_ekle(kk, guvenilen::HostKaydi {
-                        izleyici_kimlik: izleyici, ad: ad.clone(), etiket: None,
-                        cihaz_izinleri: Some((&izinler).into()),
-                        jeton_sha256: guvenilen::jeton_ozeti(&guvenilen::yeni_jeton()),
-                        eklenme: simdi, son_gorulme: simdi,
-                    });
-                }
-            });
+            let sonuc = google_onayini_yaz(&guvenilen::kayit_yolu(&k.veri), &izleyici, &ad, &izinler, google_onceki_izinler.as_ref());
             if sonuc.is_err() {
                 reddet(&mut w, c, "Cihaz onayı kaydedilemedi; yeniden dene.").await;
                 return Oturum::Reddedildi;
@@ -1200,7 +1224,7 @@ async fn oturum(
     // A separate task must close QUIC even while the session loop awaits a
     // slow Google request. JoinSet aborts it on every return from this session.
     let mut yerel_onay_gorevleri = tokio::task::JoinSet::new();
-    if guvenli_linux && google_kanit.is_some() {
+    if google_kanit.is_some() {
         if let Giris::Yeni { kayit: Some(k), .. } = &giris {
             yerel_onay_gorevleri.spawn(yerel_onayi_izle(
                 guvenilen::kayit_yolu(&k.veri), ag::kimlik_metni(c.remote_id()),
@@ -1555,7 +1579,7 @@ async fn oturum(
             _ = google_denetim.tick(), if google_kanit.is_some() => {
                 let sonuc = match crate::google_baglanti::bul(yerel_kimlik) {
                     Some(g) => tokio::time::timeout(Duration::from_secs(30),
-                        g.yetki(google_kanit.as_ref().expect("google proof"), &ag::kimlik_metni(c.remote_id()))).await,
+                        g.yetki(google_kanit.as_ref().expect("google proof"), &ag::kimlik_metni(c.remote_id()), true)).await,
                     None => { c.close(0u32.into(),b"google signout"); break Oturum::Bitti("Hesaptan çıkıldı.".into()); }
                 };
                 if !matches!(sonuc,Ok(Ok((crate::google::Karar::Kabul,_)))) {
