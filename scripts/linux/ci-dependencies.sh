@@ -31,5 +31,5 @@ sudo env DEBIAN_FRONTEND=noninteractive apt-get "${options[@]}" install -y --no-
   libxcb1-dev libxcb-randr0-dev libxcb-shm0-dev libxcb-xfixes0-dev \
   libxrandr-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
   libegl1-mesa-dev libgl1-mesa-dri libglu1-mesa-dev libgbm-dev libxdo-dev \
-  xvfb xauth xdotool scrot openbox python3-tk dbus-x11 gnome-keyring \
+  xvfb xauth x11-utils xdotool scrot openbox python3-tk dbus-x11 gnome-keyring \
   dpkg-dev desktop-file-utils

@@ -1,0 +1,43 @@
+python : .FF.
+At line:2 char:1
++ python scripts/linux/test_apt_sources.py *> reports/linux/apt-sources ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (.FF.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+======================================================================
+FAIL: test_microsoft_list_is_untouched (__main__.SourcesTest.test_microsoft_list_is_untouched)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\afuuu\Desktop\afuproject\_wt\afudesk-linux\scripts\linux\test_apt_sources.py", line 10, in test_micros
+oft_list_is_untouched
+    self.assertEqual(rewrite(text, MIRROR), text)
+AssertionError: 'deb [61 chars] https://archive.ubuntu.com/ubuntu noble main\n' != 'deb [61 chars] https://packages.mic
+rosoft.com/ubuntu/24.04/prod noble main\n'
+- deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://archive.ubuntu.com/ubuntu noble main
+?                                                                             ^^^^^^^^^^ -
++ deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/ubuntu/24.04/prod no
+ble main
+?                                                                           + ++++++++++ ^^^^            +++++++++++
+
+
+======================================================================
+FAIL: test_third_party_deb822_is_untouched (__main__.SourcesTest.test_third_party_deb822_is_untouched)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\afuuu\Desktop\afuproject\_wt\afudesk-linux\scripts\linux\test_apt_sources.py", line 14, in test_third_
+party_deb822_is_untouched
+    self.assertEqual(rewrite(text, MIRROR, True), text)
+AssertionError: 'Type[17 chars]ps://archive.ubuntu.com/ubuntu\nSuites: noble\[48 chars]pg\n' != 'Type[17 chars]ps://pac
+kages.microsoft.com/ubuntu/24.04/prod\[63 chars]pg\n'
+  Types: deb
+- URIs: https://archive.ubuntu.com/ubuntu
++ URIs: https://packages.microsoft.com/ubuntu/24.04/prod
+  Suites: noble
+  Signed-By: /usr/share/keyrings/microsoft-prod.gpg
+
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.001s
+
+FAILED (failures=2)

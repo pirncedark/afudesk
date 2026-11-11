@@ -1,0 +1,11 @@
+python : ....
+At line:2 char:1
++ python scripts/linux/test_apt_sources.py *> reports/linux/apt-sources ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (....:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+----------------------------------------------------------------------
+Ran 4 tests in 0.000s
+
+OK

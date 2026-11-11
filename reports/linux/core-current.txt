@@ -1,0 +1,235 @@
+cargo :    Compiling afudesk_core v1.8.0 (C:\Users\afuuu\Desktop\afuproject\_wt\afudesk-linux\rust)
+At line:2 char:67
++ ... lidation'); cargo test --offline --manifest-path rust/Cargo.toml -- - ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling af...esk-linux\rust):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+warning: linker stdout: C:\Users\afuuu\Desktop\afuproject\_wt\afudesk-linux\target-linux-validation\debug\deps\afudesk_
+core.dll.lib kitaplığı ve C:\Users\afuuu\Desktop\afuproject\_wt\afudesk-linux\target-linux-validation\debug\deps\afudes
+k_core.dll.exp nesnesi oluşturuluyor
+  |
+  = note: `#[warn(linker_messages)]` on by default
+
+warning: `afudesk_core` (lib) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 20.67s
+     Running unittests src\lib.rs (target-linux-validation\debug\deps\afudesk_core-b332a1e71b4e6ee3.exe)
+
+running 200 tests
+test ag::testler::baglanti_hatasi_kullaniciya_teknik_ayrinti_gostermez ... ok
+test ag::testler::ortam_degiskeni_relay_zorlar ... ok
+test ag::testler::genel_adres_ayrimi ... ok
+test ag::testler::mdns_yalniz_yerel_haric_tum_kurulumlarda_acik ... ok
+test ag::testler::relay_listesi_ayristirilir_ve_bos_liste_merkeze_dusmez ... ok
+test dosya::testler::devam_noktasi_hesabi ... ok
+test dosya::testler::gorsel_uzanti_ve_baslik_eslesmelidir ... ok
+test dosya::testler::guvenli_ad_temizler ... ok
+test dosya::testler::kimlik_icerige_bagli_ve_kararli ... ok
+test dosya::testler::cakismada_numara_eklenir ... ok
+test google::dizin_testleri::android_azp_ayni_projeden_kabul_edilir ... ok
+test dosya::testler::varsayilan_klasor_afudesk_ile_biter ... ok
+test google::dizin_testleri::android_exp_icin_tolerans_yok ... ok
+test google::dizin_testleri::android_aud_ve_coklu_aud_azp_zorunlulugu_korunur ... ok
+test google::dizin_testleri::android_azp_yabanci_ve_bozuk_projeden_reddedilir ... ok
+test google::dizin_testleri::android_izinli_azp_aud_disinda_da_kabul_edilir ... ok
+test google::dizin_testleri::android_iat_300_saniye_toleransi ... ok
+test google::dizin_testleri::android_hata_nedeni_claim_degerlerini_aciga_cikarmaz ... ok
+test google::dizin_testleri::android_tls_istemcisi_jni_baslatmadan_kurulur ... ok
+test google::dizin_testleri::dizin_iki_anahtari_tek_kullanimlik_google_nonce_ile_baglar ... ok
+test dosya::testler::gorsel_afudesk_gelen_klasorune_kaydedilir ... ok
+test google::dizin_testleri::host_tokeni_yenilenirken_taze_karsi_kanit_ve_drive_kaydi_yeterli ... ok
+test google::dizin_testleri::dizin_ayri_cihazlar_arasi_ayni_hesabi_ve_kaldirmayi_kontrol_eder ... ok
+test google::dizin_testleri::dizin_baska_hesap_ayni_anahtarlari_sahiplenemez ... ok
+test google_oauth::yenileme_testleri::ag_hatasi_oturumu_iptal_etmez ... ok
+test google_oauth::yenileme_testleri::bozuk_rotation_yaniti_eski_refresh_kullanimi_gibi_gizlenmez ... FAILED
+test google_oauth::yenileme_testleri::ilk_giris_offline_onayi_ister ... ok
+test google::dizin_testleri::yenileme_nonce_olmadan_yalniz_kayitli_hesabi_dogrular ... ok
+test google::dizin_testleri::dizin_sahte_anahtar_ad_degisikligi_ve_gecikmis_kaniti_reddeder ... ok
+test google_oauth::yenileme_testleri::mock_giris_imza_gecerli_olsa_da_baska_nonce_reddedilir ... ok
+test google_oauth::yenileme_testleri::token_dondurme_istege_baglidir ... ok
+test google_oauth::yenileme_testleri::mock_refresh_rotation_ve_google_iptali ... ok
+test google_oauth::yenileme_testleri::yerel_bozuk_kayit_google_iptali_sayilmaz ... ok
+test google_oauth::yenileme_testleri::mock_giris_pkce_ve_imzali_google_tokeni_dogrulanir ... ok
+test ag::testler::kurulan_endpointte_n0_address_lookup_yoktur ... ok
+test ag::testler::cevrimici_sorgu_calisan_ucun_kesfini_kullanir ... ok
+test ag::testler::yayinlanan_relayler_kullanici_relayini_koda_katar ... ok
+test goruntu::testler::degisiklik_yoksa_kare_yok ... ok
+test goruntu::testler::iptal_edilen_kare_dosemeleri_yeniden_gider ... ok
+test goruntu::testler::kotu_kare_reddedilir ... ok
+test goruntu::testler::yanlis_rgba_boyutu ... ok
+test goruntu::testler::yarim_olcek_ortalama_alir ... ok
+test goruntu::testler::sirasiz_gelen_eski_kare_yeniyi_ezmez ... ok
+test goruntu::testler::boyut_degisince_tam_kare ... ok
+test guvenilen::testler::eski_json_etiketsiz_okunur ... ok
+test ag::testler::farkli_protokol_surumu_acik_hata_verir ... ok
+test guvenilen::testler::atomik_yazma ... ok
+test guvenilen::testler::guvenilen_cihaz_kaldirilir_ve_unutulur ... ok
+test guvenilen::testler::jeton_dogrulamasi ... ok
+test goruntu::testler::ilk_kare_tam_ve_birlesir ... ok
+test goruntu::testler::yayin_boyutu_siniri ... ok
+test host::gorsel_alt_v_testleri::pano_basarili_ve_terminal_seciliyken_alt_v_sirasi_gonderilir ... ok
+test host::gorsel_alt_v_testleri::terminal_secili_degilse_veya_pano_basarisizsa_tus_gonderilmez ... ok
+test host::guvenlik_testleri::izleyici_yeniden_deneme_jeton_omrunden_kisa ... ok
+test guvenilen::testler::etiket_kaydedilir_silinir_ve_yeniden_baglaninca_korunur ... ok
+test host::guvenlik_testleri::linux_baska_hesap_onayla_bile_baglanamaz ... ok
+test guvenilen::testler::kayit_gidis_donus ... ok
+test host::guvenlik_testleri::linux_google_girisi_eslesmemis_anahtari_otomatik_onaylamaz ... ok
+test host::guvenlik_testleri::linux_ilk_onayin_izinleri_yeniden_baglaninca_artmaz ... ok
+test ag::testler::yanlis_kimlik_reddedilir ... ok
+test goruntu::testler::yalniz_degisen_doseme_gider ... ok
+test ag::testler::olu_ve_gecersiz_adresler_digerini_engellemez ... ok
+test ag::testler::dogru_kimlige_baglanir_ve_yol_dogrudan ... ok
+test host::guvenlik_testleri::relay_ve_genel_adres_yoksa_erisim_uyarisi_gerekir ... ok
+test host::guvenlik_testleri::uc_hatali_bilet_kod_dongusunu_yeniler ... ok
+test host::guvenlik_testleri::yayin_korumasi_erken_cikista_durdurur ... ok
+test host::sira_testleri::sira_sarmali_ve_eski_paket ... ok
+test host::uyarlama_testleri::iyi_agda_yukselir_ust_sinirda_durur ... ok
+test host::uyarlama_testleri::kotu_agda_kalite_ve_fps_duser_sinirlarda_durur ... ok
+test host::uyarlama_testleri::orta_agda_sabit ... ok
+test izleyici::ses_host_testleri::eski_host_saat_yaniti_uyariyi_etkinlestirir ... ok
+test izleyici::ses_host_testleri::yanitsiz_yoklama_iki_saniyede_eski_host_olur ... ok
+test izleyici::ses_host_testleri::yeni_host_ve_eksik_surucu_eski_host_degildir ... ok
+test izleyici::testler::bekleme_artar_ve_sinirda_durur ... ok
+test izleyici::testler::kopusta_terminal_komutlari_yeni_oturuma_tasinmaz ... ok
+test izleyici::testler::yalniz_dongu_adresli_kod_disari_cikmaz ... ok
+test kimlik::testler::cihaz_kimligi_kalici ... ok
+test host::guvenlik_testleri::linux_yerel_onay_silinince_aktif_oturum_yetkisi_biter ... ok
+test guvenilen::testler::eszamanli_guncelleme_kayit_kaybetmez ... ok
+test google_oauth::yenileme_testleri::uretim_istemcisi_http_istegi_gondermez ... ok
+test host::guvenlik_testleri::linux_dogru_parola_bile_eslesmemis_cihaza_ekran_acmaz ... ok
+test host::guvenlik_testleri::linux_anahtar_iptali_quic_oturumunu_kapatir ... ok
+test google_drive::tests::heartbeat_silinmis_cihazi_yeniden_kaydetmez ... ok
+test kod::testler::hata_metinleri_turkce ... ok
+test ag::testler::hic_ulasilamazsa_anlasilir_hata ... ok
+test kod::testler::bozuk_girdiler ... ok
+test kod::testler::kod_kisa_kalir ... ok
+test host::guvenlik_testleri::mikrofon_kurtarma_join_hatasi_hostu_engellemez ... ok
+test kod::testler::relaysiz_eski_yuk_de_cozulur ... ok
+test host::guvenlik_testleri::mikrofon_kurtarma_hatasi_hostu_engellemez ... ok
+test kod::testler::adres_acik_metinde_gorunmez ... ok
+test kol::testler::dugme_maskesi_kol_durumunda_tasinir ... ok
+test kol::testler::eksen_ve_tetik_sinir_eslemesi ... ok
+test linux_guvenlik::testler::cgnat_sinirlari_ve_ipv6_mapped_adresler_kapali ... ok
+test kod::testler::bos_parola ... ok
+test linux_guvenlik::testler::paylasimda_genel_lan_ve_ipv6_adresi_yok ... ok
+test linux_guvenlik::testler::tailscale_fiziksel_agdan_once_secilir ... ok
+test linux_guvenlik::testler::tailscale_yoksa_yalniz_loopback_dinler ... ok
+test linux_portal::tests::invalid_layout_is_rejected_before_allocation ... ok
+test linux_portal::tests::latest_frame_overwrites_and_close_discards_all_frames ... ok
+test linux_portal::tests::portal_denial_and_cancellation_fail_closed ... ok
+test linux_portal::tests::selected_stream_uses_logical_not_pixel_coordinates ... ok
+test linux_portal::tests::stride_padding_offset_and_bgr_conversion ... ok
+test pano::testler::buyuk_gorsel_kayitli_kalir_panoya_yazilmaz ... ok
+test pano::testler::buyuk_metin_reddedilir ... ok
+test pano::testler::degisiklik_algilanir ... ok
+test pano::testler::gelen_gorsel_sahte_panoya_rgba_yazar ... ok
+test platform::masaustu::numpad_enter::input_abi_boyutu ... ok
+test platform::masaustu::testler::fiziksel_hid_vk ... ok
+test pano::testler::sahte_uzanti_ve_bozuk_gorsel_panoya_yazilmaz ... ok
+test platform::masaustu::testler::tus_adlari ... ok
+test protokol::testler::akim_tavani_bos_yeni_akimi_reddeder ... ok
+test protokol::testler::alpn_protokol_surumunu_tasir ... ok
+test protokol::testler::cop_veri_reddedilir ... ok
+test protokol::testler::dev_uzunluk_reddedilir ... ok
+test protokol::testler::eski_hosta_ses_gitmez_space_devam_eder ... ok
+test protokol::testler::eski_tel_baytlari_aynen_kalir ... ok
+test protokol::testler::eski_istemci_yeni_host_ile_kopmaz ... ok
+test protokol::testler::normal_saat_cevabi_olcumu_gunceller_sesi_degistirmez ... ok
+test protokol::testler::kontrol_son_indeksi_22_yeni_varyant_yok ... ok
+test protokol::testler::ses_saat_cevabi_saat_olcumunu_degistirmez ... ok
+test protokol::testler::ses_sozlesmesi_ve_eski_indeksler ... ok
+test protokol::testler::ses_yoklamasi_mevcut_saat_cevabini_kullanir ... ok
+test protokol::testler::surucu_yokken_ses_destegi_bildirilmez ... ok
+test protokol::testler::terminal_mesajlari_gidis_donus ... ok
+test protokol::testler::yaz_oku_gidis_donus ... ok
+test sanal_kol::testler::sahte_surucu_durumlari_kaydeder ... ok
+test protokol::testler::yeni_host_ses_yanitini_mevcut_tel_biciminde_gonderir ... ok
+test sanal_mikrofon::kanit_testleri::kopru_birim::kaynak_hatasi_isci_adimina_hata_doner_hostu_durdurmaz ... ok
+test sanal_mikrofon::kanit_testleri::kopru_birim::kaynak_secimi_varsayilan_cable_olsa_da_cable_secmez ... ok
+test sanal_mikrofon::kanit_testleri::telmik_olcum_bir_khz_sinusu_kabul_eder ... ok
+test sanal_mikrofon::kanit_testleri::telmik_olcum_eksik_kaydi_reddeder ... ok
+test sanal_mikrofon::kanit_testleri::telmik_olcum_sessiz_ve_dusuk_sesi_reddeder ... ok
+test sanal_mikrofon::kanit_testleri::kopru_birim::telefon_konusurken_yazmaz_birakinca_ilk_adimda_yazar ... ok
+test sanal_mikrofon::testler::aygit_adlari ... ok
+test sanal_mikrofon::testler::baslangic_geri_yukleme_hatasinda_kayit_korunur ... ok
+test sanal_mikrofon::testler::bozuk_json_silinir_ve_aygitlara_dokunulmaz ... ok
+test sanal_mikrofon::testler::cable_kontrolu_aygitlari_degistirmez ... ok
+test sanal_mikrofon::testler::cokmeden_kalan_aygitlar_baslangicta_geri_yuklenir ... ok
+test sanal_mikrofon::kanit_testleri::telmik_olcum_yanlis_baskin_frekansi_reddeder ... ok
+test sanal_mikrofon::testler::geri_yukleme_hatasinda_drop_yeniden_dener ... ok
+test sanal_mikrofon::testler::hizli_yeniden_acma_eski_aygitlari_korur ... ok
+test sanal_mikrofon::testler::kayip_aygit_atlanir_diger_rol_yuklenir_ve_kayit_silinir ... ok
+test sanal_mikrofon::testler::kapatma_300ms_ve_drop_geri_yukler ... ok
+test sanal_mikrofon::testler::kayit_yazilamazsa_aygitlar_degismez ... ok
+test sanal_mikrofon::testler::pcm_little_endian_ve_surucu_uyarisi ... ok
+test sanal_mikrofon::testler::pcm_sinirli_ve_kapaliyken_atilir ... ok
+test telmik_sayac::testler::telmik_sayac_agdan_gonderilen_pcm_ile_eslesir ... ok
+test telmik_sayac::testler::telmik_sayac_basarisiz_ag_yazimini_saymaz ... ok
+test sanal_mikrofon::testler::surucu_yok_ve_yarim_degisim ... ok
+test telmik_sayac::testler::telmik_sayac_pcm_baytlarini_sayar_kapanista_raporlar ... ok
+test telmik_sayac::testler::telmik_sayac_yeni_bas_konusta_sifirlanir ... ok
+test terminal::tests::dik_boyut_orani_ve_sinirlar ... ok
+test terminal::tests::kirpma_ve_fare_ayni_ofseti_kullanir ... ok
+test terminal::tests::guard_hata_ve_panikte_bir_kez_geri_yukler ... ok
+test terminal::tests::sahte_pencere_konum_boyut_ve_kucultulmus_durumuna_doner ... ok
+test terminal::tests::terminal_girdisi_odak_onayindan_once_asla_uygulanmaz ... ok
+test terminal::tests::uygulama_adi_eslestirme ... ok
+test terminal::tests::terminal_siniflandirma ... ok
+test kod::testler::bosluk_ve_satir_sonu ... ok
+test kod::testler::eski_surum_kod_anlasilir_hata_verir ... ok
+test kod::testler::gidis_donus ... ok
+test host::guvenlik_testleri::kod_ekrani_kapaninca_yeni_kod_uretilir ... ok
+test kod::testler::parola_yanlis ... ok
+test kod::testler::rastgelelik ... ok
+test kod::testler::turkce_parola ... ok
+test kod::testler::suresi_dolmus_ve_sinir ... ok
+test uctan_uca::disaridan_kol_durumu_hosta_ulasir ... ok
+test kod::testler::oynanmis_bayt ... ok
+test uctan_uca::dosya_aktarilir ... ok
+test uctan_uca::host_kimligi_yeniden_acilista_ayni ... ok
+test uctan_uca::dosya_izni_yoksa_reddedilir ... ok
+test uctan_uca::dosya_bozulursa_hata ... ok
+test uctan_uca::dosya_kaldigi_yerden_devam ... ok
+test uctan_uca::eski_sirali_kol_durumu_atilir ... ok
+test uctan_uca::eski_bilet_devam_yerine_kullanilamaz ... ok
+test host::guvenlik_testleri::on_oturum_sonrasinda_yakalayici_birikmez ... ok
+test uctan_uca::izleyici_kapatinca_yeniden_baglanmaz_host_yeni_kod_uretir ... ok
+test uctan_uca::kaldirilan_cihaz_reddedilir ... ok
+test uctan_uca::kayitli_cihaz_onaysiz_baglanamaz ... ok
+test uctan_uca::oyun_kolu_izni_yoksa_uygulanmaz ... ok
+test uctan_uca::kontrol_izni_yoksa_girdi_uygulanmaz ... ok
+test uctan_uca::kopunca_onay_sormadan_yeniden_baglanir_goruntu_ve_girdi_surer ... ok
+test uctan_uca::kayitli_cihaz_kodsuz_baglanir ... ok
+test uctan_uca::host_sertifikasi_degisirse_reddedilir ... ok
+test uctan_uca::kod_kapaliyken_kodla_girilmez_kayitli_cihaz_yine_baglanir ... ok
+test zaman::testler::gecikme_saat_geri_ve_tasimada_sinirlanir ... ok
+test zaman::testler::negatif_saat_farki_desteklenir ... ok
+test zaman::testler::saat_farki_rtt_yarisini_cikarir ... ok
+test uctan_uca::pano_iki_yonlu_gider ... ok
+test uctan_uca::pano_izni_yoksa_gitmez ... ok
+test uctan_uca::host_durdurulunca_baglanilamaz ... ok
+test uctan_uca::titresim_izleyiciye_doner ... ok
+test uctan_uca::red_edilince_izleyici_sebebi_gorur ... ok
+test uctan_uca::pano_dongu_yapmaz ... ok
+test uctan_uca::yanlis_parola_baglanmadan_reddedilir ... ok
+test uctan_uca::tam_akis_goruntu_ve_girdi ... ok
+test uctan_uca::yanlis_jeton_reddedilir ... ok
+test uctan_uca::sahte_bilet_reddedilir ... ok
+test uctan_uca::terminal_hatasi_oturumu_kapatmaz_uc_baglanti_tekrarlanir ... ok
+
+failures:
+
+---- google_oauth::yenileme_testleri::bozuk_rotation_yaniti_eski_refresh_kullanimi_gibi_gizlenmez stdout ----
+
+thread 'google_oauth::yenileme_testleri::bozuk_rotation_yaniti_eski_refresh_kullanimi_gibi_gizlenmez' (17976) panicked at src\google_oauth.rs:707:9:
+assertion failed: yenileme_yaniti(true,
+        br#"{"id_token":"id","access_token":"access","token_type":"Bearer","refresh_token":123}"#).is_err()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    google_oauth::yenileme_testleri::bozuk_rotation_yaniti_eski_refresh_kullanimi_gibi_gizlenmez
+
+test result: FAILED. 199 passed; 1 failed; 0 ignored; 0 measured; 10 filtered out; finished in 52.71s
+
+error: test failed, to rerun pass `--lib`

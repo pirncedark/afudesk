@@ -1,5 +1,7 @@
 # Linux runner sonucu — 2026-11-11
 
+Bu dosya ilk runner tesliminin tarihsel kaydıdır. Güncel Secret Service bulunmadığında şifreli fallback, CI düzeltmeleri ve gerçek test/paket sonuçları [LINUX_TEST_RAPORU.md](LINUX_TEST_RAPORU.md) ve [CIHAZ_GUVENI.md](CIHAZ_GUVENI.md) içindedir. Artifact artık `.deb` ve kanıt dizinini içerir; ayrıca açılmış bundle yüklenmez. Windows analiz/test adımları da hata kodlarını ayrı doğrular.
+
 ## DONE
 
 - `app/linux/`: Flutter GTK runner, Flutter/Cargokit plugin ve native asset bundle kurulumu; Windows runner değişmedi.

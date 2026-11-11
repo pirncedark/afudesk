@@ -68,9 +68,9 @@ afudesk
 
 Beklenen oturum türü `x11`'dir. Mevcut Rust yolu `rust/src/platform.rs` içindeki `XcapYakalayici` ile ekran yakalama ve `EnigoEnjektor` ile klavye/fare girdisidir. Xvfb'de kare alınması, gerçek GPU/çoklu ekran/ölçekleme/klavye düzeninin doğrulanması anlamına gelmez.
 
-**Wayland tam desteği tamamlanmış değildir.** Uygulamaya ait xdg-desktop-portal ScreenCast + RemoteDesktop izin oturumu, PipeWire akışı ve ilgili input yaşam döngüsünün tamamı doğrulanmadan Wayland'de ekran + klavye + fare çalışıyor denmez. PipeWire veya portal paketini kurmak tek başına bu eksiği çözmez; `uinput` için geniş cihaz izni vermeyin ve uygulamayı root çalıştırmayın. İlk kullanılabilir yol Xorg'dur; kalıcı sistem geneli Wayland kapatma işlemi gerekmez.
+**Wayland runtime desteği UNVERIFIED'dır.** Uygulamaya ait tek xdg-desktop-portal ScreenCast + RemoteDesktop izin oturumu ve PipeWire backend'i eklendi; gerçek compositor üzerinde izin verme/red/iptal, ekran ve input yaşam döngüsü henüz denenmedi. Xvfb sonucu bu doğrulamanın yerine geçmez. `uinput` için geniş cihaz izni vermeyin ve uygulamayı root çalıştırmayın. Bu teslimatta çalışma kanıtı için Xorg yolu kullanılır; kalıcı sistem geneli Wayland kapatma işlemi gerekmez.
 
-Ses/mikrofon, sanal gamepad, güncelleyici ve Google OAuth Linux davranışının her biri ayrıca test raporundan kontrol edilmelidir; Windows desteğinden Linux eşdeğerliği çıkarılamaz. Google OAuth token ömrü ile AfuDesk'in kendi 30 günlük cihaz güveni ayrı mekanizmalardır; Google Console Testing/Production durumu kodla değiştirilmez.
+Ses/mikrofon, sanal gamepad, güncelleyici ve gerçek Google OAuth davranışı ayrıca test raporundan kontrol edilmelidir; Windows desteğinden Linux eşdeğerliği çıkarılamaz. [Google OAuth ve 30 günlük cihaz güveni](CIHAZ_GUVENI.md) ayrı mekanizmalardır; Google Console Testing/Production durumu kodla değiştirilmez.
 
 ## 5. Güvenli çalışma kontrolü
 

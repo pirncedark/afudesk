@@ -1,0 +1,6 @@
+Source: https://github.com/pirncedark/afudesk/actions/runs/43097791540
+Status: startup_failure; 0 jobs
+GitHub annotation: An unexpected error has occurred and we've been automatically notified.
+Support request ID: e7cb0b3b-de10-11f1-8351-f1b39d55524f
+Official actionlint v1.7.12: exit 0
+Browser host: unavailable; public summary read through HTTPS

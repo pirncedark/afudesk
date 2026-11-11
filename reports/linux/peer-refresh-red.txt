@@ -1,0 +1,28 @@
+cargo :    Compiling afudesk_core v1.8.0 (C:\Users\afuuu\Desktop\afuproject\_wt\afudesk-linux\rust)
+At line:2 char:67
++ ... lidation'); cargo test --offline --manifest-path rust/Cargo.toml --li ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling af...esk-linux\rust):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 14.02s
+     Running unittests src\lib.rs (target-linux-validation\debug\deps\afudesk_core-b332a1e71b4e6ee3.exe)
+
+running 1 test
+test google::dizin_testleri::nonce_puuttuu_yenileme_vain_eslesmis_anahtar_ve_guncel_dizinle ... FAILED
+
+failures:
+
+---- google::dizin_testleri::nonce_puuttuu_yenileme_vain_eslesmis_anahtar_ve_guncel_dizinle stdout ----
+
+thread 'google::dizin_testleri::nonce_puuttuu_yenileme_vain_eslesmis_anahtar_ve_guncel_dizinle' (8532) panicked at src\google.rs:486:59:
+paired refresh must verify: DogrulamaHatasi { neden: "nonce" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    google::dizin_testleri::nonce_puuttuu_yenileme_vain_eslesmis_anahtar_ve_guncel_dizinle
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 210 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`
