@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Ephemeral CI runners only. APT still verifies Ubuntu's signed repository data.
 set -euo pipefail
+# shellcheck source=/dev/null
 source /etc/os-release
 : "${VERSION_CODENAME:?Ubuntu codename missing}"
 printf 'Ubuntu suite: %s\n' "$VERSION_CODENAME"
@@ -29,6 +30,6 @@ sudo env DEBIAN_FRONTEND=noninteractive apt-get "${options[@]}" install -y --no-
   libsecret-1-dev libssl-dev libudev-dev libdbus-1-dev libpipewire-0.3-dev \
   libxcb1-dev libxcb-randr0-dev libxcb-shm0-dev libxcb-xfixes0-dev \
   libxrandr-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
-  libegl1-mesa-dev libgl1-mesa-dri libglu1-mesa-dev libxdo-dev \
+  libegl1-mesa-dev libgl1-mesa-dri libglu1-mesa-dev libgbm-dev libxdo-dev \
   xvfb xauth xdotool scrot openbox python3-tk dbus-x11 gnome-keyring \
   dpkg-dev desktop-file-utils
