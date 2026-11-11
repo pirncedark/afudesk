@@ -171,8 +171,11 @@ pub struct Host {
 impl Host {
     pub fn google_adresleri(&self) -> (Vec<String>, Vec<String>) {
         let adres = self.endpoint.addr();
+        let ipler: Vec<String> = adres.ip_addrs().map(ToString::to_string).collect();
+        #[cfg(target_os = "linux")]
+        let ipler = crate::linux_guvenlik::ozel_adresler(&ipler);
         (
-            adres.ip_addrs().map(ToString::to_string).collect(),
+            ipler,
             adres.relay_urls().map(ToString::to_string).collect(),
         )
     }
@@ -361,6 +364,47 @@ fn gorsel_alt_v_gonder(
 #[cfg(test)]
 mod guvenlik_testleri {
     use super::*;
+
+    #[test]
+    fn linux_baska_hesap_onayla_bile_baglanamaz() {
+        assert_eq!(linux_google_karari(crate::google::Karar::OnaySor, true), crate::google::Karar::Red);
+    }
+
+    #[test]
+    fn linux_google_girisi_eslesmemis_anahtari_otomatik_onaylamaz() {
+        assert_eq!(linux_google_karari(crate::google::Karar::Kabul, false), crate::google::Karar::OnaySor);
+        assert_eq!(linux_google_karari(crate::google::Karar::Kabul, true), crate::google::Karar::Kabul);
+    }
+
+    #[tokio::test]
+    async fn linux_dogru_parola_bile_eslesmemis_cihaza_ekran_acmaz() {
+        let ep = ag::uc_nokta(Kurulum::YalnizYerel, false).await.unwrap();
+        let iz = ag::uc_nokta(Kurulum::YalnizYerel, false).await.unwrap();
+        let hedef = ag::hedef_adres(&ep.id().to_string(),
+            &ep.bound_sockets().iter().map(ToString::to_string).collect::<Vec<_>>(), &[]).unwrap();
+        let sunucu = tokio::spawn(async move {
+            let c = ep.accept().await.unwrap().await.unwrap();
+            let fabrika: Arc<dyn Fabrika> = Arc::new(crate::platform::sahte::SahteFabrika::new(80,60));
+            let (olay, mut olaylar) = mpsc::channel(8);
+            let (_komut_tx, mut komut) = mpsc::channel(8);
+            let (_dur_tx, mut durdur) = oneshot::channel();
+            let klasor = tempfile::tempdir().unwrap();
+            let sonuc = oturum(true, &ep.id().to_string(), &c,
+                Giris::Yeni { bilet: "dogru-bilet", kayit: None }, &fabrika,
+                klasor.path(), &AtomicBool::new(true), &olay, &mut komut, &mut durdur).await;
+            assert!(matches!(sonuc, Oturum::Reddedildi));
+            assert!(olaylar.try_recv().is_err(), "onaysız cihaz görüntü/istek olayı üretemez");
+            ep.close().await;
+        });
+        let c = ag::baglan(&iz, hedef, Duration::from_secs(5)).await.unwrap();
+        let (mut w, mut r) = c.open_bi().await.unwrap();
+        protokol::yaz(&mut w, &Kontrol::Merhaba { bilet:"dogru-bilet".into(), ad:"sahte".into() }).await.unwrap();
+        let red = tokio::time::timeout(Duration::from_secs(5), protokol::oku::<_, Kontrol>(&mut r)).await.unwrap().unwrap();
+        assert!(matches!(red, Some(Kontrol::Red(_))), "{red:?}");
+        c.close(0u32.into(), b"test");
+        sunucu.await.unwrap();
+        iz.close().await;
+    }
 
     async fn mikrofon_hatasiyla_host_baslat(
         geri_yukle: impl FnOnce() -> Result<()> + Send + 'static,
@@ -687,6 +731,7 @@ async fn calis(
                     continue;
                 };
                 match oturum(
+                    cfg!(target_os = "linux") && kurulum != Kurulum::YalnizYerel,
                     &ag::kimlik_metni(ep.id()),
                     &baglanti,
                     Giris::Devam(&d),
@@ -745,7 +790,12 @@ async fn calis(
             bilet: bilet.clone(),
             bitis: kod::simdi() + kod::GECERLILIK_SN,
         };
-        let metin = match kod::kodla(&davet, &parola) {
+        let sonuc = if cfg!(target_os = "linux") && kurulum != Kurulum::YalnizYerel {
+            kod::paylasim_kodu(&davet, &parola)
+        } else {
+            kod::kodla(&davet, &parola)
+        };
+        let metin = match sonuc {
             Ok(k) => k,
             Err(e) => {
                 let _ = olay.send(HostOlay::Hata(e.to_string())).await;
@@ -790,6 +840,7 @@ async fn calis(
                 continue;
             };
             match oturum(
+                cfg!(target_os = "linux") && kurulum != Kurulum::YalnizYerel,
                 &ag::kimlik_metni(ep.id()),
                 &baglanti,
                 Giris::Yeni {
@@ -863,7 +914,17 @@ async fn reddet(w: &mut GonderAkisi, c: &Baglanti, sebep: &str) {
     c.close(1u32.into(), b"red");
 }
 
+fn linux_google_karari(karar: crate::google::Karar, eslesmis: bool) -> crate::google::Karar {
+    use crate::google::Karar;
+    match karar {
+        Karar::Kabul if eslesmis => Karar::Kabul,
+        Karar::Kabul => Karar::OnaySor,
+        _ => Karar::Red,
+    }
+}
+
 async fn oturum(
+    guvenli_linux: bool,
     yerel_kimlik: &str,
     c: &Baglanti,
     giris: Giris<'_>,
@@ -880,6 +941,11 @@ async fn oturum(
     };
     let ilk =
         tokio::time::timeout(Duration::from_secs(10), protokol::oku::<_, Kontrol>(&mut r)).await;
+    if guvenli_linux && matches!(&ilk,
+        Ok(Ok(Some(Kontrol::Merhaba { .. } | Kontrol::MerhabaKayitli { .. })))) {
+        reddet(&mut w, c, "Bu cihaz onaylı değil; Google hesabınla giriş yap.").await;
+        return Oturum::Reddedildi;
+    }
     const OTURUM_BITTI: &str = "Oturum sona ermiş; yeni kod iste.";
     const KOD_GECERSIZ: &str = "Kod geçersiz ya da daha önce kullanılmış.";
     const KOD_KAPALI: &str =
@@ -909,6 +975,16 @@ async fn oturum(
                 g.yetki(&kanit, &ag::kimlik_metni(c.remote_id())),
             )
             .await;
+            let eslesmis = match &giris {
+                Giris::Yeni { kayit: Some(k), .. } =>
+                    guvenilen::oku(&guvenilen::kayit_yolu(&k.veri)).hostlar.iter()
+                        .any(|h| h.izleyici_kimlik == ag::kimlik_metni(c.remote_id())),
+                Giris::Devam(d) => d.kimlik == c.remote_id(),
+                _ => false,
+            };
+            let yetki = yetki.map(|s| s.map(|(karar, ad)| (
+                if guvenli_linux { linux_google_karari(karar, eslesmis) } else { karar }, ad
+            )));
             match yetki {
                 Ok(Ok((crate::google::Karar::Kabul, cihaz_adi))) => {
                     google_kanit = Some(kanit);
@@ -923,7 +999,16 @@ async fn oturum(
                         Tur::Google,
                     )
                 }
-                Ok(Ok((crate::google::Karar::OnaySor, _))) => (ad, None, Tur::Google),
+                Ok(Ok((crate::google::Karar::OnaySor, cihaz_adi))) => {
+                    if guvenli_linux {
+                        // Same-account Google proof is valid, but the independent
+                        // local key grant still needs the user's first approval.
+                        google_kanit = Some(kanit);
+                        (cihaz_adi, None, Tur::Google)
+                    } else {
+                        (ad, None, Tur::Google)
+                    }
+                },
                 _ => {
                     reddet(
                         &mut w,
@@ -1014,6 +1099,30 @@ async fn oturum(
             }
         }
     };
+    if guvenli_linux && tur == Tur::Google {
+        if let Giris::Yeni { kayit: Some(k), .. } = &giris {
+            let izleyici = ag::kimlik_metni(c.remote_id());
+            let simdi = guvenilen::simdi();
+            let sonuc = guvenilen::guncelle(&guvenilen::kayit_yolu(&k.veri), |kk| {
+                if let Some(h) = kk.hostlar.iter_mut().find(|h| h.izleyici_kimlik == izleyici) {
+                    h.son_gorulme = simdi;
+                } else {
+                    guvenilen::hosta_ekle(kk, guvenilen::HostKaydi {
+                        izleyici_kimlik: izleyici, ad: ad.clone(), etiket: None,
+                        jeton_sha256: guvenilen::jeton_ozeti(&guvenilen::yeni_jeton()),
+                        eklenme: simdi, son_gorulme: simdi,
+                    });
+                }
+            });
+            if sonuc.is_err() {
+                reddet(&mut w, c, "Cihaz onayı kaydedilemedi; yeniden dene.").await;
+                return Oturum::Reddedildi;
+            }
+        } else if !matches!(&giris, Giris::Devam(d) if d.kimlik == c.remote_id()) {
+            reddet(&mut w, c, "Cihaz onayı kaydedilemedi; yeniden dene.").await;
+            return Oturum::Reddedildi;
+        }
+    }
     let devam_bilgisi = DevamBilgisi {
         jeton: kod::yeni_bilet(),
         kimlik: c.remote_id(),

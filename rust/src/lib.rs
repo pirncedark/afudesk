@@ -16,6 +16,7 @@ pub mod host;
 pub mod izleyici;
 pub mod kimlik;
 pub mod kod;
+pub mod linux_guvenlik;
 pub mod kol;
 pub mod pano;
 pub mod platform;

@@ -67,6 +67,99 @@ jobs:
           name: AfuDesk-windows-x64
           path: app/build/windows/x64/runner/Release/
 
+  linux:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.wan == '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+      - name: Linux kanıt dizini
+        run: mkdir -p reports/linux
+      - name: Linux derleme ve X11 test bağımlılıkları
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang libclang-dev cmake ninja-build pkg-config libgtk-3-dev \
+            libsecret-1-dev libudev-dev libdbus-1-dev libpipewire-0.3-dev \
+            libxcb1-dev libxcb-randr0-dev libxcb-shm0-dev libxcb-xfixes0-dev \
+            libxrandr-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
+            libegl1-mesa-dev libgl1-mesa-dri libglu1-mesa-dev libxdo-dev \
+            xvfb xauth xdotool scrot openbox python3-tk dbus-x11 gnome-keyring \
+            dpkg-dev desktop-file-utils
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.9
+          channel: stable
+      - name: Linux betik söz dizimi
+        run: |
+          mkdir -p reports/linux
+          bash -n scripts/linux/build.sh scripts/linux/package.sh scripts/linux/smoke.sh
+          python3 -m py_compile scripts/linux/input_receiver.py
+      - name: Rust çekirdek testleri (ekransız)
+        working-directory: rust
+        run: cargo test --release -- --skip gercek_ 2>&1 | tee ../reports/linux/cargo-test.log
+      - name: Rust Flutter köprüsü kontrolü
+        run: cargo check --manifest-path app/kopru/Cargo.toml 2>&1 | tee reports/linux/cargo-check.log
+      - name: Flutter analiz, test ve Linux release
+        env:
+          AFUDESK_GOOGLE_DESKTOP_CLIENT_ID: ${{ vars.AFUDESK_GOOGLE_DESKTOP_CLIENT_ID }}
+          AFUDESK_GOOGLE_WEB_CLIENT_ID: ${{ vars.AFUDESK_GOOGLE_WEB_CLIENT_ID }}
+          AFUDESK_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.AFUDESK_GOOGLE_DESKTOP_CLIENT_SECRET }}
+        run: bash scripts/linux/build.sh 2>&1 | tee reports/linux/flutter-build.log
+      - name: Gerçek ekran ve girdi smoke derlemesi
+        run: |
+          cargo build --release --manifest-path rust/Cargo.toml --example linux_smoke
+          g++ -std=c++14 -Wall -Wextra -Werror app/linux/runner/google_secure_storage.cc \
+            app/linux/tests/google_secure_storage_test.cc $(pkg-config --cflags --libs libsecret-1) \
+            -o reports/linux/secure-storage-test
+      - name: Debian v0.1.0 paketi
+        run: bash scripts/linux/package.sh 2>&1 | tee reports/linux/package.log
+      - name: Debian kurulum ve kaldırma doğrulaması
+        run: |
+          sudo apt-get install -y ./reports/linux/afudesk_0.1.0_amd64.deb
+          test -x /opt/afudesk/afudesk
+          test -x /usr/bin/afudesk
+          test -f /usr/share/applications/afudesk.desktop
+          dpkg-query -W afudesk | tee reports/linux/deb-installed.txt
+          ldd /opt/afudesk/afudesk | tee reports/linux/ldd.txt
+          ! grep -q 'not found' reports/linux/ldd.txt
+      - name: Gerçek Xvfb ekranı, Enigo girdisi, Secret Service ve kurulu Flutter pencere testi
+        run: |
+          set -o pipefail
+          xvfb-run -a -s '-screen 0 1280x800x24 -ac +extension RANDR' \
+            dbus-run-session -- bash scripts/linux/smoke.sh "$PWD/reports/linux" /usr/bin/afudesk \
+            2>&1 | tee reports/linux/session.log
+      - name: Debian paketini kaldırma
+        if: always()
+        run: |
+          if dpkg-query -W -f='${Status}' afudesk 2>/dev/null | grep -q 'install ok installed'; then
+            sudo apt-get remove -y afudesk
+            test ! -e /opt/afudesk/afudesk
+            test ! -e /usr/bin/afudesk
+            printf 'PASS: package removed\n' > reports/linux/deb-removed.txt
+          fi
+      - name: Linux sonuç kaydı
+        if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          mkdir -p reports/linux
+          printf 'job_status=%s\nrunner=%s\n' "$JOB_STATUS" "$RUNNER_OS" > reports/linux/job-status.txt
+      - name: Linux paketi, bundle ve kanıtlar
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AfuDesk-linux-v0.1.0-x64
+          path: |
+            reports/linux/
+            app/build/linux/x64/release/bundle/
+          if-no-files-found: warn
+
   # WAN TEST-1: izleyici GitHub'ın makinesinde (farklı makine, farklı ağ), host
   # geliştiricinin bilgisayarında. Kod+parola `WAN_KOD` secret'ından gelir (log'a
   # yazılmaz); sonuçlar ekran görüntüsü içerdiği için `WAN_ANAHTAR` ile şifrelenir.

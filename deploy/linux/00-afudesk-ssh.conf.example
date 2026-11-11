@@ -1,0 +1,12 @@
+# Replace @TAILSCALE_IPV4@ with this machine's `tailscale ip -4` output.
+# Install as /etc/ssh/sshd_config.d/00-afudesk.conf AFTER key login is verified.
+AddressFamily inet
+ListenAddress @TAILSCALE_IPV4@
+PubkeyAuthentication yes
+AuthenticationMethods publickey
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitEmptyPasswords no
+PermitRootLogin no
+X11Forwarding no
+MaxAuthTries 3
