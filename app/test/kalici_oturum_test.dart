@@ -217,8 +217,9 @@ void main() {
       islem: (op, _) async {
         if (op == 'geriYukle') throw StateError('(G6)');
         if (op == 'baslat') return '{"url":"https://accounts.google.com/"}';
-        if (op == 'tamamla')
+        if (op == 'tamamla') {
           return '{"ad":"Hesabım","oturum":"yeni-imzali-bundle"}';
+        }
         throw StateError('Beklenmeyen islem');
       },
       googleBaglan: (_) => const Stream<IzleyiciOlay>.empty(),

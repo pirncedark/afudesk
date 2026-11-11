@@ -195,8 +195,9 @@ class GercekHesapServisi extends HesapServisi {
     var etkinlesti = false;
     try {
       final kayit = await kasa!.oku();
-      if (kayit == null || _kapali || _duraklatildi || nesil != _oturumNesli)
+      if (kayit == null || _kapali || _duraklatildi || nesil != _oturumNesli) {
         return;
+      }
       Map identity;
       try {
         identity = await _cagir('geriYukle', kayit) as Map;
