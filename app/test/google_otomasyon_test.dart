@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import '../lib/google_otomasyon.dart';
+import 'package:afudesk/google_otomasyon.dart';
 
 const _basari =
     '{"status":"signed-in","needsUserApproval":false,"message":"Siteye giriş yapıldı."}\n';
