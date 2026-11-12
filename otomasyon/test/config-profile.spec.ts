@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import { expect } from '@playwright/test';
 import { existsSync } from 'node:fs';
-import { mkdtemp, mkdir, symlink, stat } from 'node:fs/promises';
+import { mkdtemp as mkdtempRaw, mkdir, symlink, stat, realpath } from 'node:fs/promises';
+// Runners return 8.3 short temp paths on Windows; the module returns real paths.
+const mkdtemp = async (prefix: string) => realpath(await mkdtempRaw(prefix));
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { parseSites } from '../src/config.js';
