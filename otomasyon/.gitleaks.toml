@@ -1,0 +1,8 @@
+[extend]
+useDefault = true
+
+[[rules]]
+id = "afudesk-local-browser-data"
+description = "Browser profiles and audit records must never be committed"
+path = '''(^|/)(profil|kayit)/'''
+regex = '''.+'''
