@@ -1,0 +1,44 @@
+name: Google otomasyon (mock)
+
+on:
+  push:
+    paths:
+      - 'otomasyon/**'
+  pull_request:
+    paths:
+      - 'otomasyon/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mock-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: otomasyon
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: otomasyon/package-lock.json
+      - run: npm ci
+      - name: Install headless Chromium (Windows)
+        if: runner.os == 'Windows'
+        run: npx playwright install chromium
+      - name: Install headless Chromium and dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: npx playwright install --with-deps chromium
+      # Tests use local mock pages only; never launch the production login CLI
+      # against an approved remote site or load a real Google profile in CI.
+      - run: npm test

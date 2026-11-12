@@ -8,3 +8,12 @@
 
 # WAN testi kanıtları: kişisel ekran görüntüleri içerir, yerelde kalır
 reports/wan/
+
+# AfuDesk browser profiles and local audit records never enter git
+**/profil/
+**/kayit/
+/otomasyon/node_modules/
+/otomasyon/dist/
+/otomasyon/test-results/
+/otomasyon/playwright-report/
+/otomasyon/test-results*.txt
