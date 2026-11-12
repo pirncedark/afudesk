@@ -2,6 +2,7 @@
 //! bridge DTO; authorization always stays inside the core.
 use super::afudesk;
 use afudesk_core::{
+    cihaz_guveni::{CihazGuveni, GuvenHatasi},
     google_baglanti::{self, Erisim},
     google_drive::CihazKaydi,
     google_oauth::{Giris, MasaustuGiris},
@@ -78,11 +79,13 @@ struct KaliciOturum {
     sub: String,
     nonce: String,
     istemciler: Vec<String>,
+    guven: Option<CihazGuveni>,
 }
 impl KaliciOturum {
     fn yaz(&self) -> String {
         json!({"client_id":self.client_id, "refresh_token":self.refresh_token,
             "sub":self.sub, "nonce":self.nonce, "istemciler":self.istemciler,
+            "guven": self.guven.as_ref().and_then(|g| g.yaz().ok()),
             "platform": if self.refresh_token == "android" { "android" } else { "desktop" }})
         .to_string()
     }
@@ -108,16 +111,137 @@ impl KaliciOturum {
                     .all(|id| id.ends_with(".apps.googleusercontent.com") && id.len() <= 512),
             "G9"
         );
+        let refresh_token = alan("refresh_token", 16384)?;
+        let guven = v["guven"].as_str().map(CihazGuveni::oku).transpose()?;
+        ensure!(refresh_token == "android" || guven.is_some(), GuvenHatasi);
         Ok(Self {
             client_id,
-            refresh_token: alan("refresh_token", 16384)?,
+            refresh_token,
             sub: alan("sub", 256)?,
             nonce: alan("nonce", 256)?,
             istemciler,
+            guven,
         })
     }
 }
 static KALICI: Mutex<Option<KaliciOturum>> = Mutex::new(None);
+
+const GUVEN_DOSYASI: &str = "google_cihaz_guveni.json";
+
+fn guven_yolu() -> Result<std::path::PathBuf> {
+    Ok(afudesk::veri().ok_or(GuvenHatasi)?.join(GUVEN_DOSYASI))
+}
+
+fn guven_kaydet(guven: &CihazGuveni) -> Result<()> {
+    guven_yaz(&guven_yolu()?, guven)
+}
+
+fn guven_yaz(yol: &std::path::Path, guven: &CihazGuveni) -> Result<()> {
+    afudesk_core::guvenilen::atomik_yaz(yol, guven.yaz()?.as_bytes()).context("G9")?;
+    Ok(())
+}
+
+fn guven_iptal() -> Result<()> {
+    guven_iptal_yol(&guven_yolu()?)
+}
+
+fn guven_iptal_yol(yol: &std::path::Path) -> Result<()> {
+    match std::fs::remove_file(yol) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        // Even if deleting fails, overwrite the authority with an invalid record.
+        Err(_) => afudesk_core::guvenilen::atomik_yaz(yol, b"{}").context("G9"),
+    }
+}
+
+fn guven_yeni(sub: &str, client: &str) -> Result<CihazGuveni> {
+    let v = afudesk::veri().ok_or(GuvenHatasi)?;
+    let host = kimlik::yukle_veya_uret(&v.join(kimlik::HOST_DOSYASI))?;
+    let viewer = kimlik::yukle_veya_uret(&v.join(kimlik::IZLEYICI_DOSYASI))?;
+    let guven = CihazGuveni::yeni(
+        &host.gizli,
+        viewer.kimlik(),
+        sub,
+        client,
+        afudesk_core::kod::simdi(),
+    )?;
+    guven_kaydet(&guven)?;
+    Ok(guven)
+}
+
+fn guveni_dogrula(k: &mut KaliciOturum) -> Result<()> {
+    if k.refresh_token == "android" {
+        return Ok(());
+    }
+    let v = afudesk::veri().ok_or(GuvenHatasi)?;
+    let host = kimlik::yukle_veya_uret(&v.join(kimlik::HOST_DOSYASI))?;
+    let viewer = kimlik::yukle_veya_uret(&v.join(kimlik::IZLEYICI_DOSYASI))?;
+    guveni_dogrula_ile(
+        k,
+        &guven_yolu()?,
+        &host,
+        &viewer,
+        afudesk_core::kod::simdi(),
+    )
+}
+
+fn guveni_dogrula_ile(
+    k: &mut KaliciOturum,
+    yol: &std::path::Path,
+    host: &afudesk_core::kimlik::CihazKimligi,
+    viewer: &afudesk_core::kimlik::CihazKimligi,
+    simdi: i64,
+) -> Result<()> {
+    // The local authority is independent of the caller-supplied encrypted bundle.
+    // Missing/deleted authority may only be replaced by an explicit OAuth login.
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    std::fs::File::open(yol)
+        .map_err(|_| GuvenHatasi)?
+        .take(8193)
+        .read_to_end(&mut bytes)
+        .map_err(|_| GuvenHatasi)?;
+    ensure!(bytes.len() <= 8192, GuvenHatasi);
+    let mut yerel = CihazGuveni::oku(std::str::from_utf8(&bytes).map_err(|_| GuvenHatasi)?)?;
+    let gelen = k.guven.as_ref().ok_or(GuvenHatasi)?;
+    yerel.dogrula(host.kimlik(), viewer.kimlik(), &k.sub, &k.client_id, simdi)?;
+    gelen.dogrula(host.kimlik(), viewer.kimlik(), &k.sub, &k.client_id, simdi)?;
+    ensure!(yerel.ayni_oturum(gelen), GuvenHatasi);
+    yerel.ilerlet(&host.gizli, simdi)?;
+    guven_yaz(yol, &yerel)?;
+    k.guven = Some(yerel);
+    Ok(())
+}
+
+fn ayni_kalici(a: &KaliciOturum, b: &KaliciOturum) -> bool {
+    a.client_id == b.client_id
+        && a.sub == b.sub
+        && a.nonce == b.nonce
+        && a.istemciler == b.istemciler
+        && match (&a.guven, &b.guven) {
+            (Some(a), Some(b)) => a.ayni_oturum(b),
+            (None, None) => a.refresh_token == "android" && b.refresh_token == "android",
+            _ => false,
+        }
+}
+
+fn cihaz_uyeligi(k: &CihazKaydi, liste: &[CihazKaydi]) -> Result<()> {
+    let mut eslesen = liste
+        .iter()
+        .filter(|c| c.host == k.host && c.izleyici == k.izleyici && c.sub == k.sub);
+    ensure!(
+        eslesen.next().is_some_and(|c| c.erisim) && eslesen.next().is_none(),
+        GuvenHatasi
+    );
+    Ok(())
+}
+
+async fn mevcut_cihazi_yenile(g: &Erisim, k: &CihazKaydi) -> Result<()> {
+    let liste = g.dizin.liste().await.context("G3")?;
+    cihaz_uyeligi(k, &liste)?;
+    g.dizin.yenile(k).await.context("G3")?;
+    Ok(())
+}
 
 fn oturum_sonucu() -> Value {
     let hesap_guard = HESAP.lock().unwrap();
@@ -135,7 +259,8 @@ fn oturum_sonucu() -> Value {
     })
 }
 
-async fn kalici_yenile(k: KaliciOturum) -> Result<Value> {
+async fn kalici_yenile(mut k: KaliciOturum) -> Result<Value> {
+    guveni_dogrula(&mut k)?;
     let (id, access, rotated) = afudesk_core::google_oauth::yenile(
         &k.client_id,
         masaustu_sir(DESKTOP_SECRET)?,
@@ -154,7 +279,7 @@ async fn kalici_yenile(k: KaliciOturum) -> Result<Value> {
         .await
         .context("G4")?;
     g.dizin.hesabi_dogrula().await.context("G3")?;
-    g.dizin.kaydet(&g.cihaz).await.context("G3")?;
+    mevcut_cihazi_yenile(&g, &g.cihaz).await?;
     google_baglanti::etkinlestir(g.clone());
     *HESAP.lock().unwrap() = Some(g);
     Ok(oturum_sonucu())
@@ -221,6 +346,11 @@ fn hesap() -> Result<Arc<Erisim>> {
 // than waiting for the Flutter heartbeat to notice an expired token.
 async fn taze_hesap() -> Result<Arc<Erisim>> {
     let g = hesap()?;
+    let kalici = KALICI.lock().unwrap().clone();
+    if let Some(mut k) = kalici {
+        guveni_dogrula(&mut k)?;
+        *KALICI.lock().unwrap() = Some(k);
+    }
     if yenileme_gerekli(g.hesap.gecerlilik_sonu(), afudesk_core::kod::simdi()) {
         let kalici = KALICI.lock().unwrap().clone();
         if let Some(k) = kalici {
@@ -249,7 +379,10 @@ fn guvenli_islem_hatasi(e: anyhow::Error) -> anyhow::Error {
             Some(afudesk_core::google_oauth::YenilemeHatasi::Iptal)
         )
     });
-    let code = if iptal {
+    let guven_bitti = e
+        .chain()
+        .any(|cause| cause.downcast_ref::<GuvenHatasi>().is_some());
+    let code = if iptal || guven_bitti {
         "G6"
     } else {
         ["G2", "G3", "G4", "G5"]
@@ -295,14 +428,7 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
                 return Err(anyhow!("android_sessiz"));
             }
             let onceki = KALICI.lock().unwrap().clone();
-            let k = onceki
-                .filter(|onceki| {
-                    onceki.client_id == k.client_id
-                        && onceki.sub == k.sub
-                        && onceki.nonce == k.nonce
-                        && onceki.istemciler == k.istemciler
-                })
-                .unwrap_or(k);
+            let k = onceki.filter(|onceki| ayni_kalici(onceki, &k)).unwrap_or(k);
             kalici_yenile(k).await
         }
         "duraklat" => {
@@ -315,14 +441,13 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
             afudesk::host_durdur();
             if let Some(g) = g {
                 let mut kayit = g.cihaz.clone();
-                kayit.erisim = false;
+                kayit.son_gorulme = afudesk_core::kod::simdi()
+                    .saturating_sub(afudesk_core::google_drive::HEARTBEAT_SECONDS + 1);
                 // Local access is already revoked; an offline directory cannot
                 // block stop/exit. Its last-seen record expires normally.
-                let _ = tokio::time::timeout(
-                    std::time::Duration::from_secs(2),
-                    g.dizin.yenile(&kayit),
-                )
-                .await;
+                let _ =
+                    tokio::time::timeout(std::time::Duration::from_secs(2), g.dizin.yenile(&kayit))
+                        .await;
             }
             Ok(json!({}))
         }
@@ -371,6 +496,9 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
             BEKLEYEN.lock().unwrap().take();
             Ok(json!({}))
         }
+        "kaliciKayit" => {
+            Ok(json!({"oturum":KALICI.lock().unwrap().as_ref().map(KaliciOturum::yaz)}))
+        }
         "tamamla" => {
             let (pending, kabul_edilen) = BEKLEYEN
                 .lock()
@@ -382,12 +510,14 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
                 Bekleyen::Masaustu(g, secret) => {
                     let token = g.kod_bekle().await?.oturum(Some(&secret)).await?;
                     if let Some(refresh) = token.refresh_token {
+                        let guven = guven_yeni(token.hesap.sub(), &token.client_id)?;
                         kalici = Some(KaliciOturum {
                             client_id: token.client_id,
                             refresh_token: refresh,
                             sub: token.hesap.sub().into(),
                             nonce: token.hesap.nonce().into(),
                             istemciler: kabul_edilen.clone(),
+                            guven: Some(guven),
                         });
                     } else {
                         return Err(anyhow!("G3"));
@@ -407,11 +537,15 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
                         );
                     }
                     kalici = Some(KaliciOturum {
-                        client_id: kabul_edilen.first().cloned().unwrap_or_else(|| "android".into()),
+                        client_id: kabul_edilen
+                            .first()
+                            .cloned()
+                            .unwrap_or_else(|| "android".into()),
                         refresh_token: "android".into(),
                         sub: identity.sub().into(),
                         nonce: identity.nonce().into(),
                         istemciler: kabul_edilen.clone(),
+                        guven: None,
                     });
                     (
                         id.to_owned(),
@@ -445,7 +579,7 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
                 .map(|k| json!({"id":k.host,"ad":k.ad,"cevrimici":k.erisim && k.guncel(g.hesap.sub(),afudesk_core::kod::simdi())})).collect::<Vec<_>>()))
         }
         "yenile" => {
-            let g = hesap()?;
+            let g = taze_hesap().await?;
             if yenileme_gerekli(g.hesap.gecerlilik_sonu(), afudesk_core::kod::simdi()) {
                 let kalici = KALICI.lock().unwrap().clone();
                 if let Some(k) = kalici {
@@ -458,8 +592,8 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
             );
             let mut k = g.cihaz.clone();
             adresleri_yenile(&mut k);
-            g.dizin.yenile(&k).await?;
-            Ok(json!({}))
+            mevcut_cihazi_yenile(&g, &k).await?;
+            Ok(oturum_sonucu())
         }
         "cikar" => {
             let g = taze_hesap().await?;
@@ -468,10 +602,19 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
                 .iter()
                 .find(|k| k.host == veri)
                 .ok_or_else(|| anyhow!("device"))?;
+            if k.host == g.cihaz.host {
+                guven_iptal()?;
+                KALICI.lock().unwrap().take();
+                HESAP.lock().unwrap().take();
+                google_baglanti::kapat(&g.cihaz.host);
+                afudesk::host_kes();
+                afudesk::izleyici_kapat();
+            }
             g.dizin.kaldir(&k.izleyici).await?;
             Ok(json!({}))
         }
         "cikis" | "erisimKapat" => {
+            let guven_sonucu = guven_iptal();
             KALICI.lock().unwrap().take();
             BEKLEYEN.lock().unwrap().take();
             let g = HESAP.lock().unwrap().take();
@@ -482,6 +625,7 @@ async fn islem_yap(islem: &str, veri: &str) -> Result<Value> {
                 google_baglanti::kapat(&g.cihaz.host);
                 g.dizin.kaldir(&g.cihaz.izleyici).await?;
             }
+            guven_sonucu?;
             Ok(json!({}))
         }
         _ => Err(anyhow!("operation")),
@@ -497,6 +641,134 @@ pub(super) async fn etkin_hesap() -> Result<Arc<Erisim>> {
 mod tests {
     use super::*;
     use afudesk_core::google::Dogrulayici;
+
+    fn guven_test_ortami() -> (
+        std::path::PathBuf,
+        kimlik::CihazKimligi,
+        kimlik::CihazKimligi,
+        KaliciOturum,
+    ) {
+        static SIRA: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "afudesk-ek4-{}-{}-{}",
+            std::process::id(),
+            afudesk_core::kod::simdi(),
+            SIRA.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let host = kimlik::yukle_veya_uret(&dir.join("host.json")).unwrap();
+        let viewer = kimlik::yukle_veya_uret(&dir.join("viewer.json")).unwrap();
+        let guven = CihazGuveni::yeni(
+            &host.gizli,
+            viewer.kimlik(),
+            "account",
+            "test.apps.googleusercontent.com",
+            1_700_000_100,
+        )
+        .unwrap();
+        guven_yaz(&dir.join(GUVEN_DOSYASI), &guven).unwrap();
+        let k = KaliciOturum {
+            client_id: "test.apps.googleusercontent.com".into(),
+            refresh_token: "test-refresh".into(),
+            sub: "account".into(),
+            nonce: "test-nonce".into(),
+            istemciler: vec!["test.apps.googleusercontent.com".into()],
+            guven: Some(guven),
+        };
+        (dir, host, viewer, k)
+    }
+
+    #[test]
+    fn yerel_guven_iptali_bundle_ile_kendini_yeniden_olusturmaz() {
+        let (dir, host, viewer, mut k) = guven_test_ortami();
+        let yol = dir.join(GUVEN_DOSYASI);
+        guveni_dogrula_ile(&mut k, &yol, &host, &viewer, 1_700_000_100).unwrap();
+        guven_iptal_yol(&yol).unwrap();
+        let hata = guveni_dogrula_ile(&mut k, &yol, &host, &viewer, 1_700_000_101).unwrap_err();
+        assert!(guvenli_islem_hatasi(hata).to_string().contains("(G6)"));
+        assert!(!yol.exists());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn yerel_capa_hesap_istemci_oturum_ve_saat_degisimini_reddeder() {
+        let (dir, host, viewer, k) = guven_test_ortami();
+        let yol = dir.join(GUVEN_DOSYASI);
+        let mut ilerlemis = k.clone();
+        guveni_dogrula_ile(&mut ilerlemis, &yol, &host, &viewer, 1_700_003_700).unwrap();
+        assert!(guveni_dogrula_ile(&mut k.clone(), &yol, &host, &viewer, 1_700_003_699).is_err());
+        let mut yanlis = k.clone();
+        yanlis.sub = "other-account".into();
+        assert!(guveni_dogrula_ile(&mut yanlis, &yol, &host, &viewer, 1_700_003_700).is_err());
+        assert!(guveni_dogrula_ile(&mut k.clone(), &yol, &viewer, &host, 1_700_003_700).is_err());
+        let mut yanlis = k.clone();
+        yanlis.client_id = "other.apps.googleusercontent.com".into();
+        assert!(guveni_dogrula_ile(&mut yanlis, &yol, &host, &viewer, 1_700_003_700).is_err());
+        let mut yeni = k.clone();
+        yeni.guven = Some(
+            CihazGuveni::yeni(
+                &host.gizli,
+                viewer.kimlik(),
+                &k.sub,
+                &k.client_id,
+                1_700_000_100,
+            )
+            .unwrap(),
+        );
+        assert!(guveni_dogrula_ile(&mut yeni, &yol, &host, &viewer, 1_700_003_700).is_err());
+        assert!(!ayni_kalici(&k, &yeni));
+        assert!(ayni_kalici(&k, &ilerlemis));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn drive_uyeligi_silinmis_iptal_edilmis_yabanci_eslesmemis_ve_cift_kaydi_reddeder() {
+        let (dir, host, viewer, _) = guven_test_ortami();
+        let k = CihazKaydi {
+            v: 1,
+            sub: "account".into(),
+            host: host.kimlik().to_string(),
+            izleyici: viewer.kimlik().to_string(),
+            ad: "Ev".into(),
+            platform: "linux".into(),
+            adresler: vec![],
+            relaylar: vec![],
+            son_gorulme: 0,
+            erisim: true,
+        };
+        assert!(
+            cihaz_uyeligi(&k, &[k.clone()]).is_ok(),
+            "offline mevcut kayit yenilenebilir"
+        );
+        assert!(cihaz_uyeligi(&k, &[]).is_err());
+        for (alan, deger) in [
+            ("erisim", json!(false)),
+            ("sub", json!("other")),
+            ("host", json!(viewer.kimlik().to_string())),
+            ("izleyici", json!(host.kimlik().to_string())),
+        ] {
+            let mut v = serde_json::to_value(&k).unwrap();
+            v[alan] = deger;
+            let yanlis: CihazKaydi = serde_json::from_value(v).unwrap();
+            assert!(cihaz_uyeligi(&k, &[yanlis]).is_err(), "{alan}");
+        }
+        assert!(cihaz_uyeligi(&k, &[k.clone(), k.clone()]).is_err());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn imzasiz_eski_masaustu_kaydi_yeniden_giris_ister() {
+        let veri = json!({
+            "client_id":"test.apps.googleusercontent.com", "refresh_token":"test-only",
+            "sub":"account", "nonce":"nonce", "istemciler":["test.apps.googleusercontent.com"],
+            "platform":"desktop"
+        });
+        let hata = KaliciOturum::oku(&veri.to_string()).err();
+        assert!(hata.is_some(), "imzasiz eski kayit kabul edilmemeli");
+        assert!(guvenli_islem_hatasi(hata.unwrap())
+            .to_string()
+            .contains("(G6)"));
+    }
 
     #[test]
     fn bozuk_kasa_google_iptali_sayilmaz() {

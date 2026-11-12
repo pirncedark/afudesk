@@ -1,0 +1,30 @@
+cargo :    Compiling afudesk_core v1.8.0 (C:\Users\afuuu\Desktop\afuproject\_wt\afudesk-linux\rust)
+At line:2 char:65
++ ... alidation'; cargo test --manifest-path rust/Cargo.toml --locked --lib ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling af...esk-linux\rust):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 13.63s
+     Running unittests src\lib.rs (target-linux-validation\debug\deps\afudesk_core-b332a1e71b4e6ee3.exe)
+
+running 1 test
+test host::guvenlik_testleri::linux_ilk_onayin_izinleri_yeniden_baglaninca_artmaz ... FAILED
+
+failures:
+
+---- host::guvenlik_testleri::linux_ilk_onayin_izinleri_yeniden_baglaninca_artmaz stdout ----
+
+thread 'host::guvenlik_testleri::linux_ilk_onayin_izinleri_yeniden_baglaninca_artmaz' (34680) panicked at src\host.rs:384:9:
+assertion `left == right` failed: EK4: Windows Google girişi de bağımsız cihaz izinlerini korumalı
+  left: Izinler { kontrol: true, pano: true, dosya: true, oyun_kolu: false }
+ right: Izinler { kontrol: false, pano: false, dosya: false, oyun_kolu: false }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    host::guvenlik_testleri::linux_ilk_onayin_izinleri_yeniden_baglaninca_artmaz
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 208 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`

@@ -1,0 +1,13 @@
+dart.exe : CreateFile failed 5 (Eri�im engellendi.
+At line:2 char:140
++ ... ICS='true'; & 'C:/Users/afuuu/tools/flutter/bin/cache/dart-sdk/bin/da ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (CreateFile failed 5 (Eri�im engellendi.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+)
+Flutter failed to write to a file at "C:\Users\afuuu\tools\flutter\bin\cache\libimobiledevice.stamp". The flutter tool 
+cannot access the file or directory.
+Please ensure that the SDK and/or project is installed in a location that has read/write permissions for the current us
+er.

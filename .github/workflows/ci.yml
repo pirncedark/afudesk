@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       wan:
-        description: "WAN testi: boş = normal CI | derle | baglan"
+        description: "boş = tüm CI | windows/linux/ubuntu24 | derle/baglan = WAN"
         required: false
         default: ""
       derleme_run:
@@ -21,7 +21,7 @@ on:
 
 jobs:
   test:
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.wan == '' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.wan == '' || inputs.wan == 'windows' }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -53,19 +53,126 @@ jobs:
         working-directory: rust
         # Gerçek ekran/girdi testleri CI'da (ekransız oturum) atlanır.
         run: cargo test --release -- --skip gercek_
-      - name: Flutter analiz + arayüz testleri
+      - name: Rust hesap köprüsü testleri
+        run: cargo test --release --manifest-path app/kopru/Cargo.toml --lib
+      - name: Flutter bağımlılıkları
         working-directory: app
-        run: |
-          flutter pub get
-          flutter analyze
-          flutter test
+        run: flutter pub get
+      - name: Flutter analiz
+        working-directory: app
+        run: flutter analyze
+      - name: Flutter arayüz testleri
+        working-directory: app
+        run: flutter test
       - name: Windows derleme
         working-directory: app
-        run: flutter build windows --release
+        env:
+          AFUDESK_GOOGLE_DESKTOP_CLIENT_ID: ${{ vars.AFUDESK_GOOGLE_DESKTOP_CLIENT_ID }}
+          AFUDESK_GOOGLE_WEB_CLIENT_ID: ${{ vars.AFUDESK_GOOGLE_WEB_CLIENT_ID }}
+          AFUDESK_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.AFUDESK_GOOGLE_DESKTOP_CLIENT_SECRET }}
+        run: flutter build windows --release --dart-define="AFUDESK_GOOGLE_DESKTOP_CLIENT_ID=$env:AFUDESK_GOOGLE_DESKTOP_CLIENT_ID"
       - uses: actions/upload-artifact@v4
         with:
           name: AfuDesk-windows-x64
           path: app/build/windows/x64/runner/Release/
+
+  linux:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.wan == '' || inputs.wan == 'linux' || inputs.wan == 'ubuntu24' }}
+    runs-on: ${{ inputs.wan == 'ubuntu24' && 'ubuntu-24.04' || 'ubuntu-latest' }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+      - name: Linux kanıt dizini
+        run: |
+          mkdir -p reports/linux-ci
+          cat /etc/os-release > reports/linux-ci/runner-os.txt
+          uname -m >> reports/linux-ci/runner-os.txt
+      - name: Linux derleme ve X11 test bağımlılıkları
+        timeout-minutes: 8
+        run: bash scripts/linux/ci-dependencies.sh 2>&1 | tee reports/linux-ci/dependencies.log
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.9
+          channel: stable
+      - name: Linux betik söz dizimi
+        run: |
+          mkdir -p reports/linux-ci
+          bash -n scripts/linux/*.sh
+          python3 -m py_compile scripts/linux/input_receiver.py
+          python3 scripts/linux/test_apt_sources.py
+      - name: Linux güvenli kasa derlemesi ve şifreli fallback testi
+        run: |
+          g++ -std=c++14 -Wall -Wextra -Werror app/linux/runner/google_secure_storage.cc \
+            app/linux/tests/google_secure_storage_test.cc $(pkg-config --cflags --libs libsecret-1) -lcrypto \
+            -o reports/linux-ci/secure-storage-test
+          XDG_DATA_HOME="$(mktemp -d)" DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent-afudesk-bus \
+            timeout 20s reports/linux-ci/secure-storage-test --unavailable | tee reports/linux-ci/secure-fallback.log
+          XDG_DATA_HOME="$(mktemp -d)" DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent-afudesk-bus \
+            timeout 20s reports/linux-ci/secure-storage-test --concurrent | tee -a reports/linux-ci/secure-fallback.log
+      - name: Rust çekirdek testleri (ekransız)
+        working-directory: rust
+        run: cargo test --release -- --skip gercek_ 2>&1 | tee ../reports/linux-ci/cargo-test.log
+      - name: Rust Flutter köprüsü kontrolü
+        run: |
+          cargo check --manifest-path app/kopru/Cargo.toml 2>&1 | tee reports/linux-ci/cargo-check.log
+          cargo test --release --manifest-path app/kopru/Cargo.toml --lib 2>&1 | tee reports/linux-ci/bridge-test.log
+      - name: Flutter analiz, test ve Linux release
+        env:
+          AFUDESK_GOOGLE_DESKTOP_CLIENT_ID: ${{ vars.AFUDESK_GOOGLE_DESKTOP_CLIENT_ID }}
+          AFUDESK_GOOGLE_WEB_CLIENT_ID: ${{ vars.AFUDESK_GOOGLE_WEB_CLIENT_ID }}
+          AFUDESK_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.AFUDESK_GOOGLE_DESKTOP_CLIENT_SECRET }}
+        run: bash scripts/linux/build.sh 2>&1 | tee reports/linux-ci/flutter-build.log
+      - name: Gerçek ekran ve girdi smoke derlemesi
+        run: |
+          df -h "$PWD" | tee reports/linux-ci/disk-before-smoke-build.txt
+          cargo build --release --manifest-path rust/Cargo.toml --example linux_smoke 2>&1 | tee reports/linux-ci/smoke-build.log
+      - name: Debian v0.1.0 paketi
+        run: bash scripts/linux/package.sh "$PWD/app/build/linux/x64/release/bundle" "$PWD/reports/linux-ci" 2>&1 | tee reports/linux-ci/package.log
+      - name: Debian kurulum ve kaldırma doğrulaması
+        run: |
+          sudo apt-get install -y ./reports/linux-ci/afudesk_0.1.0_amd64.deb
+          test -x /opt/afudesk/afudesk
+          test -x /usr/bin/afudesk
+          test -f /usr/share/applications/afudesk.desktop
+          dpkg-query -W afudesk | tee reports/linux-ci/deb-installed.txt
+          ldd /opt/afudesk/afudesk | tee reports/linux-ci/ldd.txt
+          ! grep -q 'not found' reports/linux-ci/ldd.txt
+      - name: Gerçek Xvfb ekranı, Enigo girdisi, Secret Service ve kurulu Flutter pencere testi
+        run: |
+          set -o pipefail
+          xvfb-run -a -s '-screen 0 1280x800x24 -ac +extension RANDR' \
+            dbus-run-session -- bash scripts/linux/smoke.sh "$PWD/reports/linux-ci" /usr/bin/afudesk \
+            2>&1 | tee reports/linux-ci/session.log
+      - name: Debian paketini kaldırma
+        if: always()
+        run: |
+          if dpkg-query -W -f='${Status}' afudesk 2>/dev/null | grep -q 'install ok installed'; then
+            sudo apt-get remove -y afudesk
+            test ! -e /opt/afudesk/afudesk
+            test ! -e /usr/bin/afudesk
+            printf 'PASS: package removed\n' > reports/linux-ci/deb-removed.txt
+          fi
+      - name: Linux sonuç kaydı
+        if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          mkdir -p reports/linux-ci
+          printf 'job_status=%s\nrunner=%s\n' "$JOB_STATUS" "$RUNNER_OS" > reports/linux-ci/job-status.txt
+      - name: Linux paketi ve kanıtlar
+        if: always()
+        timeout-minutes: 5
+        uses: actions/upload-artifact@v4
+        with:
+          name: AfuDesk-linux-v0.1.0-x64
+          path: reports/linux-ci/
+          if-no-files-found: warn
 
   # WAN TEST-1: izleyici GitHub'ın makinesinde (farklı makine, farklı ağ), host
   # geliştiricinin bilgisayarında. Kod+parola `WAN_KOD` secret'ından gelir (log'a

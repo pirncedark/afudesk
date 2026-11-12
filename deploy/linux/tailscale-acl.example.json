@@ -1,0 +1,24 @@
+{
+  "groups": {
+    "group:afudesk-admins": ["yonetici@example.com"]
+  },
+  "tagOwners": {
+    "tag:afudesk-pve": ["group:afudesk-admins"],
+    "tag:afudesk-server": ["group:afudesk-admins"]
+  },
+  "acls": [
+    {
+      "action": "accept",
+      "src": ["group:afudesk-admins"],
+      "proto": "tcp",
+      "dst": ["tag:afudesk-pve:22,8006", "tag:afudesk-server:22"]
+    }
+  ],
+  "tests": [
+    {
+      "src": "yonetici@example.com",
+      "accept": ["tag:afudesk-pve:22", "tag:afudesk-pve:8006", "tag:afudesk-server:22"],
+      "deny": ["tag:afudesk-pve:3389", "tag:afudesk-server:8006"]
+    }
+  ]
+}

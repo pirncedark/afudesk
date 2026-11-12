@@ -1,0 +1,41 @@
+cargo : warning: linker stdout: C:\Users\afuuu\Desktop\afuproject\_wt\afudesk-linux\target-linux-validation\debug\deps\
+afudesk_core.dll.lib kitaplığı ve C:\Users\afuuu\Desktop\afuproject\_wt\afudesk-linux\target-linux-validation\debug\dep
+s\afudesk_core.dll.exp nesnesi oluşturuluyor
+At line:2 char:156
++ ... lidation'); cargo test --offline --manifest-path rust/Cargo.toml --te ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (warning: linker...i oluşturuluyor:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  |
+  = note: `#[warn(linker_messages)]` on by default
+
+warning: `afudesk_core` (lib) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.61s
+     Running tests\cihaz_guveni.rs (target-linux-validation\debug\deps\cihaz_guveni-a8e4c0659861c653.exe)
+
+running 7 tests
+test eski_imzasiz_ve_sinirsiz_kayit_kabul_edilmez ... ok
+test kontrol_karakterli_istemci_kimligi_imzalanmaz ... FAILED
+test baska_cihaz_anahtari_hesap_ve_istemci_reddedilir ... ok
+test imzali_alanlarin_degistirilmesi_reddedilir ... ok
+test ayni_cihaz_yeni_giris_ile_farkli_oturum_uretir ... ok
+test baslangictan_ve_son_kullanimdan_geriye_saat_reddedilir ... ok
+test guven_tam_otuz_gun_soner_ve_yenilemeyle_uzamaz ... ok
+
+failures:
+
+---- kontrol_karakterli_istemci_kimligi_imzalanmaz stdout ----
+
+thread 'kontrol_karakterli_istemci_kimligi_imzalanmaz' (32496) panicked at tests\cihaz_guveni.rs:112:5:
+assertion failed: CihazGuveni::yeni(&host, viewer, "account",
+        "bad\0.apps.googleusercontent.com", NOW).is_err()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    kontrol_karakterli_istemci_kimligi_imzalanmaz
+
+test result: FAILED. 6 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `--test cihaz_guveni`

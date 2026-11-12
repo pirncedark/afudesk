@@ -2,7 +2,7 @@
 //! same-account members. Installing/removing an identity never changes old grants.
 use crate::{
     google::{anahtar_nonce, DogrulamaHatasi, Dogrulanmis, Dogrulayici, Karar},
-    google_drive::{drive_karari, CihazKaydi, DriveDizin},
+    google_drive::{drive_karari_eslesmis, CihazKaydi, DriveDizin},
 };
 use std::{
     collections::HashMap,
@@ -92,9 +92,10 @@ impl Erisim {
         &self,
         kanit: &Kanit,
         uzak: &str,
+        eslesmis: bool,
     ) -> Result<(Karar, String), DogrulamaHatasi> {
         let d = Dogrulayici::google_dan(self.istemciler.clone()).await?;
-        let karsi = d.dogrula(&kanit.0, crate::kod::simdi())?;
+        let karsi = d.dogrula_eslesmis(&kanit.0, crate::kod::simdi(), eslesmis)?;
         if self.hesap.sub() != karsi.sub() {
             return Ok((Karar::OnaySor, String::new()));
         }
@@ -108,7 +109,14 @@ impl Erisim {
         }) {
             return Err(DogrulamaHatasi);
         }
-        let karar = drive_karari(&self.hesap, Ok(&karsi), uzak, &liste, crate::kod::simdi());
+        let karar = drive_karari_eslesmis(
+            &self.hesap,
+            Ok(&karsi),
+            uzak,
+            &liste,
+            crate::kod::simdi(),
+            eslesmis,
+        );
         let ad = liste
             .iter()
             .find(|k| k.izleyici == uzak)

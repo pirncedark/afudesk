@@ -91,6 +91,20 @@ pub fn kodla(d: &Davet, parola: &str) -> Result<String, KodHata> {
     Ok(format!("{ONEK}{}", URL_SAFE_NO_PAD.encode(ham)))
 }
 
+/// Shareable invitation; direct addresses are never part of its decrypted load.
+pub fn paylasim_kodu(d: &Davet, parola: &str) -> Result<String, KodHata> {
+    let mut gizli = d.clone();
+    gizli.adresler.clear();
+    gizli.relaylar.retain(|r| {
+        reqwest::Url::parse(r).is_ok_and(|url| {
+            url.scheme() == "https" && url.host_str().is_some_and(|host| {
+                host.trim_matches(['[', ']']).parse::<std::net::IpAddr>().is_err()
+            })
+        })
+    });
+    kodla(&gizli, parola)
+}
+
 /// Kodu çözer; boşluk ve satır sonları (mesajlaşma uygulamalarından kopyalama) yok sayılır.
 pub fn coz(kod: &str, parola: &str, simdi: i64) -> Result<Davet, KodHata> {
     if parola.trim().is_empty() {

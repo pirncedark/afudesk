@@ -1,0 +1,2 @@
+PASS: Python AST, CI YAML, ACL JSON, fail2ban INI and SSH security directives
+UNVERIFIED: actual sshd, UFW, Tailscale policy engine, Proxmox and unattended-upgrades runtime

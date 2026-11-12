@@ -1,0 +1,28 @@
+cargo :    Compiling afudesk_core v1.8.0 (C:\Users\afuuu\Desktop\afuproject\_wt\afudesk-linux\rust)
+At line:2 char:310
++ ... lidation'); cargo test --offline --manifest-path rust/Cargo.toml --te ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling af...esk-linux\rust):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+warning: linker stdout: C:\Users\afuuu\Desktop\afuproject\_wt\afudesk-linux\target-linux-validation\debug\deps\afudesk_
+core.dll.lib kitaplığı ve C:\Users\afuuu\Desktop\afuproject\_wt\afudesk-linux\target-linux-validation\debug\deps\afudes
+k_core.dll.exp nesnesi oluşturuluyor
+  |
+  = note: `#[warn(linker_messages)]` on by default
+
+warning: `afudesk_core` (lib) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 15.67s
+     Running tests\cihaz_guveni.rs (target-linux-validation\debug\deps\cihaz_guveni-a8e4c0659861c653.exe)
+
+running 7 tests
+test kontrol_karakterli_istemci_kimligi_imzalanmaz ... ok
+test eski_imzasiz_ve_sinirsiz_kayit_kabul_edilmez ... ok
+test baska_cihaz_anahtari_hesap_ve_istemci_reddedilir ... ok
+test ayni_cihaz_yeni_giris_ile_farkli_oturum_uretir ... ok
+test imzali_alanlarin_degistirilmesi_reddedilir ... ok
+test guven_tam_otuz_gun_soner_ve_yenilemeyle_uzamaz ... ok
+test baslangictan_ve_son_kullanimdan_geriye_saat_reddedilir ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

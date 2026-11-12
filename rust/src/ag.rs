@@ -101,15 +101,27 @@ pub async fn uc_nokta_kimlikli(
             .clear_ip_transports(),
     };
     let mut b = b.alpns(vec![ALPN.to_vec()]).transport_config(tasima());
+    // Linux never binds a wildcard or a physical LAN/WAN interface. Without
+    // Tailscale the direct transport stays on loopback; relay remains fallback.
+    #[cfg(target_os = "linux")]
+    if kurulum == Kurulum::Internet {
+        let ip = crate::linux_guvenlik::sistem_baglama_ip();
+        // Do not use the Tailscale source address as a default Internet route
+        // for QUIC/QAD probes: only the private overlay subnet is eligible.
+        let prefix = if ip.is_loopback() { 8 } else { 10 };
+        b = b.clear_ip_transports().bind_addr_with_opts(SocketAddr::new(ip, 0),
+            iroh::endpoint::BindOpts::default().set_prefix_len(prefix).set_is_default_route(false))?;
+    }
     if let Some(g) = gizli {
         b = b.secret_key(g);
     }
     let kesif_acik = mdns_acik(kurulum);
-    if !portmapper || kurulum != Kurulum::Internet {
+    if cfg!(target_os = "linux") || !portmapper || kurulum != Kurulum::Internet {
         b = b.portmapper_config(iroh::endpoint::PortmapperConfig::Disabled);
     }
     if kurulum != Kurulum::YalnizYerel {
         if kurulum == Kurulum::Internet {
+            #[cfg(not(target_os = "linux"))]
             if let Some(ip) = ortam(BAGLA_IP_ORTAM).and_then(|v| v.parse::<std::net::IpAddr>().ok())
             {
                 b = b.clear_ip_transports().bind_addr(SocketAddr::new(ip, 0))?;
@@ -197,7 +209,7 @@ fn relay_modu(relaylar: Option<&[RelayUrl]>) -> RelayMode {
 }
 
 fn mdns_acik(kurulum: Kurulum) -> bool {
-    kurulum != Kurulum::YalnizYerel
+    !cfg!(target_os = "linux") && kurulum != Kurulum::YalnizYerel
 }
 
 fn ortam(ad: &str) -> Option<String> {
@@ -291,6 +303,8 @@ pub fn hedef_adres(kimlik: &str, adresler: &[String], relaylar: &[String]) -> Re
 pub fn yayinlanacak(ep: &Endpoint, ek_relayler: &[RelayUrl]) -> (Vec<String>, Vec<String>) {
     let a = ep.addr();
     let mut ipler: Vec<String> = a.ip_addrs().map(|s| s.to_string()).collect();
+    #[cfg(target_os = "linux")]
+    { ipler = crate::linux_guvenlik::ozel_adresler(&ipler); }
     ipler.sort();
     ipler.dedup();
     let mut relaylar: Vec<RelayUrl> = a.relay_urls().cloned().collect();
@@ -616,16 +630,21 @@ mod testler {
         let ep = uc_nokta_kimlikli(Kurulum::Internet, false, None, Some(vec![]))
             .await
             .unwrap();
-        // İnternet kurulumunda yalnız mDNS kalır; n0 pkarr ve DNS servisleri kurulmamıştır.
-        assert_eq!(ep.address_lookup().unwrap().len(), 1);
+        // Windows retains mDNS; Linux publishes no unauthenticated identity.
+        assert_eq!(ep.address_lookup().unwrap().len(), if cfg!(target_os = "linux") { 0 } else { 1 });
         assert!(ep.addr().relay_urls().next().is_none());
+        #[cfg(target_os = "linux")]
+        for soket in ep.bound_sockets() {
+            assert!(!soket.ip().is_unspecified(), "wildcard socket: {soket}");
+            assert!(soket.ip().is_loopback() || crate::linux_guvenlik::tailscale_mi(soket.ip()));
+        }
     }
 
     #[test]
     fn mdns_yalniz_yerel_haric_tum_kurulumlarda_acik() {
         assert!(!mdns_acik(Kurulum::YalnizYerel));
-        assert!(mdns_acik(Kurulum::Internet));
-        assert!(mdns_acik(Kurulum::SadeceRelay));
+        assert_eq!(mdns_acik(Kurulum::Internet), !cfg!(target_os = "linux"));
+        assert_eq!(mdns_acik(Kurulum::SadeceRelay), !cfg!(target_os = "linux"));
     }
 
     #[tokio::test]
@@ -647,6 +666,18 @@ fn kesifler() -> &'static std::sync::Mutex<std::collections::HashMap<String, Kes
         std::sync::OnceLock::new();
     KESIF.get_or_init(Default::default)
 }
+#[cfg(target_os = "linux")]
+pub async fn cevrimici_kimlikler(_host: Option<String>) -> Vec<String> {
+    // Account directory provides device names. Do not start a second wildcard
+    // UDP endpoint for unauthenticated LAN discovery on Linux.
+    let mut kesif = kesifler().lock().unwrap();
+    kesif.retain(|_, (mdns, _)| mdns.strong_count() > 0);
+    _host.as_ref().and_then(|h| kesif.get(h))
+        .map(|(_, k)| k.lock().unwrap().iter().cloned().collect())
+        .unwrap_or_default()
+}
+
+#[cfg(not(target_os = "linux"))]
 pub async fn cevrimici_kimlikler(host: Option<String>) -> Vec<String> {
     {
         let mut kesif = kesifler().lock().unwrap();

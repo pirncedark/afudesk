@@ -1,0 +1,41 @@
+cargo :    Compiling afudesk_core v1.8.0 (C:\Users\afuuu\Desktop\afuproject\_wt\afudesk-linux\rust)
+At line:2 char:516
++ ... exit $kod}; cargo test --offline --manifest-path app/kopru/Cargo.toml ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling af...esk-linux\rust):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+warning: linker stdout: C:\Users\afuuu\Desktop\afuproject\_wt\afudesk-linux\target-linux-validation\debug\deps\afudesk_
+core.dll.lib kitaplığı ve C:\Users\afuuu\Desktop\afuproject\_wt\afudesk-linux\target-linux-validation\debug\deps\afudes
+k_core.dll.exp nesnesi oluşturuluyor
+  |
+  = note: `#[warn(linker_messages)]` on by default
+
+warning: `afudesk_core` (lib) generated 1 warning
+   Compiling afudesk_kopru v0.1.0 (C:\Users\afuuu\Desktop\afuproject\_wt\afudesk-linux\app\kopru)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 31.98s
+     Running unittests src\lib.rs (target-linux-validation\debug\deps\afudesk_kopru-179a4e899d00288d.exe)
+
+running 19 tests
+test api::afudesk::terminal_testleri::gecersiz_terminal_istekleri_gonderilmez ... ok
+test api::afudesk::terminal_testleri::terminal_kimligi_tam_hassasiyetle_aktarilir ... ok
+test api::afudesk::terminal_testleri::liste_ve_kapat_girdi_degildir ... ok
+test api::google::tests::bozuk_kasa_google_iptali_sayilmaz ... ok
+test api::google::tests::bos_yapilandirma_kimlik_dogrulamasini_acmaz ... ok
+test api::google::tests::imzasiz_eski_masaustu_kaydi_yeniden_giris_ister ... ok
+test api::google::tests::android_istemci_kimligi_audience_olarak_kabul_edilmez ... ok
+test api::google::tests::masaustu_sir_zorunludur_ve_hataya_yansitilmaz ... ok
+test api::google::tests::token_bes_dakika_once_ve_suresi_dolunca_yenilenir ... ok
+test api::google::tests::android_buildconfig_derleme_ortami_olmadan_audience_saglar ... ok
+test api::google::tests::g4_yalniz_sabit_kural_adini_aktarir ... ok
+test api::google::tests::panik_tanisi_token_ve_sir_yazmaz ... ok
+test api::google::tests::uyari_yalniz_google_invalid_grant_icin_gosterilir ... ok
+test api::google::tests::web_ve_desktop_audience_kabul_edilir_yabanci_reddedilir ... ok
+test api::google::tests::masaustu_sir_yoksa_tarayicidan_once_g2_doner ... ok
+test api::google::tests::bilinmeyen_hata_yalniz_guvenli_kod_dondurur ... ok
+test api::google::tests::drive_uyeligi_silinmis_iptal_edilmis_yabanci_eslesmemis_ve_cift_kaydi_reddeder ... ok
+test api::google::tests::yerel_guven_iptali_bundle_ile_kendini_yeniden_olusturmaz ... ok
+test api::google::tests::yerel_capa_hesap_istemci_oturum_ve_saat_degisimini_reddeder ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+

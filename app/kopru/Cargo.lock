@@ -91,6 +91,7 @@ dependencies = [
  "iroh",
  "iroh-mdns-address-lookup",
  "log",
+ "pipewire",
  "rand 0.8.8",
  "rayon",
  "reqwest",
@@ -107,6 +108,8 @@ dependencies = [
  "windows-capture",
  "windows-sys 0.59.0",
  "xcap",
+ "xkeysym",
+ "zbus",
 ]
 
 [[package]]

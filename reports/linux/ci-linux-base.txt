@@ -1,0 +1,510 @@
+2026-11-11T14:45:49.2140960Z Current runner version: '2.338.2'
+2026-11-11T14:45:49.2164672Z ##[group]Runner Image Provisioner
+2026-11-11T14:45:49.2165446Z Hosted Compute Agent
+2026-11-11T14:45:49.2166159Z Version: 20261028.624
+2026-11-11T14:45:49.2166729Z Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
+2026-11-11T14:45:49.2167393Z Build Date: 2026-10-28T21:51:42Z
+2026-11-11T14:45:49.2168081Z Worker ID: {dd642ff9-c4e4-49b0-b90f-2df1c11edb2f}
+2026-11-11T14:45:49.2168731Z Region: westus3
+2026-11-11T14:45:49.2169261Z Cloud: Azure
+2026-11-11T14:45:49.2169803Z ##[endgroup]
+2026-11-11T14:45:49.2171342Z ##[group]Operating System
+2026-11-11T14:45:49.2172288Z Ubuntu
+2026-11-11T14:45:49.2172772Z 26.04.1
+2026-11-11T14:45:49.2173241Z LTS
+2026-11-11T14:45:49.2173718Z ##[endgroup]
+2026-11-11T14:45:49.2174541Z ##[group]Runner Image
+2026-11-11T14:45:49.2175169Z Image: ubuntu-26.04
+2026-11-11T14:45:49.2175702Z Version: 20261101.186.1
+2026-11-11T14:45:49.2176907Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261101.186/images/ubuntu/Ubuntu2604-Readme.md
+2026-11-11T14:45:49.2178289Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261101.186
+2026-11-11T14:45:49.2179198Z ##[endgroup]
+2026-11-11T14:45:49.2180304Z ##[group]GITHUB_TOKEN Permissions
+2026-11-11T14:45:49.2182471Z Contents: read
+2026-11-11T14:45:49.2183089Z Metadata: read
+2026-11-11T14:45:49.2183658Z Packages: read
+2026-11-11T14:45:49.2184412Z ##[endgroup]
+2026-11-11T14:45:49.2186441Z Secret source: Actions
+2026-11-11T14:45:49.2187384Z Cache mode: write
+2026-11-11T14:45:49.2188218Z Prepare workflow directory
+2026-11-11T14:45:49.2624189Z Prepare all required actions
+2026-11-11T14:45:49.2671153Z Getting action download info
+2026-11-11T14:45:49.5785382Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-11-11T14:45:49.7627846Z Download action repository 'dtolnay/rust-toolchain@stable' (SHA:b725eda525362e7cf34af9a7243cac1e3f01a7ec)
+2026-11-11T14:45:50.0266930Z Download action repository 'subosito/flutter-action@v2' (SHA:1a449444c387b1966244ae4d4f8c696479add0b2)
+2026-11-11T14:45:50.4281945Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-11-11T14:45:50.6253543Z Getting action download info
+2026-11-11T14:45:50.7443244Z Download action repository 'actions/cache@v5' (SHA:caa296126883cff596d87d8935842f9db880ef25)
+2026-11-11T14:45:50.9305029Z Complete job name: linux
+2026-11-11T14:45:51.0287405Z ##[group]Run actions/checkout@v4
+2026-11-11T14:45:51.0288734Z with:
+2026-11-11T14:45:51.0289555Z   repository: pirncedark/afudesk
+2026-11-11T14:45:51.0298136Z   token: ***
+2026-11-11T14:45:51.0298950Z   ssh-strict: true
+2026-11-11T14:45:51.0299776Z   ssh-user: git
+2026-11-11T14:45:51.0300615Z   persist-credentials: true
+2026-11-11T14:45:51.0301526Z   clean: true
+2026-11-11T14:45:51.0302360Z   sparse-checkout-cone-mode: true
+2026-11-11T14:45:51.0303318Z   fetch-depth: 1
+2026-11-11T14:45:51.0304214Z   fetch-tags: false
+2026-11-11T14:45:51.0305046Z   show-progress: true
+2026-11-11T14:45:51.0305907Z   lfs: false
+2026-11-11T14:45:51.0306688Z   submodules: false
+2026-11-11T14:45:51.0307516Z   set-safe-directory: true
+2026-11-11T14:45:51.0308436Z   allow-unsafe-pr-checkout: false
+2026-11-11T14:45:51.0309631Z env:
+2026-11-11T14:45:51.0310366Z   CARGO_TERM_COLOR: always
+2026-11-11T14:45:51.0311225Z ##[endgroup]
+2026-11-11T14:45:51.3265124Z Syncing repository: pirncedark/afudesk
+2026-11-11T14:45:51.3268093Z ##[group]Getting Git version info
+2026-11-11T14:45:51.3270151Z Working directory is '/home/runner/work/afudesk/afudesk'
+2026-11-11T14:45:51.3272630Z [command]/usr/bin/git version
+2026-11-11T14:45:51.3287511Z git version 2.56.0
+2026-11-11T14:45:51.3319834Z ##[endgroup]
+2026-11-11T14:45:51.3330535Z Temporarily overriding HOME='/home/runner/work/_temp/fe9503a1-5716-457f-8d45-a5735ffb1d7b' before making global git config changes
+2026-11-11T14:45:51.3335099Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-11T14:45:51.3338392Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/afudesk/afudesk
+2026-11-11T14:45:51.3403338Z Deleting the contents of '/home/runner/work/afudesk/afudesk'
+2026-11-11T14:45:51.3409323Z ##[group]Initializing the repository
+2026-11-11T14:45:51.3413348Z [command]/usr/bin/git init /home/runner/work/afudesk/afudesk
+2026-11-11T14:45:51.3539377Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-11T14:45:51.3542728Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-11T14:45:51.3546039Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-11T14:45:51.3548512Z hint: call:
+2026-11-11T14:45:51.3549776Z hint:
+2026-11-11T14:45:51.3551381Z hint: 	git config --global init.defaultBranch <name>
+2026-11-11T14:45:51.3553370Z hint:
+2026-11-11T14:45:51.3555400Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-11T14:45:51.3558537Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-11T14:45:51.3561124Z hint:
+2026-11-11T14:45:51.3562436Z hint: 	git branch -m <name>
+2026-11-11T14:45:51.3564068Z hint:
+2026-11-11T14:45:51.3566135Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-11T14:45:51.3569768Z Initialized empty Git repository in /home/runner/work/afudesk/afudesk/.git/
+2026-11-11T14:45:51.3575423Z [command]/usr/bin/git remote add origin https://github.com/pirncedark/afudesk
+2026-11-11T14:45:51.3610794Z ##[endgroup]
+2026-11-11T14:45:51.3613285Z ##[group]Disabling automatic garbage collection
+2026-11-11T14:45:51.3615651Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-11T14:45:51.3641758Z ##[endgroup]
+2026-11-11T14:45:51.3644203Z ##[group]Setting up auth
+2026-11-11T14:45:51.3647457Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-11T14:45:51.3680977Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-11T14:45:51.4133185Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-11T14:45:51.4165783Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-11T14:45:51.4386475Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-11T14:45:51.4418204Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-11T14:45:51.4629180Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-11T14:45:51.4663068Z ##[endgroup]
+2026-11-11T14:45:51.4664972Z ##[group]Fetching the repository
+2026-11-11T14:45:51.4674089Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +53a8d721d82faf57fd24eb75eb53a5deeafd530a:refs/remotes/origin/feat/linux-ubuntu
+2026-11-11T14:45:52.2061139Z From https://github.com/pirncedark/afudesk
+2026-11-11T14:45:52.2063712Z  * [new ref]         53a8d721d82faf57fd24eb75eb53a5deeafd530a -> origin/feat/linux-ubuntu
+2026-11-11T14:45:52.2067453Z ##[endgroup]
+2026-11-11T14:45:52.2068174Z ##[group]Determining the checkout info
+2026-11-11T14:45:52.2071223Z ##[endgroup]
+2026-11-11T14:45:52.2078226Z [command]/usr/bin/git sparse-checkout disable
+2026-11-11T14:45:52.2129480Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-11T14:45:52.2156894Z ##[group]Checking out the ref
+2026-11-11T14:45:52.2162722Z [command]/usr/bin/git checkout --progress --force -B feat/linux-ubuntu refs/remotes/origin/feat/linux-ubuntu
+2026-11-11T14:45:52.2405465Z Switched to a new branch 'feat/linux-ubuntu'
+2026-11-11T14:45:52.2408866Z branch 'feat/linux-ubuntu' set up to track 'origin/feat/linux-ubuntu'.
+2026-11-11T14:45:52.2416583Z ##[endgroup]
+2026-11-11T14:45:52.2458238Z [command]/usr/bin/git log -1 --format=%H
+2026-11-11T14:45:52.2478896Z 53a8d721d82faf57fd24eb75eb53a5deeafd530a
+2026-11-11T14:45:52.2685705Z ##[group]Run mkdir -p reports/linux
+2026-11-11T14:45:52.2686455Z [36;1mmkdir -p reports/linux[0m
+2026-11-11T14:45:52.2722204Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-11T14:45:52.2722809Z env:
+2026-11-11T14:45:52.2723233Z   CARGO_TERM_COLOR: always
+2026-11-11T14:45:52.2723678Z ##[endgroup]
+2026-11-11T14:45:52.2870347Z ##[group]Run sudo apt-get update
+2026-11-11T14:45:52.2870889Z [36;1msudo apt-get update[0m
+2026-11-11T14:45:52.2871563Z [36;1msudo apt-get install -y clang libclang-dev cmake ninja-build pkg-config libgtk-3-dev \[0m
+2026-11-11T14:45:52.2872356Z [36;1m  libsecret-1-dev libudev-dev libdbus-1-dev libpipewire-0.3-dev \[0m
+2026-11-11T14:45:52.2873087Z [36;1m  libxcb1-dev libxcb-randr0-dev libxcb-shm0-dev libxcb-xfixes0-dev \[0m
+2026-11-11T14:45:52.2874021Z [36;1m  libxrandr-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \[0m
+2026-11-11T14:45:52.2874812Z [36;1m  libegl1-mesa-dev libgl1-mesa-dri libglu1-mesa-dev libxdo-dev \[0m
+2026-11-11T14:45:52.2875527Z [36;1m  xvfb xauth xdotool scrot openbox python3-tk dbus-x11 gnome-keyring \[0m
+2026-11-11T14:45:52.2876157Z [36;1m  dpkg-dev desktop-file-utils[0m
+2026-11-11T14:45:52.2905244Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-11T14:45:52.2905786Z env:
+2026-11-11T14:45:52.2906217Z   CARGO_TERM_COLOR: always
+2026-11-11T14:45:52.2906644Z ##[endgroup]
+2026-11-11T14:45:52.3550025Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2026-11-11T14:45:52.3832135Z Get:6 https://packages.microsoft.com/ubuntu/26.04/prod resolute InRelease [3964 B]
+2026-11-11T14:45:52.4145968Z Get:7 https://packages.microsoft.com/ubuntu/26.04/prod resolute/main amd64 Packages [154 kB]
+2026-11-11T14:45:52.4272373Z Get:8 https://packages.microsoft.com/ubuntu/26.04/prod resolute/main armhf Packages [1077 B]
+2026-11-11T14:45:52.4335740Z Get:9 https://packages.microsoft.com/ubuntu/26.04/prod resolute/main arm64 Packages [140 kB]
+2026-11-11T14:46:12.3933078Z Ign:2 http://azure.archive.ubuntu.com/ubuntu resolute InRelease
+2026-11-11T14:46:32.4187556Z Ign:3 http://azure.archive.ubuntu.com/ubuntu resolute-updates InRelease
+2026-11-11T14:46:52.4437906Z Ign:4 http://azure.archive.ubuntu.com/ubuntu resolute-backports InRelease
+2026-11-11T14:47:12.4664078Z Ign:5 http://azure.archive.ubuntu.com/ubuntu resolute-security InRelease
+2026-11-11T14:47:32.4866233Z Ign:2 http://azure.archive.ubuntu.com/ubuntu resolute InRelease
+2026-11-11T14:47:52.5129217Z Ign:3 http://azure.archive.ubuntu.com/ubuntu resolute-updates InRelease
+2026-11-11T14:47:52.5161920Z Ign:2 https://archive.ubuntu.com/ubuntu resolute InRelease
+2026-11-11T14:48:12.5385204Z Ign:4 http://azure.archive.ubuntu.com/ubuntu resolute-backports InRelease
+2026-11-11T14:48:12.5438975Z Ign:3 https://archive.ubuntu.com/ubuntu resolute-updates InRelease
+2026-11-11T14:48:12.5440381Z Err:2 https://security.ubuntu.com/ubuntu resolute InRelease
+2026-11-11T14:48:12.5441322Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:48:12.5441856Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T14:48:12.5442364Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T14:48:32.5630699Z Ign:5 http://azure.archive.ubuntu.com/ubuntu resolute-security InRelease
+2026-11-11T14:48:32.5668360Z Err:3 https://security.ubuntu.com/ubuntu resolute-updates InRelease
+2026-11-11T14:48:32.5668882Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:48:32.5669358Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T14:48:32.5669717Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T14:48:32.5778206Z Ign:4 https://archive.ubuntu.com/ubuntu resolute-backports InRelease
+2026-11-11T14:48:52.5401994Z Ign:5 https://archive.ubuntu.com/ubuntu resolute-security InRelease
+2026-11-11T14:48:52.6061626Z Err:4 https://security.ubuntu.com/ubuntu resolute-backports InRelease
+2026-11-11T14:48:52.6062729Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:48:52.6063181Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T14:48:52.6063602Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T14:49:12.6308598Z Err:5 https://security.ubuntu.com/ubuntu resolute-security InRelease
+2026-11-11T14:49:12.6310291Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:49:12.6311453Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T14:49:12.6335783Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T14:49:14.4912112Z Fetched 299 kB in 3min 20s (1494 B/s)
+2026-11-11T14:49:15.1907893Z Reading package lists...
+2026-11-11T14:49:15.2016911Z W: Failed to fetch mirror+file:/etc/apt/apt-mirrors.txt/dists/resolute/InRelease  Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T14:49:15.2018424Z W: Failed to fetch mirror+file:/etc/apt/apt-mirrors.txt/dists/resolute-updates/InRelease  Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T14:49:15.2019980Z W: Failed to fetch mirror+file:/etc/apt/apt-mirrors.txt/dists/resolute-backports/InRelease  Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T14:49:15.2021644Z W: Failed to fetch mirror+file:/etc/apt/apt-mirrors.txt/dists/resolute-security/InRelease  Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T14:49:15.2022914Z W: Some index files failed to download. They have been ignored, or old ones used instead.
+2026-11-11T14:49:15.2216087Z Reading package lists...
+2026-11-11T14:49:15.3802329Z Building dependency tree...
+2026-11-11T14:49:15.3810159Z Reading state information...
+2026-11-11T14:49:15.4155215Z pkg-config is already the newest version (2.5.1-4).
+2026-11-11T14:49:15.4156118Z libgl1-mesa-dri is already the newest version (26.0.8-1ubuntu0.3).
+2026-11-11T14:49:15.4156863Z libgl1-mesa-dri set to manually installed.
+2026-11-11T14:49:15.4158093Z xvfb is already the newest version (2:21.1.22-1ubuntu1.3).
+2026-11-11T14:49:15.4158848Z xauth is already the newest version (1:1.1.2-1.1build1).
+2026-11-11T14:49:15.4159447Z xauth set to manually installed.
+2026-11-11T14:49:15.4159951Z dpkg-dev is already the newest version (1.23.7ubuntu1).
+2026-11-11T14:49:15.4715634Z Solving dependencies...
+2026-11-11T14:49:15.5629195Z The following additional packages will be installed:
+2026-11-11T14:49:15.5629782Z   bzip2-doc cmake-data fonts-droid-fallback fonts-noto-mono fonts-urw-base35
+2026-11-11T14:49:15.5630631Z   gcr gcr4 gir1.2-atk-1.0 gir1.2-atspi-2.0 gir1.2-freedesktop
+2026-11-11T14:49:15.5631290Z   gir1.2-freedesktop-dev gir1.2-gdkpixbuf-2.0 gir1.2-glib-2.0-dev gir1.2-gly-2
+2026-11-11T14:49:15.5632008Z   gir1.2-gtk-3.0 gir1.2-harfbuzz-0.0 gir1.2-pango-1.0 gir1.2-secret-1
+2026-11-11T14:49:15.5632664Z   girepository-tools gnome-keyring-pkcs11 gstreamer1.0-gl
+2026-11-11T14:49:15.5633225Z   gstreamer1.0-plugins-base ibus-gtk4 libatk-bridge2.0-dev libatk1.0-dev
+2026-11-11T14:49:15.5633720Z   libatspi2.0-dev libblkid-dev libbrotli-dev libbz2-dev
+2026-11-11T14:49:15.5634523Z   libcairo-script-interpreter2 libcairo2-dev libcdparanoia0 libclang-21-dev
+2026-11-11T14:49:15.5635281Z   libdatrie-dev libegl-dev libegl-mesa0 libegl1 libepoxy-dev libfftw3-single3
+2026-11-11T14:49:15.5635930Z   libflac14 libfontconfig-dev libfreetype-dev libfribidi-dev libgck-1-0
+2026-11-11T14:49:15.5636598Z   libgck-2-2 libgcr-4-4 libgcr-base-3-1 libgcr-ui-3-1 libgcrypt20-dev
+2026-11-11T14:49:15.5637304Z   libgdk-pixbuf-2.0-dev libgdk-pixbuf2.0-bin libgif7 libgio-2.0-dev
+2026-11-11T14:49:15.5638057Z   libgio-2.0-dev-bin libgl-dev libgles-dev libgles1 libgles2 libglib2.0-dev
+2026-11-11T14:49:15.5638808Z   libglib2.0-dev-bin libglu1-mesa libglvnd-core-dev libglvnd-dev libglx-dev
+2026-11-11T14:49:15.5639564Z   libglycin-2-dev libgpg-error-dev libgraphene-1.0-0 libgraphite2-dev
+2026-11-11T14:49:15.5640220Z   libgs-common libgs10 libgs10-common libgstreamer-gl1.0-0
+2026-11-11T14:49:15.5640965Z   libgstreamer-plugins-base1.0-0 libgstreamer-plugins-extra1.0-0 libgtk-4-1
+2026-11-11T14:49:15.5642213Z   libgtk-4-bin libgtk-4-common libharfbuzz-cairo0 libharfbuzz-dev
+2026-11-11T14:49:15.5643102Z   libharfbuzz-gobject0 libharfbuzz-icu0 libharfbuzz-subset0 libibus-1.0-5
+2026-11-11T14:49:15.5643997Z   libice-dev libid3tag0 libidn12 libijs-0.35 libimlib2t64 libjbig2dec0
+2026-11-11T14:49:15.5644702Z   libjsoncpp26 liblcms2-dev libmount-dev libmp3lame0 libmpg123-0t64
+2026-11-11T14:49:15.5645386Z   libobrender32 libobt2 libopengl-dev libopengl0 libopus0 liborc-0.4-0t64
+2026-11-11T14:49:15.5646455Z   libpam-gnome-keyring libpango1.0-dev libpangoxft-1.0-0 libpaper-utils
+2026-11-11T14:49:15.5647244Z   libpaper2 libpipewire-0.3-0t64 libpipewire-0.3-common libpixman-1-dev
+2026-11-11T14:49:15.5648000Z   libpng-dev libpng-tools librhash1 librsvg2-common libseccomp-dev
+2026-11-11T14:49:15.5648744Z   libsecret-1-0 libsecret-common libselinux-dev libsepol-dev libsm-dev
+2026-11-11T14:49:15.5649444Z   libsndfile1 libspa-0.2-dev libspa-0.2-modules libspectre1
+2026-11-11T14:49:15.5650229Z   libstartup-notification0 libsysprof-capture-4-dev libsystemd-dev libthai-dev
+2026-11-11T14:49:15.5651051Z   libtheoradec2 libtheoraenc2 libva-drm2 libva2 libvisual-0.4-0 libvorbisenc2
+2026-11-11T14:49:15.5651892Z   libwayland-bin libwayland-server0 libwebrtc-audio-processing-1-3 libx11-dev
+2026-11-11T14:49:15.5652753Z   libxau-dev libxcb-render0-dev libxcb-shape0 libxcb-shape0-dev libxcb-util1
+2026-11-11T14:49:15.5653593Z   libxcb-xkb-dev libxcb-xkb1 libxcomposite-dev libxcursor-dev libxdamage-dev
+2026-11-11T14:49:15.5654608Z   libxdmcp-dev libxdo3 libxext-dev libxfixes-dev libxft-dev libxi-dev
+2026-11-11T14:49:15.5655338Z   libxinerama-dev libxkbcommon-x11-0 libxrender-dev libxres-dev libxtst-dev
+2026-11-11T14:49:15.5656145Z   native-architecture obconf pango1.0-tools pinentry-gnome3 poppler-data
+2026-11-11T14:49:15.5656941Z   python3.14-tk uuid-dev wayland-protocols x11proto-dev xfonts-encodings
+2026-11-11T14:49:15.5657578Z   xfonts-utils xorg-sgml-doctools xtrans-dev
+2026-11-11T14:49:15.5658091Z Suggested packages:
+2026-11-11T14:49:15.5658613Z   cmake-doc cmake-format elpa-cmake-mode fonts-noto fonts-freefont-otf
+2026-11-11T14:49:15.5659387Z   | fonts-freefont-ttf fonts-texgyre gvfs libcairo2-doc libdatrie-doc
+2026-11-11T14:49:15.5660104Z   libfftw3-bin libfftw3-dev freetype2-doc libgcrypt-bin libgcrypt20-doc
+2026-11-11T14:49:15.5660831Z   libglib2.0-doc libxml2-utils libgraphite2-utils libvisual-0.4-plugins
+2026-11-11T14:49:15.5661610Z   libgtk-3-doc libice-doc opus-tools libpango1.0-doc pipewire pipewire-doc
+2026-11-11T14:49:15.5662388Z   seccomp libsm-doc libthai-doc libwayland-doc libx11-doc libxcb-doc
+2026-11-11T14:49:15.5663082Z   libxext-doc fonts-dejavu tint2 openbox-gnome-session openbox-kde-session
+2026-11-11T14:49:15.5664194Z   graphicsmagick pinentry-doc poppler-utils ghostscript fonts-japanese-mincho
+2026-11-11T14:49:15.5665095Z   | fonts-ipafont-mincho fonts-japanese-gothic | fonts-ipafont-gothic
+2026-11-11T14:49:15.5665889Z   fonts-arphic-ukai fonts-arphic-uming fonts-nanum blt tix
+2026-11-11T14:49:15.6221678Z The following NEW packages will be installed:
+2026-11-11T14:49:15.6222274Z   bzip2-doc clang cmake cmake-data dbus-x11 desktop-file-utils
+2026-11-11T14:49:15.6222796Z   fonts-droid-fallback fonts-noto-mono fonts-urw-base35 gcr gcr4
+2026-11-11T14:49:15.6223530Z   gir1.2-atk-1.0 gir1.2-atspi-2.0 gir1.2-freedesktop gir1.2-freedesktop-dev
+2026-11-11T14:49:15.6224301Z   gir1.2-gdkpixbuf-2.0 gir1.2-glib-2.0-dev gir1.2-gly-2 gir1.2-gtk-3.0
+2026-11-11T14:49:15.6225456Z   gir1.2-harfbuzz-0.0 gir1.2-pango-1.0 gir1.2-secret-1 girepository-tools
+2026-11-11T14:49:15.6226400Z   gnome-keyring gnome-keyring-pkcs11 gstreamer1.0-gl gstreamer1.0-plugins-base
+2026-11-11T14:49:15.6226947Z   ibus-gtk4 libatk-bridge2.0-dev libatk1.0-dev libatspi2.0-dev libblkid-dev
+2026-11-11T14:49:15.6227478Z   libbrotli-dev libbz2-dev libcairo-script-interpreter2 libcairo2-dev
+2026-11-11T14:49:15.6227956Z   libcdparanoia0 libclang-21-dev libclang-dev libdatrie-dev libdbus-1-dev
+2026-11-11T14:49:15.6228398Z   libegl-dev libegl-mesa0 libegl1 libegl1-mesa-dev libepoxy-dev
+2026-11-11T14:49:15.6229217Z   libfftw3-single3 libflac14 libfontconfig-dev libfreetype-dev libfribidi-dev
+2026-11-11T14:49:15.6229681Z   libgck-1-0 libgck-2-2 libgcr-4-4 libgcr-base-3-1 libgcr-ui-3-1
+2026-11-11T14:49:15.6230107Z   libgcrypt20-dev libgdk-pixbuf-2.0-dev libgdk-pixbuf2.0-bin libgif7
+2026-11-11T14:49:15.6230660Z   libgio-2.0-dev libgio-2.0-dev-bin libgl-dev libgles-dev libgles1 libgles2
+2026-11-11T14:49:15.6231557Z   libglib2.0-dev libglib2.0-dev-bin libglu1-mesa libglu1-mesa-dev
+2026-11-11T14:49:15.6232039Z   libglvnd-core-dev libglvnd-dev libglx-dev libglycin-2-dev libgpg-error-dev
+2026-11-11T14:49:15.6232515Z   libgraphene-1.0-0 libgraphite2-dev libgs-common libgs10 libgs10-common
+2026-11-11T14:49:15.6233014Z   libgstreamer-gl1.0-0 libgstreamer-plugins-base1.0-0
+2026-11-11T14:49:15.6233443Z   libgstreamer-plugins-extra1.0-0 libgtk-3-dev libgtk-4-1 libgtk-4-bin
+2026-11-11T14:49:15.6234122Z   libgtk-4-common libharfbuzz-cairo0 libharfbuzz-dev libharfbuzz-gobject0
+2026-11-11T14:49:15.6234728Z   libharfbuzz-icu0 libharfbuzz-subset0 libibus-1.0-5 libice-dev libid3tag0
+2026-11-11T14:49:15.6235209Z   libidn12 libijs-0.35 libimlib2t64 libjbig2dec0 libjsoncpp26 liblcms2-dev
+2026-11-11T14:49:15.6235796Z   libmount-dev libmp3lame0 libmpg123-0t64 libobrender32 libobt2 libopengl-dev
+2026-11-11T14:49:15.6236283Z   libopengl0 libopus0 liborc-0.4-0t64 libpam-gnome-keyring libpango1.0-dev
+2026-11-11T14:49:15.6236748Z   libpangoxft-1.0-0 libpaper-utils libpaper2 libpipewire-0.3-0t64
+2026-11-11T14:49:15.6238112Z   libpipewire-0.3-common libpipewire-0.3-dev libpixman-1-dev libpng-dev
+2026-11-11T14:49:15.6238620Z   libpng-tools librhash1 librsvg2-common libseccomp-dev libsecret-1-0
+2026-11-11T14:49:15.6239698Z   libsecret-1-dev libsecret-common libselinux-dev libsepol-dev libsm-dev
+2026-11-11T14:49:15.6240763Z   libsndfile1 libspa-0.2-dev libspa-0.2-modules libspectre1
+2026-11-11T14:49:15.6241463Z   libstartup-notification0 libsysprof-capture-4-dev libsystemd-dev libthai-dev
+2026-11-11T14:49:15.6242413Z   libtheoradec2 libtheoraenc2 libudev-dev libva-drm2 libva2 libvisual-0.4-0
+2026-11-11T14:49:15.6242888Z   libvorbisenc2 libwayland-bin libwayland-dev libwayland-server0
+2026-11-11T14:49:15.6243340Z   libwebrtc-audio-processing-1-3 libx11-dev libxau-dev libxcb-randr0-dev
+2026-11-11T14:49:15.6244078Z   libxcb-render0-dev libxcb-shape0 libxcb-shape0-dev libxcb-shm0-dev
+2026-11-11T14:49:15.6350177Z   libxcb-util1 libxcb-xfixes0-dev libxcb-xkb-dev libxcb-xkb1 libxcb1-dev
+2026-11-11T14:49:15.6351173Z   libxcomposite-dev libxcursor-dev libxdamage-dev libxdmcp-dev libxdo-dev
+2026-11-11T14:49:15.6351889Z   libxdo3 libxext-dev libxfixes-dev libxft-dev libxi-dev libxinerama-dev
+2026-11-11T14:49:15.6352559Z   libxkbcommon-dev libxkbcommon-x11-0 libxkbcommon-x11-dev libxrandr-dev
+2026-11-11T14:49:15.6353317Z   libxrender-dev libxres-dev libxtst-dev native-architecture ninja-build
+2026-11-11T14:49:15.6354348Z   obconf openbox pango1.0-tools pinentry-gnome3 poppler-data python3-tk
+2026-11-11T14:49:15.6355486Z   python3.14-tk scrot uuid-dev wayland-protocols x11proto-dev xdotool
+2026-11-11T14:49:15.6355944Z   xfonts-encodings xfonts-utils xorg-sgml-doctools xtrans-dev
+2026-11-11T14:49:15.6481521Z 0 upgraded, 197 newly installed, 0 to remove and 2 not upgraded.
+2026-11-11T14:49:15.6482028Z Need to get 109 MB of archives.
+2026-11-11T14:49:15.6482388Z After this operation, 599 MB of additional disk space will be used.
+2026-11-11T14:49:15.6482830Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2026-11-11T14:49:35.6796756Z Ign:2 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 poppler-data all 0.4.12-1build1
+2026-11-11T14:49:55.7060663Z Ign:3 http://azure.archive.ubuntu.com/ubuntu resolute-updates/main amd64v3 bzip2-doc all 1.0.8-6ubuntu0.1
+2026-11-11T14:50:15.7307943Z Ign:4 http://azure.archive.ubuntu.com/ubuntu resolute/universe amd64v3 clang amd64 1:21.1.6-71
+2026-11-11T14:50:35.7605389Z Ign:5 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 cmake-data all 4.2.3-2ubuntu2
+2026-11-11T14:50:55.7856907Z Ign:6 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 libjsoncpp26 amd64 1.9.6-5
+2026-11-11T14:51:15.8125699Z Ign:7 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 librhash1 amd64 1.4.6-1.1
+2026-11-11T14:51:35.8395871Z Ign:8 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 cmake amd64 4.2.3-2ubuntu2
+2026-11-11T14:51:55.8648169Z Ign:9 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 dbus-x11 amd64 1.16.2-2ubuntu4
+2026-11-11T14:52:15.8857180Z Ign:10 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 desktop-file-utils amd64 0.28-1build1
+2026-11-11T14:52:35.9175234Z Ign:11 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 fonts-droid-fallback all 1:8.1.0r7-1~1.gbp36536bbuild1
+2026-11-11T14:52:55.9614645Z Ign:12 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 fonts-noto-mono all 20201225-2build1
+2026-11-11T14:53:15.9812792Z Ign:2 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 poppler-data all 0.4.12-1build1
+2026-11-11T14:53:36.0072375Z Ign:3 http://azure.archive.ubuntu.com/ubuntu resolute-updates/main amd64v3 bzip2-doc all 1.0.8-6ubuntu0.1
+2026-11-11T14:53:36.0140279Z Ign:2 https://archive.ubuntu.com/ubuntu resolute/main amd64v3 poppler-data all 0.4.12-1build1
+2026-11-11T14:53:56.0342684Z Ign:4 http://azure.archive.ubuntu.com/ubuntu resolute/universe amd64v3 clang amd64 1:21.1.6-71
+2026-11-11T14:53:56.0352350Z Ign:3 https://archive.ubuntu.com/ubuntu resolute-updates/main amd64v3 bzip2-doc all 1.0.8-6ubuntu0.1
+2026-11-11T14:53:56.0400563Z Err:2 https://security.ubuntu.com/ubuntu resolute/main amd64v3 poppler-data all 0.4.12-1build1
+2026-11-11T14:53:56.0401567Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:53:56.0402014Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T14:53:56.0402432Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T14:54:16.0539948Z Ign:4 https://archive.ubuntu.com/ubuntu resolute/universe amd64v3 clang amd64 1:21.1.6-71
+2026-11-11T14:54:16.0604893Z Ign:5 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 cmake-data all 4.2.3-2ubuntu2
+2026-11-11T14:54:16.0663723Z Ign:3 https://security.ubuntu.com/ubuntu resolute-updates/main amd64v3 bzip2-doc all 1.0.8-6ubuntu0.1
+2026-11-11T14:54:16.0664837Z Err:3 mirror+file:/etc/apt/apt-mirrors.txt resolute-updates/main amd64v3 bzip2-doc all 1.0.8-6ubuntu0.1
+2026-11-11T14:54:16.0665689Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:54:16.0666454Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T14:54:16.0666922Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T14:54:36.0820704Z Err:4 https://security.ubuntu.com/ubuntu resolute/universe amd64v3 clang amd64 1:21.1.6-71
+2026-11-11T14:54:36.0821467Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:54:36.0822173Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T14:54:36.0822894Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T14:54:36.0824107Z Ign:5 https://archive.ubuntu.com/ubuntu resolute/main amd64v3 cmake-data all 4.2.3-2ubuntu2
+2026-11-11T14:54:36.0846585Z Ign:6 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 libjsoncpp26 amd64 1.9.6-5
+2026-11-11T14:54:56.1084398Z Err:5 https://security.ubuntu.com/ubuntu resolute/main amd64v3 cmake-data all 4.2.3-2ubuntu2
+2026-11-11T14:54:56.1084960Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:54:56.1085331Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T14:54:56.1085703Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T14:54:56.1094820Z Ign:7 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 librhash1 amd64 1.4.6-1.1
+2026-11-11T14:54:56.1115075Z Ign:6 https://archive.ubuntu.com/ubuntu resolute/main amd64v3 libjsoncpp26 amd64 1.9.6-5
+2026-11-11T14:55:12.0287768Z Ign:7 https://archive.ubuntu.com/ubuntu resolute/main amd64v3 librhash1 amd64 1.4.6-1.1
+2026-11-11T14:55:15.8870296Z Ign:8 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 cmake amd64 4.2.3-2ubuntu2
+2026-11-11T14:55:16.1366920Z Err:6 https://security.ubuntu.com/ubuntu resolute/main amd64v3 libjsoncpp26 amd64 1.9.6-5
+2026-11-11T14:55:16.1367774Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:55:16.1368231Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T14:55:16.1368647Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T14:55:32.3760797Z Ign:8 https://archive.ubuntu.com/ubuntu resolute/main amd64v3 cmake amd64 4.2.3-2ubuntu2
+2026-11-11T14:55:35.9114978Z Ign:9 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 dbus-x11 amd64 1.16.2-2ubuntu4
+2026-11-11T14:55:36.1666987Z Err:7 https://security.ubuntu.com/ubuntu resolute/main amd64v3 librhash1 amd64 1.4.6-1.1
+2026-11-11T14:55:36.1667835Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:55:36.1668436Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T14:55:36.1669043Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T14:55:55.9266646Z Ign:9 https://archive.ubuntu.com/ubuntu resolute/main amd64v3 dbus-x11 amd64 1.16.2-2ubuntu4
+2026-11-11T14:55:55.9325127Z Ign:10 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 desktop-file-utils amd64 0.28-1build1
+2026-11-11T14:55:56.1962181Z Err:8 https://security.ubuntu.com/ubuntu resolute/main amd64v3 cmake amd64 4.2.3-2ubuntu2
+2026-11-11T14:55:56.1963261Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:55:56.1963995Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T14:55:56.1964515Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T14:56:15.9569830Z Ign:11 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 fonts-droid-fallback all 1:8.1.0r7-1~1.gbp36536bbuild1
+2026-11-11T14:56:15.9574173Z Ign:10 https://archive.ubuntu.com/ubuntu resolute/main amd64v3 desktop-file-utils amd64 0.28-1build1
+2026-11-11T14:56:16.2214121Z Err:9 https://security.ubuntu.com/ubuntu resolute/main amd64v3 dbus-x11 amd64 1.16.2-2ubuntu4
+2026-11-11T14:56:16.2215217Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:56:16.2215666Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T14:56:16.2216090Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T14:56:35.9815490Z Ign:12 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 fonts-noto-mono all 20201225-2build1
+2026-11-11T14:56:35.9822424Z Ign:11 https://archive.ubuntu.com/ubuntu resolute/main amd64v3 fonts-droid-fallback all 1:8.1.0r7-1~1.gbp36536bbuild1
+2026-11-11T14:56:36.2462207Z Err:10 https://security.ubuntu.com/ubuntu resolute/main amd64v3 desktop-file-utils amd64 0.28-1build1
+2026-11-11T14:56:36.2463097Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:56:36.2463473Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T14:56:36.2463996Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T14:56:56.0039260Z Ign:13 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 xfonts-encodings all 1:1.0.5-0ubuntu3
+2026-11-11T14:56:56.0054433Z Ign:12 https://archive.ubuntu.com/ubuntu resolute/main amd64v3 fonts-noto-mono all 20201225-2build1
+2026-11-11T14:56:56.2738762Z Err:11 https://security.ubuntu.com/ubuntu resolute/main amd64v3 fonts-droid-fallback all 1:8.1.0r7-1~1.gbp36536bbuild1
+2026-11-11T14:56:56.2739667Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:56:56.2740115Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T14:56:56.2740568Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T14:57:16.0305148Z Ign:14 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 xfonts-utils amd64 1:7.7+7build1
+2026-11-11T14:57:16.2997733Z Err:12 https://security.ubuntu.com/ubuntu resolute/main amd64v3 fonts-noto-mono all 20201225-2build1
+2026-11-11T14:57:16.2998452Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:57:16.2998876Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T14:57:16.2999229Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T14:57:36.0540258Z Ign:15 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 fonts-urw-base35 all 20200910-8build1
+2026-11-11T14:57:56.0773740Z Ign:16 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 libgck-2-2 amd64 4.4.0.1-8
+2026-11-11T14:58:16.1045311Z Ign:17 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 libgcr-4-4 amd64 4.4.0.1-8
+2026-11-11T14:58:36.1298807Z Ign:18 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 libcairo-script-interpreter2 amd64 1.18.4-3
+2026-11-11T14:58:56.1528059Z Ign:19 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 libgraphene-1.0-0 amd64 1.10.8-5build1
+2026-11-11T14:59:16.1868250Z Ign:20 http://azure.archive.ubuntu.com/ubuntu resolute-updates/main amd64v3 libegl-mesa0 amd64 26.0.8-1ubuntu0.3
+2026-11-11T14:59:36.2121141Z Ign:21 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 libegl1 amd64 1.7.0-3
+2026-11-11T14:59:56.2394638Z Ign:22 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 liborc-0.4-0t64 amd64 1:0.4.42-2
+2026-11-11T15:00:16.2639735Z Ign:23 http://azure.archive.ubuntu.com/ubuntu resolute-updates/main amd64v3 libgstreamer-plugins-base1.0-0 amd64 1.28.2-1ubuntu0.1
+2026-11-11T15:00:36.2915199Z Ign:13 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 xfonts-encodings all 1:1.0.5-0ubuntu3
+2026-11-11T15:00:56.3138731Z Ign:13 https://archive.ubuntu.com/ubuntu resolute/main amd64v3 xfonts-encodings all 1:1.0.5-0ubuntu3
+2026-11-11T15:00:56.3184142Z Ign:14 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 xfonts-utils amd64 1:7.7+7build1
+2026-11-11T15:01:16.3330466Z Ign:15 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 fonts-urw-base35 all 20200910-8build1
+2026-11-11T15:01:16.3352786Z Err:13 https://security.ubuntu.com/ubuntu resolute/main amd64v3 xfonts-encodings all 1:1.0.5-0ubuntu3
+2026-11-11T15:01:16.3353531Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T15:01:16.3354243Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T15:01:16.3354812Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T15:01:16.3384654Z Ign:14 https://archive.ubuntu.com/ubuntu resolute/main amd64v3 xfonts-utils amd64 1:7.7+7build1
+2026-11-11T15:01:36.1491570Z Ign:16 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 libgck-2-2 amd64 4.4.0.1-8
+2026-11-11T15:01:36.3632655Z Err:14 https://security.ubuntu.com/ubuntu resolute/main amd64v3 xfonts-utils amd64 1:7.7+7build1
+2026-11-11T15:01:36.3634573Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T15:01:36.3635225Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T15:01:36.3635627Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T15:01:36.3674984Z Ign:15 https://archive.ubuntu.com/ubuntu resolute/main amd64v3 fonts-urw-base35 all 20200910-8build1
+2026-11-11T15:01:56.1784899Z Ign:17 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 libgcr-4-4 amd64 4.4.0.1-8
+2026-11-11T15:01:56.3864618Z Err:15 https://security.ubuntu.com/ubuntu resolute/main amd64v3 fonts-urw-base35 all 20200910-8build1
+2026-11-11T15:01:56.3865328Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T15:01:56.3865705Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T15:01:56.3866063Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T15:01:56.3908034Z Ign:16 https://archive.ubuntu.com/ubuntu resolute/main amd64v3 libgck-2-2 amd64 4.4.0.1-8
+2026-11-11T15:02:16.2078957Z Ign:18 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 libcairo-script-interpreter2 amd64 1.18.4-3
+2026-11-11T15:02:16.4115280Z Err:16 https://security.ubuntu.com/ubuntu resolute/main amd64v3 libgck-2-2 amd64 4.4.0.1-8
+2026-11-11T15:02:16.4115984Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T15:02:16.4116611Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T15:02:16.4117090Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T15:02:16.4117779Z Ign:17 https://archive.ubuntu.com/ubuntu resolute/main amd64v3 libgcr-4-4 amd64 4.4.0.1-8
+2026-11-11T15:02:36.2320492Z Ign:19 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 libgraphene-1.0-0 amd64 1.10.8-5build1
+2026-11-11T15:02:36.4411572Z Err:17 https://security.ubuntu.com/ubuntu resolute/main amd64v3 libgcr-4-4 amd64 4.4.0.1-8
+2026-11-11T15:02:36.4412158Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T15:02:36.4412551Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T15:02:36.4413295Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T15:02:36.4432338Z Ign:18 https://archive.ubuntu.com/ubuntu resolute/main amd64v3 libcairo-script-interpreter2 amd64 1.18.4-3
+2026-11-11T15:02:56.2579026Z Ign:20 http://azure.archive.ubuntu.com/ubuntu resolute-updates/main amd64v3 libegl-mesa0 amd64 26.0.8-1ubuntu0.3
+2026-11-11T15:02:56.4656871Z Ign:19 https://archive.ubuntu.com/ubuntu resolute/main amd64v3 libgraphene-1.0-0 amd64 1.10.8-5build1
+2026-11-11T15:02:56.4661537Z Err:18 https://security.ubuntu.com/ubuntu resolute/main amd64v3 libcairo-script-interpreter2 amd64 1.18.4-3
+2026-11-11T15:02:56.4662402Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T15:02:56.4662863Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T15:02:56.4663287Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T15:03:16.0718843Z Ign:20 https://archive.ubuntu.com/ubuntu resolute-updates/main amd64v3 libegl-mesa0 amd64 26.0.8-1ubuntu0.3
+2026-11-11T15:03:16.2834355Z Ign:21 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 libegl1 amd64 1.7.0-3
+2026-11-11T15:03:16.4975401Z Err:19 https://security.ubuntu.com/ubuntu resolute/main amd64v3 libgraphene-1.0-0 amd64 1.10.8-5build1
+2026-11-11T15:03:16.4976047Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T15:03:16.4976414Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T15:03:16.4976756Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T15:03:36.3086005Z Ign:21 https://archive.ubuntu.com/ubuntu resolute/main amd64v3 libegl1 amd64 1.7.0-3
+2026-11-11T15:03:36.3087271Z Ign:22 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 liborc-0.4-0t64 amd64 1:0.4.42-2
+2026-11-11T15:03:36.5223152Z Err:20 https://security.ubuntu.com/ubuntu resolute-updates/main amd64v3 libegl-mesa0 amd64 26.0.8-1ubuntu0.3
+2026-11-11T15:03:36.5224347Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T15:03:36.5224795Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T15:03:36.5225241Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T15:03:56.3302695Z Ign:23 http://azure.archive.ubuntu.com/ubuntu resolute-updates/main amd64v3 libgstreamer-plugins-base1.0-0 amd64 1.28.2-1ubuntu0.1
+2026-11-11T15:03:56.3331467Z Ign:22 https://archive.ubuntu.com/ubuntu resolute/main amd64v3 liborc-0.4-0t64 amd64 1:0.4.42-2
+2026-11-11T15:03:56.5499164Z Err:21 https://security.ubuntu.com/ubuntu resolute/main amd64v3 libegl1 amd64 1.7.0-3
+2026-11-11T15:03:56.5500280Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T15:03:56.5500819Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T15:03:56.5501216Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T15:04:16.3566766Z Ign:24 http://azure.archive.ubuntu.com/ubuntu resolute-updates/main amd64v3 libgstreamer-gl1.0-0 amd64 1.28.2-1ubuntu0.1
+2026-11-11T15:04:16.3576027Z Ign:23 https://archive.ubuntu.com/ubuntu resolute-updates/main amd64v3 libgstreamer-plugins-base1.0-0 amd64 1.28.2-1ubuntu0.1
+2026-11-11T15:04:16.5710145Z Err:22 https://security.ubuntu.com/ubuntu resolute/main amd64v3 liborc-0.4-0t64 amd64 1:0.4.42-2
+2026-11-11T15:04:16.5711203Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T15:04:16.5711659Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T15:04:16.5712081Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T15:04:36.3836064Z Ign:25 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 libva2 amd64 2.23.0-1ubuntu1
+2026-11-11T15:04:36.5986539Z Ign:23 https://security.ubuntu.com/ubuntu resolute-updates/main amd64v3 libgstreamer-plugins-base1.0-0 amd64 1.28.2-1ubuntu0.1
+2026-11-11T15:04:36.5987437Z Err:23 mirror+file:/etc/apt/apt-mirrors.txt resolute-updates/main amd64v3 libgstreamer-plugins-base1.0-0 amd64 1.28.2-1ubuntu0.1
+2026-11-11T15:04:36.5988052Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T15:04:36.5988425Z   Temporary failure resolving 'archive.ubuntu.com'
+2026-11-11T15:04:36.5988758Z   Temporary failure resolving 'security.ubuntu.com'
+2026-11-11T15:04:56.4093618Z Ign:26 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 libva-drm2 amd64 2.23.0-1ubuntu1
+2026-11-11T15:05:16.4261696Z Ign:27 http://azure.archive.ubuntu.com/ubuntu resolute-updates/main amd64v3 libgstreamer-plugins-extra1.0-0 amd64 1.28.2-1ubuntu1.2
+2026-11-11T15:05:36.4553986Z Ign:28 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 libharfbuzz-subset0 amd64 12.3.2-2
+2026-11-11T15:05:55.8342120Z Ign:29 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 libgles2 amd64 1.7.0-3
+2026-11-11T15:06:15.8570579Z Ign:30 http://azure.archive.ubuntu.com/ubuntu resolute-updates/main amd64v3 libgtk-4-common all 4.22.4+ds-0ubuntu0.1
+2026-11-11T15:06:35.8831823Z Ign:31 http://azure.archive.ubuntu.com/ubuntu resolute-updates/main amd64v3 libgtk-4-1 amd64 4.22.4+ds-0ubuntu0.1
+2026-11-11T15:06:55.9121414Z Ign:32 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 libsecret-common all 0.21.7-2build1
+2026-11-11T15:07:15.9369168Z Ign:33 http://azure.archive.ubuntu.com/ubuntu resolute/main amd64v3 libsecret-1-0 amd64 0.21.7-2build1
+2026-11-11T15:07:20.0791915Z ##[error]The operation was canceled.
+2026-11-11T15:07:20.0921593Z ##[group]Run if dpkg-query -W -f='${Status}' afudesk 2>/dev/null | grep -q 'install ok installed'; then
+2026-11-11T15:07:20.0922267Z [36;1mif dpkg-query -W -f='${Status}' afudesk 2>/dev/null | grep -q 'install ok installed'; then[0m
+2026-11-11T15:07:20.0923716Z [36;1m  sudo apt-get remove -y afudesk[0m
+2026-11-11T15:07:20.0924275Z [36;1m  test ! -e /opt/afudesk/afudesk[0m
+2026-11-11T15:07:20.0924553Z [36;1m  test ! -e /usr/bin/afudesk[0m
+2026-11-11T15:07:20.0924926Z [36;1m  printf 'PASS: package removed\n' > reports/linux/deb-removed.txt[0m
+2026-11-11T15:07:20.0925290Z [36;1mfi[0m
+2026-11-11T15:07:20.0959442Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-11T15:07:20.0959781Z env:
+2026-11-11T15:07:20.0959980Z   CARGO_TERM_COLOR: always
+2026-11-11T15:07:20.0960207Z ##[endgroup]
+2026-11-11T15:07:20.1277696Z ##[group]Run mkdir -p reports/linux
+2026-11-11T15:07:20.1278018Z [36;1mmkdir -p reports/linux[0m
+2026-11-11T15:07:20.1278459Z [36;1mprintf 'job_status=%s\nrunner=%s\n' "$JOB_STATUS" "$RUNNER_OS" > reports/linux/job-status.txt[0m
+2026-11-11T15:07:20.1306553Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-11T15:07:20.1306898Z env:
+2026-11-11T15:07:20.1307106Z   CARGO_TERM_COLOR: always
+2026-11-11T15:07:20.1307340Z   JOB_STATUS: cancelled
+2026-11-11T15:07:20.1307590Z ##[endgroup]
+2026-11-11T15:07:20.1438213Z ##[group]Run actions/upload-artifact@v4
+2026-11-11T15:07:20.1438504Z with:
+2026-11-11T15:07:20.1438728Z   name: AfuDesk-linux-v0.1.0-x64
+2026-11-11T15:07:20.1439042Z   path: reports/linux/
+app/build/linux/x64/release/bundle/
+
+2026-11-11T15:07:20.1439375Z   if-no-files-found: warn
+2026-11-11T15:07:20.1439609Z   compression-level: 6
+2026-11-11T15:07:20.1439829Z   overwrite: false
+2026-11-11T15:07:20.1440045Z   include-hidden-files: false
+2026-11-11T15:07:20.1440282Z env:
+2026-11-11T15:07:20.1440469Z   CARGO_TERM_COLOR: always
+2026-11-11T15:07:20.1440689Z ##[endgroup]
+2026-11-11T15:07:20.3106289Z (node:2815) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-11T15:07:20.3107595Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-11T15:07:20.3216254Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2026-11-11T15:07:20.3218937Z The least common ancestor is /home/runner/work/afudesk/afudesk. This will be the root directory of the artifact
+2026-11-11T15:07:20.3220714Z With the provided path, there will be 9 files uploaded
+2026-11-11T15:07:20.3226253Z Artifact name is valid!
+2026-11-11T15:07:20.3228654Z Root directory input is valid!
+2026-11-11T15:07:20.7284735Z Beginning upload of artifact content to blob storage
+2026-11-11T15:07:20.7759163Z (node:2815) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-11T15:07:21.0561777Z Uploaded bytes 20036
+2026-11-11T15:07:21.1130153Z Finished uploading artifact content to blob storage!
+2026-11-11T15:07:21.1131247Z SHA256 digest of uploaded artifact zip is 4cdd7e3fe7a7018daa79271d5018c2fe1215d570df275e7be51a165f2f9ddc72
+2026-11-11T15:07:21.1132235Z Finalizing artifact upload
+2026-11-11T15:07:21.5705272Z Artifact AfuDesk-linux-v0.1.0-x64.zip successfully finalized. Artifact ID 13867630152
+2026-11-11T15:07:21.5706911Z Artifact AfuDesk-linux-v0.1.0-x64 has been successfully uploaded! Final size is 20036 bytes. Artifact ID is 13867630152
+2026-11-11T15:07:21.5709397Z Artifact download URL: https://github.com/pirncedark/afudesk/actions/runs/43041600452/artifacts/13867630152
+2026-11-11T15:07:21.5907910Z Post job cleanup.
+2026-11-11T15:07:21.6814998Z [command]/usr/bin/git version
+2026-11-11T15:07:21.6851195Z git version 2.56.0
+2026-11-11T15:07:21.6916756Z Temporarily overriding HOME='/home/runner/work/_temp/a73b1b91-558b-4a43-b522-f886a790b285' before making global git config changes
+2026-11-11T15:07:21.6918406Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-11T15:07:21.6925019Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/afudesk/afudesk
+2026-11-11T15:07:21.6979310Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-11T15:07:21.7024414Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-11T15:07:21.7362929Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-11T15:07:21.7396475Z http.https://github.com/.extraheader
+2026-11-11T15:07:21.7406925Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-11-11T15:07:21.7444434Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-11T15:07:21.7755203Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-11T15:07:21.7766301Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-11T15:07:21.8170182Z Cleaning up orphan processes
+2026-11-11T15:07:21.8460451Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

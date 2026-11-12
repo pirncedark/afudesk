@@ -1,0 +1,1 @@
+﻿PASS: official actionlint v1.7.12 (checksum verified), workflow syntax and expressions

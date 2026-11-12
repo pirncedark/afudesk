@@ -1,0 +1,15 @@
+# Görev: Linux dalı güvenlik/uyumluluk incelemesi (salt oku)
+Çalışma dizini C:\Users\afuuu\Desktop\afuproject\_wt\afudesk-linux. AGENTS.md ve tam kullanıcı görevi C:\Users\afuuu\Desktop\afuproject\_gorev\2026-11-11\AFUDESK_LINUX.md oku.
+Hiçbir dosyayı değiştirme, commit/push yapma, sunucuya bağlanma. Başka ajanlar bu kod tabanında çalışıyor; değişiklikleri geri alma.
+Git metadata özel: asıl linked worktree .git yazmaya kapalı. İncelenecek commit/diff için `git --git-dir=.linux-publish --work-tree=. diff f5fa79cb8f3e9a861a8b8dea350acdb2d194e151 HEAD`; HEAD 53a8d72. Asıl git HEAD tabanda kalır. Yeni EK4 ajanı inceleme aşamasında, sonrasında aynı dalda kod yazacak; henüz EK4 yapılmadı diye bulgu yazma, bu tur Linux tabanı incele.
+
+📍 rust/src/ag.rs:104 Linux bind, :208 mdns, :315 yayın ve dosya sonu cevrimici_kimlikler — wildcard/UPnP/IP leakage yanlışlıkla açık mı? Windows defaults unchanged? n0 relay fallback/kimlik yayını yok mu? ALPN afudesk/8/SURUM8 sabit.
+📍 rust/src/host.rs:870 sonrası oturum — Linux üretim parola/legacy reddi, Google aynı hesap + exact QUIC key + ilk yerel eşleşme onayı. İlk onaydan sonra host kaydı; account peer token'dan geldiğini iddia ettiği key'e değil remote_id'ye bağlı. YalnizYerel yalnız izole testler. Başka hesap onayla bile Linux'ta red. Eksik revoke/bypass/izin açıkları bul.
+📍 rust/src/kod.rs:107 paylasim_kodu — decrypted invite de IP içermemeli, relay literal IP filtresi. Windows kodla akışı korunur.
+📍 app/linux/** ve .github/workflows/ci.yml Linux job — GTK/CMake/cargokit doğru, libsecret storage failclosed. native test, .deb dependencies & layout, Xvfb real capture and input vs fake evidence, pipeline tee failure propagation.
+📍 docs/LINUX_SUNUCU.md ve deploy/linux/** — SSH yalnız tail bind/socket activation, password/root off; Proxmox pveproxy tail bind, API token least privilege, ACL örnek uygulanmaz, UFW + Tailscale netfilter caveat doğru. Donanım olmadığı için gerçek uygulama yok.
+
+Beklenen çıktı: yalnız Critical/Important/Minor bulgular dosya:satır + somut neden + düzeltme önerisi; yoksa net no findings. Test koşacaksan gerçek ekran/keyboard/mouse Windows'ta ÇALIŞTIRMA; cargo tests already 209 pass --skip gercek_, CI https://github.com/pirncedark/afudesk/actions/runs/43041600452. İddiaları koddaki gerçek davranışa göre yap; çalışma kanıtı bulunmayanı DONE sayma. Ekran açma. Ağ araştırması gerekmez yerel kodu incele.
+
+## Wayland ek inceleme
+📍 rust/src/linux_portal.rs:118 native, :198 Drop, :277/283 fabrika, :337 request, :553 pipewire_capture, :708 saf testler; platform.rs:53/67 backend seçimi; Cargo.toml targetLinux bağımlılıkları. Tek RemoteDesktop+ScreenCast session, bounded latest frame, gerçek kullanıcı izni, Close/drop/join, ham buffer offset/stride/format sınırları, fare/klavye semantiği ve native API type/lifetime hatalarını salt okuyarak denetle. Linux CI Ubuntu apt DNS nedeniyle compile'a ulaşamıyor; native build veya runtime geçildi diye değerlendirme yapma. Portable testler koşulabilir ama X11/Wayland gerçek input Windows'ta yapılmaz. Agent hâlâ kendi manuel son kontrolünü yapıyor; düzeltme görürsen raporla, kaynak değiştirme.

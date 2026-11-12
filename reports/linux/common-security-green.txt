@@ -1,0 +1,30 @@
+cargo :     Blocking waiting for file lock on build directory
+At line:2 char:65
++ ... alidation'; cargo test --manifest-path rust/Cargo.toml --locked --lib ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Blocking wa...build directory:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+   Compiling afudesk_core v1.8.0 (C:\Users\afuuu\Desktop\afuproject\_wt\afudesk-linux\rust)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 26.06s
+     Running unittests src\lib.rs (target-linux-validation\debug\deps\afudesk_core-b332a1e71b4e6ee3.exe)
+
+running 15 tests
+test host::guvenlik_testleri::linux_google_girisi_eslesmemis_anahtari_otomatik_onaylamaz ... ok
+test host::guvenlik_testleri::linux_baska_hesap_onayla_bile_baglanamaz ... ok
+test host::guvenlik_testleri::linux_ilk_onayin_izinleri_yeniden_baglaninca_artmaz ... ok
+test linux_guvenlik::testler::tailscale_fiziksel_agdan_once_secilir ... ok
+test linux_guvenlik::testler::cgnat_sinirlari_ve_ipv6_mapped_adresler_kapali ... ok
+test linux_guvenlik::testler::paylasimda_genel_lan_ve_ipv6_adresi_yok ... ok
+test linux_portal::tests::invalid_layout_is_rejected_before_allocation ... ok
+test linux_portal::tests::latest_frame_overwrites_and_close_discards_all_frames ... ok
+test linux_portal::tests::portal_denial_and_cancellation_fail_closed ... ok
+test linux_portal::tests::stride_padding_offset_and_bgr_conversion ... ok
+test linux_portal::tests::selected_stream_uses_logical_not_pixel_coordinates ... ok
+test linux_guvenlik::testler::tailscale_yoksa_yalniz_loopback_dinler ... ok
+test host::guvenlik_testleri::linux_yerel_onay_silinince_aktif_oturum_yetkisi_biter ... ok
+test host::guvenlik_testleri::linux_dogru_parola_bile_eslesmemis_cihaza_ekran_acmaz ... ok
+test host::guvenlik_testleri::linux_anahtar_iptali_quic_oturumunu_kapatir ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 194 filtered out; finished in 0.10s
+

@@ -5,6 +5,12 @@
 /app/windows/flutter/ephemeral/
 *.log
 /dist/
+/target-linux-validation/
+/.linux-publish/
+/reports/linux/*.exe
+/reports/linux/*.pdb
+/scripts/linux/__pycache__/
+/app/linux/flutter/ephemeral/
 
 # WAN testi kanıtları: kişisel ekran görüntüleri içerir, yerelde kalır
 reports/wan/
