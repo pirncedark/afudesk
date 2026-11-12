@@ -4,3 +4,4 @@ import './config-profile.spec.js';
 import './audit.spec.js';
 import './safety-policy.spec.js';
 import './login.spec.js';
+import './cli.spec.js';

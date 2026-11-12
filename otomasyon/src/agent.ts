@@ -15,9 +15,9 @@ const messages: Record<StopReason, string> = {
   'unlisted-site': 'Bu siteye izin verilmemiş; devam etmek için siteyi onaylayın.',
   permission: 'Bu işlem için izin verilmemiş; devam etmek için işlem iznini onaylayın.',
   'account-choice': 'Google hesabı seçilmeli; kullanacağınız hesabı kendiniz seçin.',
-  'manual-login': 'Google girişi gerekiyor; giriş penceresinde kendiniz oturum açın.',
+  'manual-login': 'Google girişi gerekiyor; siteyi açıp kendiniz oturum açın.',
   'login-unavailable': 'Otomatik giriş tamamlanamadı; siteye kendiniz giriş yapın.',
-  error: 'Giriş tamamlanamadı; giriş penceresini kontrol edip yeniden deneyin.',
+  error: 'Giriş tamamlanamadı; siteyi açıp yeniden deneyin.',
 };
 
 export function stopped(reason: StopReason): Result {

@@ -1,4 +1,4 @@
-# AfuDesk otomasyon — adım 1–5
+# AfuDesk otomasyon — adım 1–7
 
 Node 20+, TypeScript ve resmi Playwright; AfuDesk çekirdeğinden bağımsız modül.
 
@@ -48,7 +48,45 @@ try {
 aynı ayrı profil için Chrome komutunu otomasyon bayrakları olmadan döndürür;
 bu komut yalnız kullanıcının “Google'a giriş yap” işlemiyle başlatılmalıdır.
 Elle giriş penceresi kapanınca `openProfile` kullanılabilir; profil aynı anda
-iki tarayıcıda açılmaz. Bu aşamada Flutter düğmesi/IPC yoktur (planın adım 6'sı).
+iki tarayıcıda açılmaz. Flutter arayüzüne henüz düğme eklenmemiştir.
+
+## Stdio CLI ve Flutter servisi (adım 6)
+
+`npm run build` sonrasında `node dist/src/cli.js` stdin'den tek JSON nesnesini
+EOF'a kadar okur; stdout'a yalnız bir `Result` JSON satırı yazar:
+
+```json
+{"siteId":"ornek","permission":"giriş"}
+```
+
+```json
+{"status":"signed-in","needsUserApproval":false,"message":"Siteye giriş yapıldı."}
+```
+
+İki alan zorunludur; ek alanlar, birden fazla istek, bozuk UTF-8 ve 8192 bayttan
+büyük istekler reddedilir. `oku` ve `giriş` yetkileri aynen korunur; diğer yetkiler
+ve izinli listede olmayan siteler tarayıcı açılmadan durur. Durma yanıtı
+`status: "stopped"`, sabit `reason`, `needsUserApproval: true` ve tek cümle mesaj
+içerir. Durma ve geçersiz istek de geçerli protokol yanıtıdır (çıkış kodu 0).
+Ham hata, gelen istek, şifre, çerez ve serbest tarayıcı verisi çıktıya kopyalanmaz.
+Site listesi ve depo yolu çağıranın çalışma dizininden bağımsız çözülür.
+Tarayıcı sonuç yazılmadan önce kapatılır; durma ekranı açık bırakılmaz.
+
+Yeni `app/lib/google_otomasyon.dart` içindeki `GoogleOtomasyon().siteyeGir(siteId)`
+servisi `Process.start` ile Node'u çağırır, `giriş` yetkisini kendisi gönderir,
+stdin'i kapatır ve güvenli `GoogleOtomasyonSonucu` döndürür. Geliştirmede modül
+depo kökünden veya `app/` içinden otomatik bulunur; paketlemede uygulama yanındaki
+`otomasyon/` kullanılır veya servis oluşturulurken `otomasyonDizini` verilir.
+Node PATH'te bulunmalı ve derlenmiş modül dağıtılmalıdır; bu görev paketleyiciyi
+değiştirmez. İşlem 45 saniyede tamamlanmazsa süreç kapatılır; stderr kullanıcıya
+aktarılmaz. Sahte süreç testleri `app/test/google_otomasyon_test.dart` içindedir.
+
+## CI (adım 7)
+
+`.github/workflows/otomasyon.yml` yalnız `otomasyon/**` değişikliklerinde ve
+elle çalıştırmada Node 20 ile Windows/Ubuntu testlerini yürütür. `npm ci`,
+Chromium kurulumu (Linux'ta `--with-deps`) ve `npm test` çalışır. Tarayıcı testleri
+headless ve yerel sahte sitelerle sınırlıdır; gerçek Google girişi yapılmaz.
 
 Profil Windows'ta `%LOCALAPPDATA%\AfuDesk\otomasyon\profil`, Linux'ta
 `~/.local/share/afudesk/otomasyon/profil` içindedir; repo içi ve repo içine
