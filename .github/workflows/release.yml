@@ -117,6 +117,11 @@ jobs:
         with:
           flutter-version: 3.44.9
           channel: stable
+      - name: Google client id kontrolu
+        shell: pwsh
+        env:
+          AFUDESK_GOOGLE_DESKTOP_CLIENT_ID: ${{ vars.AFUDESK_GOOGLE_DESKTOP_CLIENT_ID }}
+        run: ./app/tools/client_id_kontrol.ps1
       - name: Windows derleme
         working-directory: app
         env:
