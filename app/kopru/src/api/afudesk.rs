@@ -30,6 +30,9 @@ fn rt() -> &'static tokio::runtime::Runtime {
 /// Çalışan host ve komut göndericisi (olay alıcısı pompaya taşınır; kilit tutulmaz).
 static HOST: Mutex<Option<(host::Host, tokio::sync::mpsc::Sender<HostKomut>)>> = Mutex::new(None);
 static IZLEYICI: Mutex<Option<Arc<izleyici::Izleyici>>> = Mutex::new(None);
+fn izleyici_slot() -> std::sync::MutexGuard<'static, Option<Arc<izleyici::Izleyici>>> {
+    IZLEYICI.lock().unwrap_or_else(|e| e.into_inner())
+}
 /// Dart son kareyi çizdi mi? (en-yeni-kazanır geri basıncı)
 static KARE_SERBEST: AtomicBool = AtomicBool::new(true);
 static SON_KARE_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -450,7 +453,7 @@ fn izleyici_pompala(sonuc: anyhow::Result<izleyici::Izleyici>, olaylar: StreamSi
     };
     let mut alici = std::mem::replace(&mut iz.olaylar, tokio::sync::mpsc::channel(1).1);
     let iz = Arc::new(iz);
-    *IZLEYICI.lock().unwrap() = Some(iz);
+    *izleyici_slot() = Some(iz);
     KARE_SERBEST.store(true, Ordering::SeqCst);
     rt().spawn(async move {
         while let Some(o) = alici.recv().await {
@@ -590,7 +593,7 @@ pub fn kare_cizildi() {
 #[flutter_rust_bridge::frb(sync)]
 pub fn izleyici_canlandir() {
     KARE_SERBEST.store(true, Ordering::SeqCst);
-    if let Some(iz) = IZLEYICI.lock().unwrap().as_ref() {
+    if let Some(iz) = izleyici_slot().as_ref() {
         if iz.kapali_mi() {
             iz.yeniden_baglan();
         }
@@ -601,7 +604,7 @@ pub fn izleyici_canlandir() {
 #[flutter_rust_bridge::frb(sync)]
 pub fn izleyici_yeniden_baglan() {
     KARE_SERBEST.store(true, Ordering::SeqCst);
-    if let Some(iz) = IZLEYICI.lock().unwrap().as_ref() {
+    if let Some(iz) = izleyici_slot().as_ref() {
         iz.yeniden_baglan();
     }
 }
@@ -609,9 +612,7 @@ pub fn izleyici_yeniden_baglan() {
 /// Bağlı host telefon mikrofonunu kabul edebilir mi?
 #[flutter_rust_bridge::frb(sync)]
 pub fn izleyici_ses_destegi() -> bool {
-    IZLEYICI
-        .lock()
-        .unwrap()
+    izleyici_slot()
         .as_ref()
         .is_some_and(|iz| iz.ses_destegi())
 }
@@ -619,9 +620,7 @@ pub fn izleyici_ses_destegi() -> bool {
 /// Windows hostta telefon mikrofonu sürücüsü eksik mi?
 #[flutter_rust_bridge::frb(sync)]
 pub fn izleyici_ses_surucu_yok() -> bool {
-    IZLEYICI
-        .lock()
-        .unwrap()
+    izleyici_slot()
         .as_ref()
         .is_some_and(|iz| iz.ses_surucu_yok())
 }
@@ -629,15 +628,13 @@ pub fn izleyici_ses_surucu_yok() -> bool {
 /// Whether the connected PC predates phone microphone support.
 #[flutter_rust_bridge::frb(sync)]
 pub fn izleyici_ses_host_eski() -> bool {
-    IZLEYICI
-        .lock()
-        .unwrap()
+    izleyici_slot()
         .as_ref()
         .is_some_and(|iz| afudesk_core::izleyici_ses_host_eski(iz))
 }
 
 pub fn izleyici_girdi(g: GirdiOlayi) {
-    let Some(iz) = IZLEYICI.lock().unwrap().clone() else {
+    let Some(iz) = izleyici_slot().clone() else {
         return;
     };
     if let Some(komut) = terminal_komutu(&g) {
@@ -768,6 +765,25 @@ mod terminal_testleri {
     }
 }
 
+#[cfg(test)]
+mod izleyici_kilit_testleri {
+    use super::*;
+
+    #[test]
+    fn izleyici_kilit_zehirlense_de_yeniden_baglanilabilir() {
+        let _ = std::thread::spawn(|| {
+            let _guard = IZLEYICI.lock().unwrap();
+            panic!("kasıtlı kilit zehirleme");
+        })
+        .join();
+        assert!(IZLEYICI.is_poisoned());
+
+        // Zehirlenmiş kilide rağmen izleyici_slot() panik etmemeli:
+        let slot = izleyici_slot();
+        assert!(slot.is_none());
+    }
+}
+
 /// Dart'tan gelen oyun kolu durumunu mevcut datagram yoluna verir; sıra numarasını Rust atar.
 pub fn izleyici_kol(
     slot: u8,
@@ -782,7 +798,7 @@ pub fn izleyici_kol(
     if !IZLEYICI_KOL_IZNI.load(Ordering::SeqCst) {
         return;
     }
-    let Some(iz) = IZLEYICI.lock().unwrap().clone() else {
+    let Some(iz) = izleyici_slot().clone() else {
         return;
     };
     let sira = IZLEYICI_KOL_SIRASI.fetch_add(1, Ordering::SeqCst);
@@ -804,7 +820,7 @@ pub fn izleyici_kol(
 
 /// Dosyayı karşı tarafa gönderir; ilerleme/sonuç izleyici akışına `tur = "dosya"` olarak gelir.
 pub fn izleyici_dosya_gonder(yol: String) {
-    let Some(iz) = IZLEYICI.lock().unwrap().clone() else {
+    let Some(iz) = izleyici_slot().clone() else {
         return;
     };
     let _g = rt().enter();
@@ -813,7 +829,9 @@ pub fn izleyici_dosya_gonder(yol: String) {
 }
 
 pub fn izleyici_kapat() {
-    if let Some(iz) = IZLEYICI.lock().unwrap().take() {
+    let iz = izleyici_slot().take();
+    if let Some(iz) = iz {
+        let _g = rt().enter();
         iz.kapat();
     }
 }
