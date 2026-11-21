@@ -17,6 +17,7 @@ pub mod izleyici;
 pub mod kimlik;
 pub mod kod;
 pub mod kol;
+pub mod oyun;
 pub mod pano;
 pub mod platform;
 pub mod terminal;
