@@ -35,6 +35,9 @@ jobs:
             if ($parseErrors.Count) { throw ($parseErrors | Out-String) }
             Write-Output "PASS: $path"
           }
+      - name: Flutter surum kontrolu
+        shell: pwsh
+        run: ./app/tools/flutter_surum_kontrol.ps1
       - name: MSVC ortamı
         uses: ilammy/msvc-dev-cmd@v1
       - name: Windows DPAPI testleri
@@ -47,7 +50,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: 3.44.9
+          flutter-version: 3.47.5
           channel: stable
       - name: Rust çekirdek testleri
         working-directory: rust
