@@ -1,7 +1,9 @@
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:io' show File, Platform;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter/services.dart';
 
 import 'motor.dart';
@@ -19,49 +21,76 @@ import 'tema.dart';
 import 'arka_plan/arka_plan.dart';
 import 'acilis_log.dart';
 
-Future<void> main() async {
-  AcilisLog.yaz('main basladi');
-  WidgetsFlutterBinding.ensureInitialized();
-  await RustLib.init();
-  AcilisLog.yaz('RustLib hazir');
-  // Kalıcı cihaz kimliği ve kayıtlı cihazlar: masaüstünde çekirdek kendi bulur
-  // (%LOCALAPPDATA%\AfuDesk); Android'de uygulamaya özel klasörü Kotlin verir.
-  if (Platform.isAndroid) {
-    try {
-      final yol = await const MethodChannel(
-        'afudesk/kol',
-      ).invokeMethod<String>('veriKlasoru');
-      if (yol != null) rust.veriKlasoruAyarla(yol: yol);
-    } catch (_) {
-      // Klasör alınamazsa kayıtlı cihazlar olmadan çalışır (kodla bağlantı etkilenmez).
-    }
-  }
-  final motor = RustMotor();
-  final hesap = GercekHesapServisi.rust(motor);
-  // Restore after the UI/host starts; an offline PC must still open immediately.
-  unawaited(
-    hesap
-        .geriYukle()
-        .then((_) => AcilisLog.yaz('geriYukle bitti'))
-        .catchError((Object _) => AcilisLog.yaz('geriYukle hata')),
-  );
-  AcilisLog.yaz('geriYukle basladi');
-  if (Platform.isWindows) {
-    ArkaPlan.kanal.setMethodCallHandler((call) async {
-      if (call.method == 'durdur' || call.method == 'cik') {
-        await tepsiKomutu(
-          hesap.duraklat,
-          () => ArkaPlan.kanal.invokeMethod<void>('kapat'),
-          cikis: call.method == 'cik',
+void main() {
+  runZonedGuarded(
+    () async {
+      AcilisLog.yaz('main basladi');
+      FlutterError.onError = (details) {
+        AcilisLog.hataYaz('FlutterError', details.exception, details.stack);
+        FlutterError.presentError(details);
+      };
+      ui.PlatformDispatcher.instance.onError = (error, stack) {
+        AcilisLog.hataYaz('PlatformDispatcher', error, stack);
+        return true;
+      };
+      try {
+        WidgetsFlutterBinding.ensureInitialized();
+        AcilisLog.yaz('binding hazir');
+        AcilisLog.yaz('RustLib.init basladi');
+        await RustLib.init();
+        AcilisLog.yaz('RustLib hazir');
+        // Kalıcı cihaz kimliği ve kayıtlı cihazlar: masaüstünde çekirdek kendi bulur
+        // (%LOCALAPPDATA%\AfuDesk); Android'de uygulamaya özel klasörü Kotlin verir.
+        if (Platform.isAndroid) {
+          try {
+            final yol = await const MethodChannel(
+              'afudesk/kol',
+            ).invokeMethod<String>('veriKlasoru');
+            if (yol != null) rust.veriKlasoruAyarla(yol: yol);
+          } catch (_) {
+            // Klasör alınamazsa kayıtlı cihazlar olmadan çalışır (kodla bağlantı etkilenmez).
+          }
+        }
+        final motor = RustMotor();
+        final hesap = GercekHesapServisi.rust(motor);
+        AcilisLog.yaz('motor_ve_hesap hazir');
+        // Restore after the UI/host starts; an offline PC must still open immediately.
+        unawaited(
+          hesap
+              .geriYukle()
+              .then((_) => AcilisLog.yaz('geriYukle bitti'))
+              .catchError(
+                (Object e, StackTrace st) =>
+                    AcilisLog.hataYaz('geriYukle', e, st),
+              ),
         );
+        AcilisLog.yaz('geriYukle basladi');
+        if (Platform.isWindows) {
+          ArkaPlan.kanal.setMethodCallHandler((call) async {
+            if (call.method == 'durdur' || call.method == 'cik') {
+              await tepsiKomutu(
+                hesap.duraklat,
+                () => ArkaPlan.kanal.invokeMethod<void>('kapat'),
+                cikis: call.method == 'cik',
+              );
+            }
+          });
+          AcilisLog.yaz('arka_plan_kanal hazir');
+        }
+        AcilisLog.yaz('runApp cagrildi');
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => AcilisLog.yaz('ilk kare cizildi'),
+        );
+        runApp(AfuDeskUygulama(motor: motor, hesapServisi: hesap));
+      } catch (e, st) {
+        AcilisLog.hataYaz('main', e, st);
+        rethrow;
       }
-    });
-  }
-  AcilisLog.yaz('runApp cagrildi');
-  WidgetsBinding.instance.addPostFrameCallback(
-    (_) => AcilisLog.yaz('ilk kare cizildi'),
+    },
+    (error, stack) {
+      AcilisLog.hataYaz('Zone', error, stack);
+    },
   );
-  runApp(AfuDeskUygulama(motor: motor, hesapServisi: hesap));
 }
 
 /// Uygulama kökü: bağlantı isteklerinin onay penceresini hangi ekranda olunursa olsun
@@ -78,12 +107,21 @@ class AfuDeskUygulama extends StatefulWidget {
 
 class _AfuDeskUygulamaDurum extends State<AfuDeskUygulama> {
   final _gezgin = GlobalKey<NavigatorState>();
+  final _taniSinir = GlobalKey();
   StreamSubscription<HostOlay>? _abonelik;
   bool _istekAcik = false;
 
   @override
   void initState() {
     super.initState();
+    final taniYol = Platform.isWindows
+        ? Platform.environment['AFUDESK_DUMP_FRAME']
+        : null;
+    if (taniYol != null && taniYol.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => unawaited(_kareKaydet(taniYol)),
+      );
+    }
     unawaited(GorselPaylas.ortak.baslat());
     final servis = widget.hesapServisi;
     if (servis is GercekHesapServisi) {
@@ -156,32 +194,90 @@ class _AfuDeskUygulamaDurum extends State<AfuDeskUygulama> {
     }
   }
 
+  Future<void> _kareKaydet(String yol) async {
+    try {
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      if (!mounted) return;
+      final ro = _taniSinir.currentContext?.findRenderObject();
+      if (ro is! RenderRepaintBoundary) {
+        AcilisLog.yaz('dump_frame_yok ro=${ro.runtimeType}');
+        return;
+      }
+      final img = await ro.toImage(pixelRatio: 1.0);
+      try {
+        final rgbaData = await img.toByteData(
+          format: ui.ImageByteFormat.rawRgba,
+        );
+        final pngData = await img.toByteData(format: ui.ImageByteFormat.png);
+        if (rgbaData == null || pngData == null) {
+          AcilisLog.yaz('dump_frame_bos');
+          return;
+        }
+        final bytes = rgbaData.buffer.asUint8List();
+        var total = 0;
+        var white = 0;
+        var dark = 0;
+        final w = img.width;
+        final h = img.height;
+        for (var y = 0; y < h; y += 4) {
+          for (var x = 0; x < w; x += 4) {
+            final idx = (y * w + x) * 4;
+            final r = bytes[idx];
+            final g = bytes[idx + 1];
+            final b = bytes[idx + 2];
+            total++;
+            if (r >= 250 && g >= 250 && b >= 250) white++;
+            if (r <= 40 && g <= 45 && b <= 55) dark++;
+          }
+        }
+        final png = pngData.buffer.asUint8List();
+        final outFile = File(yol);
+        outFile.parent.createSync(recursive: true);
+        outFile.writeAsBytesSync(png, flush: true);
+        final wPct =
+            total > 0 ? (100.0 * white / total).toStringAsFixed(2) : '0';
+        final dPct =
+            total > 0 ? (100.0 * dark / total).toStringAsFixed(2) : '0';
+        AcilisLog.yaz(
+          'dump_frame_ok ${w}x$h png=${png.length} whitePct=$wPct% darkPct=$dPct%',
+        );
+      } finally {
+        img.dispose();
+      }
+    } catch (e, st) {
+      AcilisLog.hataYaz('dump_frame', e, st);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      navigatorKey: _gezgin,
-      navigatorObservers: [AcilisGezgini()],
-      title: 'AfuDesk',
-      debugShowCheckedModeBanner: false,
-      theme: afuTema(),
-      routes: {
-        '/ayarlar': (_) => AyarlarSayfasi(hesapServisi: widget.hesapServisi),
-      },
-      builder: (context, child) => widget.hesapServisi == null
-          ? child!
-          : HesapBaglantiSeridi(servis: widget.hesapServisi!, child: child!),
-      home: widget.hesapServisi == null
-          ? AnaSayfa(motor: widget.motor)
-          : HesapSayfasi(
-              servis: widget.hesapServisi!,
-              kodlaBaglan: () {
-                _gezgin.currentState?.push(
-                  MaterialPageRoute(
-                    builder: (_) => AnaSayfa(motor: widget.motor),
-                  ),
-                );
-              },
-            ),
+    return RepaintBoundary(
+      key: _taniSinir,
+      child: MaterialApp(
+        navigatorKey: _gezgin,
+        navigatorObservers: [AcilisGezgini()],
+        title: 'AfuDesk',
+        debugShowCheckedModeBanner: false,
+        theme: afuTema(),
+        routes: {
+          '/ayarlar': (_) => AyarlarSayfasi(hesapServisi: widget.hesapServisi),
+        },
+        builder: (context, child) => widget.hesapServisi == null
+            ? child!
+            : HesapBaglantiSeridi(servis: widget.hesapServisi!, child: child!),
+        home: widget.hesapServisi == null
+            ? AnaSayfa(motor: widget.motor)
+            : HesapSayfasi(
+                servis: widget.hesapServisi!,
+                kodlaBaglan: () {
+                  _gezgin.currentState?.push(
+                    MaterialPageRoute(
+                      builder: (_) => AnaSayfa(motor: widget.motor),
+                    ),
+                  );
+                },
+              ),
+      ),
     );
   }
 }
