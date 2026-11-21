@@ -32,10 +32,13 @@ class FlutterWindow : public Win32Window {
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> secure_channel_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> background_channel_;
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> update_channel_;
   bool background_ = false;
   bool start_hidden_ = false;
   bool tray_added_ = false;
   bool quitting_ = false;
+  bool first_paint_logged_ = false;
+  bool first_frame_received_ = false;
   bool AddTray();
   void RemoveTray();
 };

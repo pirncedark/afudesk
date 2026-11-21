@@ -130,19 +130,33 @@ bool Win32Window::Create(const std::wstring& title,
 
   const POINT target_point = {static_cast<LONG>(origin.x),
                               static_cast<LONG>(origin.y)};
-  HMONITOR monitor = MonitorFromPoint(target_point, MONITOR_DEFAULTTONEAREST);
+  HMONITOR monitor = MonitorFromPoint(target_point, MONITOR_DEFAULTTOPRIMARY);
+  MONITORINFO mi{};
+  mi.cbSize = sizeof(mi);
+  int start_x = 0;
+  int start_y = 0;
   UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
   double scale_factor = dpi / 96.0;
+  if (GetMonitorInfoW(monitor, &mi)) {
+    start_x = mi.rcWork.left + Scale(40, scale_factor);
+    start_y = mi.rcWork.top + Scale(40, scale_factor);
+  } else {
+    start_x = Scale(origin.x, scale_factor);
+    start_y = Scale(origin.y, scale_factor);
+  }
 
   HWND window = CreateWindow(
       window_class, title.c_str(), WS_OVERLAPPEDWINDOW,
-      Scale(origin.x, scale_factor), Scale(origin.y, scale_factor),
+      start_x, start_y,
       Scale(size.width, scale_factor), Scale(size.height, scale_factor),
       nullptr, nullptr, GetModuleHandle(nullptr), this);
 
   if (!window) {
     return false;
   }
+
+  SetWindowPos(window, nullptr, start_x, start_y, 0, 0,
+               SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 
   UpdateTheme(window);
 

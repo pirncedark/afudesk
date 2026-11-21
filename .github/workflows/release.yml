@@ -70,7 +70,7 @@ jobs:
           targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: 3.44.9
+          flutter-version: 3.47.5
           channel: stable
       - name: İmza anahtarı
         working-directory: app/android
@@ -115,8 +115,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: 3.44.9
+          flutter-version: 3.47.5
           channel: stable
+      - name: Google client id kontrolu
+        shell: pwsh
+        env:
+          AFUDESK_GOOGLE_DESKTOP_CLIENT_ID: ${{ vars.AFUDESK_GOOGLE_DESKTOP_CLIENT_ID }}
+        run: ./app/tools/client_id_kontrol.ps1
+      - name: Flutter surum kontrolu
+        shell: pwsh
+        run: ./app/tools/flutter_surum_kontrol.ps1
       - name: Windows derleme
         working-directory: app
         env:
