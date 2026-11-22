@@ -27,13 +27,18 @@ Future<void> main() async {
   // Kalıcı cihaz kimliği ve kayıtlı cihazlar: masaüstünde çekirdek kendi bulur
   // (%LOCALAPPDATA%\AfuDesk); Android'de uygulamaya özel klasörü Kotlin verir.
   if (Platform.isAndroid) {
+    const kanal = MethodChannel('afudesk/kol');
     try {
-      final yol = await const MethodChannel(
-        'afudesk/kol',
-      ).invokeMethod<String>('veriKlasoru');
+      final yol = await kanal.invokeMethod<String>('veriKlasoru');
       if (yol != null) rust.veriKlasoruAyarla(yol: yol);
     } catch (_) {
       // Klasör alınamazsa kayıtlı cihazlar olmadan çalışır (kodla bağlantı etkilenmez).
+    }
+    try {
+      final sdk = await kanal.invokeMethod<int>('sdkInt');
+      GoldGlassYuzey.androidBlurDestekli = (sdk ?? 0) >= 31;
+    } catch (_) {
+      GoldGlassYuzey.androidBlurDestekli = false;
     }
   }
   final motor = RustMotor();
@@ -163,7 +168,9 @@ class _AfuDeskUygulamaDurum extends State<AfuDeskUygulama> {
       navigatorObservers: [AcilisGezgini()],
       title: 'AfuDesk',
       debugShowCheckedModeBanner: false,
-      theme: afuTema(),
+      theme: afuAcikTema(),
+      darkTheme: afuKoyuTema(),
+      themeMode: ThemeMode.system,
       routes: {
         '/ayarlar': (_) => AyarlarSayfasi(hesapServisi: widget.hesapServisi),
       },

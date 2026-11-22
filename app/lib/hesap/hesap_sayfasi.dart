@@ -100,6 +100,7 @@ class _HesapSayfasiDurum extends State<HesapSayfasi> {
 
   @override
   Widget build(BuildContext context) {
+    final p = GoldGlassPalet.of(context);
     final hesap = servis.hesap;
     return Scaffold(
       appBar: AppBar(
@@ -124,13 +125,14 @@ class _HesapSayfasiDurum extends State<HesapSayfasi> {
           const GuncelleKarti(ayarDugmesi: true),
         ],
       ),
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 760),
-            child: ListView(
-              padding: const EdgeInsets.all(24),
-              children: [
+      body: GoldGlassZemin(
+        child: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 760),
+              child: ListView(
+                padding: const EdgeInsets.all(24),
+                children: [
                 if (servis is GercekHesapServisi && (servis as GercekHesapServisi).durum != null)
                   Semantics(liveRegion: true,
                     child: Text((servis as GercekHesapServisi).durum!)),
@@ -141,7 +143,7 @@ class _HesapSayfasiDurum extends State<HesapSayfasi> {
                       liveRegion: true,
                       child: Text(
                         _hata!,
-                        style: const TextStyle(color: Renk.tehlike),
+                        style: TextStyle(color: p.tehlike),
                       ),
                     ),
                   ),
@@ -151,20 +153,30 @@ class _HesapSayfasiDurum extends State<HesapSayfasi> {
                     children: [SelectableText(_ayrinti!)],
                   ),
                 if (hesap == null) ...[
-                  const Icon(
-                    Icons.devices_rounded,
-                    size: 64,
-                    color: Renk.vurgu,
-                  ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Kendi bilgisayarlarına her yerden ulaş.',
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: _mesgul ? null : () => _yap(servis.girisYap),
-                    child: const Text('Google ile giriş yap'),
+                  GoldGlassKart(
+                    child: Padding(
+                      padding: const EdgeInsets.all(28),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Icon(
+                            Icons.devices_rounded,
+                            size: 64,
+                            color: p.vurgu,
+                          ),
+                          const SizedBox(height: 20),
+                          const Text(
+                            'Kendi bilgisayarlarına her yerden ulaş.',
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 24),
+                          FilledButton(
+                            onPressed: _mesgul ? null : () => _yap(servis.girisYap),
+                            child: const Text('Google ile giriş yap'),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ] else if (_ayarlar) ...[
                   Text(hesap.ad, style: Theme.of(context).textTheme.titleLarge),
@@ -185,7 +197,7 @@ class _HesapSayfasiDurum extends State<HesapSayfasi> {
                     child: const Text('Hesaptan çık'),
                   ),
                 ] else ...[
-                  Card(
+                  GoldGlassKart(
                     child: SwitchListTile(
                       title: const Text('Uzaktan erişime izin ver'),
                       subtitle: const Text('Bu cihaz'),
@@ -201,12 +213,13 @@ class _HesapSayfasiDurum extends State<HesapSayfasi> {
                       'Diğer bilgisayarında da aynı Google hesabıyla giriş yap.',
                     ),
                   for (final cihaz in _cihazlar)
-                    Card(
+                    GoldGlassKart(
+                      margin: const EdgeInsets.only(bottom: 10),
                       child: ListTile(
                         leading: Icon(
                           Icons.circle,
                           size: 12,
-                          color: cihaz.cevrimici ? Renk.basari : Renk.soluk,
+                          color: cihaz.cevrimici ? p.basari : p.soluk,
                         ),
                         title: Text(cihaz.ad),
                         subtitle: Text(
@@ -242,6 +255,7 @@ class _HesapSayfasiDurum extends State<HesapSayfasi> {
           ),
         ),
       ),
+      ),
     );
   }
 }
@@ -259,40 +273,44 @@ class HesapBaglantiSeridi extends StatelessWidget {
     required this.child,
   });
   @override
-  Widget build(BuildContext context) => StreamBuilder<List<Cihaz>>(
-    stream: servis.aktifBaglantilar,
-    initialData: servis.baglantilar,
-    builder: (context, snapshot) => Column(
-      children: [
-        if ((snapshot.data ?? []).isNotEmpty)
-          Material(
-            color: Renk.yuzey2,
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 6,
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Uzaktan bağlı: ${snapshot.data!.map((c) => c.ad).join(', ')}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+  Widget build(BuildContext context) {
+    final p = GoldGlassPalet.of(context);
+    return StreamBuilder<List<Cihaz>>(
+      stream: servis.aktifBaglantilar,
+      initialData: servis.baglantilar,
+      builder: (context, snapshot) => Column(
+        children: [
+          if ((snapshot.data ?? []).isNotEmpty)
+            Material(
+              color: p.yuzey2,
+              shape: Border(bottom: BorderSide(color: p.camKenar)),
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 6,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Uzaktan bağlı: ${snapshot.data!.map((c) => c.ad).join(', ')}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                    _KesDugmesi(servis: servis),
-                  ],
+                      _KesDugmesi(servis: servis),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        Expanded(child: child),
-      ],
-    ),
-  );
+          Expanded(child: child),
+        ],
+      ),
+    );
+  }
 }
 
 class _KesDugmesi extends StatefulWidget {

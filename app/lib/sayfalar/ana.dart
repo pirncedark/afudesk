@@ -109,6 +109,7 @@ class _AnaSayfaDurum extends State<AnaSayfa> {
 
   Widget _kayitliCihazlar() {
     if (_kayitli.isEmpty) return const SizedBox.shrink();
+    final p = GoldGlassPalet.of(context);
     return Column(
       key: const Key('kayitli_liste'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -119,15 +120,16 @@ class _AnaSayfaDurum extends State<AnaSayfa> {
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 4),
-        const Text(
+        Text(
           'Kod ve parola olmadan bağlan. Karşı taraf yine onay verir.',
-          style: TextStyle(color: Renk.soluk, fontSize: 13),
+          style: TextStyle(color: p.soluk, fontSize: 13),
         ),
         const SizedBox(height: 8),
         for (final (i, c) in _kayitli.indexed)
-          Card(
+          GoldGlassKart(
+            margin: const EdgeInsets.only(bottom: 10),
             child: ListTile(
-              leading: const Icon(Icons.computer_rounded, color: Renk.vurgu),
+              leading: Icon(Icons.computer_rounded, color: p.vurgu),
               title: Wrap(
                 spacing: 8,
                 crossAxisAlignment: WrapCrossAlignment.center,
@@ -137,12 +139,12 @@ class _AnaSayfaDurum extends State<AnaSayfa> {
                     Row(
                       key: Key('kayitli_acik_$i'),
                       mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.circle, color: Colors.green, size: 8),
-                        SizedBox(width: 4),
+                      children: [
+                        Icon(Icons.circle, color: p.basari, size: 8),
+                        const SizedBox(width: 4),
                         Text(
                           'Açık',
-                          style: TextStyle(color: Colors.green, fontSize: 12),
+                          style: TextStyle(color: p.basari, fontSize: 12),
                         ),
                       ],
                     ),
@@ -182,6 +184,7 @@ class _AnaSayfaDurum extends State<AnaSayfa> {
 
   @override
   Widget build(BuildContext context) {
+    final p = GoldGlassPalet.of(context);
     return Scaffold(
       appBar: AppBar(
         actions: [
@@ -192,35 +195,36 @@ class _AnaSayfaDurum extends State<AnaSayfa> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 760),
-            child: ListView(
-              padding: const EdgeInsets.all(24),
-              children: [
-                const GuncelleKarti(),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.desktop_windows_rounded,
-                      color: Renk.vurgu,
-                      size: 30,
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      'AfuDesk',
-                      style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Tek kodla uzak masaüstü — hesap ve modem ayarı gerekmez.',
-                  style: TextStyle(color: Renk.soluk),
-                ),
-                const SizedBox(height: 24),
+      body: GoldGlassZemin(
+        child: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 760),
+              child: ListView(
+                padding: const EdgeInsets.all(24),
+                children: [
+                  const GuncelleKarti(),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.desktop_windows_rounded,
+                        color: p.vurgu,
+                        size: 30,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        'AfuDesk',
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Tek kodla uzak masaüstü — hesap ve modem ayarı gerekmez.',
+                    style: TextStyle(color: p.soluk),
+                  ),
+                  const SizedBox(height: 24),
                 LayoutBuilder(
                   builder: (context, c) {
                     final dar = c.maxWidth < 560;
@@ -269,10 +273,11 @@ class _AnaSayfaDurum extends State<AnaSayfa> {
                           );
                   },
                 ),
-                _kayitliCihazlar(),
-                const SizedBox(height: 28),
-                const AfuUygulamalar(),
-              ],
+                  _kayitliCihazlar(),
+                  const SizedBox(height: 28),
+                  const AfuUygulamalar(),
+                ],
+              ),
             ),
           ),
         ),
@@ -299,42 +304,41 @@ class _SecenekKarti extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = GoldGlassPalet.of(context);
     final kapali = onTap == null;
     return Opacity(
       opacity: kapali ? 0.55 : 1,
-      child: Card(
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          key: anahtar,
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Renk.vurgu.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(simge, color: Renk.vurgu, size: 28),
+      child: GoldGlassKart(
+        tiklamaAnahtari: anahtar,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: p.vurgu.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: p.camKenar),
                 ),
-                const SizedBox(height: 14),
-                Text(
-                  baslik,
-                  style: const TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w700,
-                  ),
+                child: Icon(simge, color: p.vurgu, size: 28),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                baslik,
+                style: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w700,
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  aciklama,
-                  style: const TextStyle(color: Renk.soluk, height: 1.35),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                aciklama,
+                style: TextStyle(color: p.soluk, height: 1.35),
+              ),
+            ],
           ),
         ),
       ),

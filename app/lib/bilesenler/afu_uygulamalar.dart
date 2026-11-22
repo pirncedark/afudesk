@@ -28,6 +28,7 @@ class AfuUygulamalar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = GoldGlassPalet.of(context);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const Text('Afu Uygulamaları', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
       const SizedBox(height: 10),
@@ -35,9 +36,11 @@ class AfuUygulamalar extends StatelessWidget {
         for (final u in afuUygulamalari)
           ActionChip(
             key: Key('afu_${u.ad}'),
-            avatar: Icon(u.simge, size: 18, color: Renk.vurgu),
+            avatar: Icon(u.simge, size: 18, color: p.vurgu),
             label: Text(u.ad),
             tooltip: u.aciklama,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            materialTapTargetSize: MaterialTapTargetSize.padded,
             onPressed: () => ac != null
                 ? ac!(u.adres)
                 : launchUrl(Uri.parse(u.adres), mode: LaunchMode.externalApplication),

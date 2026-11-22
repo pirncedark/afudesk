@@ -49,50 +49,69 @@ class _BaglanDurum extends State<BaglanSayfasi> {
 
   @override
   Widget build(BuildContext context) {
+    final p = GoldGlassPalet.of(context);
     return Scaffold(
       appBar: AppBar(title: const Text('Bağlan')),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
-          child: ListView(padding: const EdgeInsets.all(24), children: [
-            const Text('Sana gönderilen kodu ve parolayı gir.', style: TextStyle(color: Renk.soluk)),
-            const SizedBox(height: 16),
-            TextField(
-              key: const Key('baglan_kod'),
-              controller: _kod,
-              minLines: 3,
-              maxLines: 5,
-              style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
-              decoration: InputDecoration(
-                labelText: 'Bağlantı kodu',
-                hintText: 'AFU2.…',
-                errorText: _kodHata,
-                suffixIcon: IconButton(
-                  key: const Key('baglan_yapistir'),
-                  tooltip: 'Yapıştır',
-                  icon: const Icon(Icons.content_paste_rounded),
-                  onPressed: _yapistir,
+      body: GoldGlassZemin(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: ListView(
+              padding: const EdgeInsets.all(24),
+              children: [
+                Text(
+                  'Sana gönderilen kodu ve parolayı gir.',
+                  style: TextStyle(color: p.soluk),
                 ),
-              ),
+                const SizedBox(height: 16),
+                GoldGlassKart(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        TextField(
+                          key: const Key('baglan_kod'),
+                          controller: _kod,
+                          minLines: 3,
+                          maxLines: 5,
+                          style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
+                          decoration: InputDecoration(
+                            labelText: 'Bağlantı kodu',
+                            hintText: 'AFU2.…',
+                            errorText: _kodHata,
+                            suffixIcon: IconButton(
+                              key: const Key('baglan_yapistir'),
+                              tooltip: 'Yapıştır',
+                              icon: const Icon(Icons.content_paste_rounded),
+                              onPressed: _yapistir,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        TextField(
+                          key: const Key('baglan_parola'),
+                          controller: _parola,
+                          obscureText: false,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(fontSize: 20, letterSpacing: 4),
+                          decoration: InputDecoration(labelText: 'Parola', errorText: _parolaHata),
+                          onSubmitted: (_) => _baglan(),
+                        ),
+                        const SizedBox(height: 20),
+                        FilledButton.icon(
+                          key: const Key('baglan_dugme'),
+                          onPressed: _baglan,
+                          icon: const Icon(Icons.login_rounded),
+                          label: const Text('Bağlan'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 14),
-            TextField(
-              key: const Key('baglan_parola'),
-              controller: _parola,
-              obscureText: false,
-              keyboardType: TextInputType.number,
-              style: const TextStyle(fontSize: 20, letterSpacing: 4),
-              decoration: InputDecoration(labelText: 'Parola', errorText: _parolaHata),
-              onSubmitted: (_) => _baglan(),
-            ),
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              key: const Key('baglan_dugme'),
-              onPressed: _baglan,
-              icon: const Icon(Icons.login_rounded),
-              label: const Text('Bağlan'),
-            ),
-          ]),
+          ),
         ),
       ),
     );

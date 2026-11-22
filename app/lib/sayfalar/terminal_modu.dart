@@ -50,7 +50,7 @@ class TerminalModu extends StatelessWidget {
       child: OutlinedButton(
         key: Key('terminal_$ad'),
         style: OutlinedButton.styleFrom(
-          minimumSize: const Size(44, 40),
+          minimumSize: const Size(48, 48),
           padding: const EdgeInsets.symmetric(horizontal: 10),
           backgroundColor: ad == 'ctrl' && ctrl
               ? Theme.of(context).colorScheme.primaryContainer

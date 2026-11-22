@@ -205,6 +205,7 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
 
   Widget _guvenilenler() {
     if (_guvenilen.isEmpty) return const SizedBox.shrink();
+    final p = GoldGlassPalet.of(context);
     return Column(
       key: const Key('guvenilen_liste'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -215,17 +216,18 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
           style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
         ),
         const SizedBox(height: 4),
-        const Text(
+        Text(
           'Bu cihazlar kod olmadan bağlanabilir. Her seferinde yine senden onay istenir.',
-          style: TextStyle(color: Renk.soluk, fontSize: 13),
+          style: TextStyle(color: p.soluk, fontSize: 13),
         ),
         const SizedBox(height: 8),
         for (final (i, c) in _guvenilen.indexed)
-          Card(
+          GoldGlassKart(
+            margin: const EdgeInsets.only(bottom: 10),
             child: ListTile(
-              leading: const Icon(
+              leading: Icon(
                 Icons.verified_user_outlined,
-                color: Renk.vurgu,
+                color: p.vurgu,
               ),
               title: Wrap(
                 spacing: 8,
@@ -236,12 +238,12 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
                     Row(
                       key: Key('guvenilen_acik_$i'),
                       mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.circle, color: Colors.green, size: 8),
-                        SizedBox(width: 4),
+                      children: [
+                        Icon(Icons.circle, color: p.basari, size: 8),
+                        const SizedBox(width: 4),
                         Text(
                           'Açık',
-                          style: TextStyle(color: Colors.green, fontSize: 12),
+                          style: TextStyle(color: p.basari, fontSize: 12),
                         ),
                       ],
                     ),
@@ -275,12 +277,14 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Bağlantı ver')),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 640),
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [_icerik()],
+      body: GoldGlassZemin(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: ListView(
+              padding: const EdgeInsets.all(24),
+              children: [_icerik()],
+            ),
           ),
         ),
       ),
@@ -288,17 +292,18 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
   }
 
   Widget _icerik() {
+    final p = GoldGlassPalet.of(context);
     switch (_asama) {
       case _Asama.hazirlaniyor:
-        return const Padding(
-          padding: EdgeInsets.only(top: 60),
+        return Padding(
+          padding: const EdgeInsets.only(top: 60),
           child: Column(
             children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
               Text(
                 'Bağlantı hazırlanıyor…',
-                style: TextStyle(color: Renk.soluk),
+                style: TextStyle(color: p.soluk),
               ),
             ],
           ),
@@ -306,7 +311,7 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
       case _Asama.hata:
         return Column(
           children: [
-            const Icon(Icons.error_outline, color: Renk.tehlike, size: 40),
+            Icon(Icons.error_outline, color: p.tehlike, size: 40),
             const SizedBox(height: 12),
             Text(
               _hata,
@@ -318,14 +323,14 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
           ],
         );
       case _Asama.bagli:
-        return Card(
+        return GoldGlassKart(
           child: Padding(
             padding: const EdgeInsets.all(22),
             child: Column(
               children: [
-                const Icon(
+                Icon(
                   Icons.visibility_rounded,
-                  color: Renk.basari,
+                  color: p.basari,
                   size: 40,
                 ),
                 const SizedBox(height: 12),
@@ -342,15 +347,15 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
                   _bagliKontrol
                       ? 'Fare ve klavyeyi kullanabiliyor.'
                       : 'Yalnız izliyor; kontrol edemez.',
-                  style: const TextStyle(color: Renk.soluk),
+                  style: TextStyle(color: p.soluk),
                 ),
                 if (_bagliPano)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 4),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
                     child: Text(
                       'Pano paylaşılıyor.',
-                      key: Key('ver_pano'),
-                      style: TextStyle(color: Renk.soluk),
+                      key: const Key('ver_pano'),
+                      style: TextStyle(color: p.soluk),
                     ),
                   ),
                 const SizedBox(height: 4),
@@ -359,7 +364,7 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
                       ? 'Sana dosya gönderebilir (İndirilenler\\AfuDesk).'
                       : 'Dosya gönderemez.',
                   key: const Key('ver_dosya_izni'),
-                  style: const TextStyle(color: Renk.soluk),
+                  style: TextStyle(color: p.soluk),
                 ),
                 if (_alinanlar.isNotEmpty) ...[
                   const SizedBox(height: 14),
@@ -368,8 +373,9 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: Renk.yuzey2,
+                      color: p.yuzey2,
                       borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: p.camKenar),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -383,10 +389,10 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
                             padding: const EdgeInsets.only(top: 6),
                             child: Row(
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.download_done_rounded,
                                   size: 18,
-                                  color: Renk.basari,
+                                  color: p.basari,
                                 ),
                                 const SizedBox(width: 6),
                                 Expanded(
@@ -413,7 +419,10 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
                 const SizedBox(height: 18),
                 FilledButton.icon(
                   key: const Key('ver_kes'),
-                  style: FilledButton.styleFrom(backgroundColor: Renk.tehlike),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: p.tehlike,
+                    foregroundColor: Colors.white,
+                  ),
                   onPressed: () => widget.motor.hostKes(),
                   icon: const Icon(Icons.link_off),
                   label: const Text('Bağlantıyı kes'),
@@ -432,12 +441,12 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
+            Text(
               'Bu iki bilgiyi bağlanacak kişiye gönder:',
-              style: TextStyle(color: Renk.soluk),
+              style: TextStyle(color: p.soluk),
             ),
             const SizedBox(height: 14),
-            Card(
+            GoldGlassKart(
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -451,17 +460,18 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Renk.yuzey2,
+                        color: p.yuzey2,
                         borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: p.camKenar),
                       ),
                       child: SelectableText(
                         _kod,
                         key: const Key('ver_kod'),
                         maxLines: 4,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Consolas',
                           fontSize: 12,
-                          color: Renk.soluk,
+                          color: p.soluk,
                         ),
                       ),
                     ),
@@ -477,7 +487,7 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
               ),
             ),
             const SizedBox(height: 12),
-            Card(
+            GoldGlassKart(
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
@@ -516,12 +526,12 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
             const SizedBox(height: 14),
             Row(
               children: [
-                const Icon(Icons.timer_outlined, size: 18, color: Renk.soluk),
+                Icon(Icons.timer_outlined, size: 18, color: p.soluk),
                 const SizedBox(width: 6),
                 Text(
                   'Kod $dk:$sn içinde yenilenecek',
                   key: const Key('ver_sure'),
-                  style: const TextStyle(color: Renk.soluk),
+                  style: TextStyle(color: p.soluk),
                 ),
               ],
             ),
@@ -533,31 +543,31 @@ class _BaglantiVerDurum extends State<BaglantiVerSayfasi> {
                       ? Icons.public
                       : Icons.lan_outlined,
                   size: 18,
-                  color: Renk.soluk,
+                  color: p.soluk,
                 ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     _erisim,
                     key: const Key('ver_erisim'),
-                    style: const TextStyle(color: Renk.soluk),
+                    style: TextStyle(color: p.soluk),
                   ),
                 ),
               ],
             ),
             if (_erisim.contains('Yalnız aynı ağdan'))
-              const Padding(
-                padding: EdgeInsets.only(left: 26, top: 6),
+              Padding(
+                padding: const EdgeInsets.only(left: 26, top: 6),
                 child: Text(
                   'İnternet bağlantını kontrol et. Kod birkaç dakikada bir kendiliğinden yenilenir.',
-                  key: Key('ver_ag_onerisi'),
-                  style: TextStyle(color: Renk.soluk),
+                  key: const Key('ver_ag_onerisi'),
+                  style: TextStyle(color: p.soluk),
                 ),
               ),
             const SizedBox(height: 18),
-            const Text(
+            Text(
               'Biri bağlanmak istediğinde sana sorulacak. Onay vermeden kimse ekranını göremez.',
-              style: TextStyle(color: Renk.soluk, fontSize: 13),
+              style: TextStyle(color: p.soluk, fontSize: 13),
             ),
             _guvenilenler(),
           ],
@@ -627,6 +637,7 @@ class _IstekPenceresiDurum extends State<IstekPenceresi> {
 
   @override
   Widget build(BuildContext context) {
+    final p = GoldGlassPalet.of(context);
     return AlertDialog(
       title: Text(
         '${widget.ad} bağlanmak istiyor',
@@ -672,9 +683,9 @@ class _IstekPenceresiDurum extends State<IstekPenceresi> {
             value: _dosya,
             onChanged: (v) => setState(() => _dosya = v ?? false),
             title: const Text('Dosya almaya izin ver'),
-            subtitle: const Text(
+            subtitle: Text(
               'Gelen dosyalar İndirilenler\\AfuDesk klasörüne kaydedilir.',
-              style: TextStyle(color: Renk.soluk, fontSize: 12),
+              style: TextStyle(color: p.soluk, fontSize: 12),
             ),
           ),
           CheckboxListTile(
@@ -686,7 +697,7 @@ class _IstekPenceresiDurum extends State<IstekPenceresi> {
           ),
           Text(
             '$_kalan sn içinde yanıt vermezsen reddedilir.',
-            style: const TextStyle(color: Renk.soluk, fontSize: 12),
+            style: TextStyle(color: p.soluk, fontSize: 12),
           ),
         ],
       ),

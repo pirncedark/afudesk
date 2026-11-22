@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../oyun_kolu.dart';
-
+import '../tema.dart';
 /// Yatay oturum ekranında parmaklarla aynı anda kullanılabilen yarı saydam kol.
 class OyunKoluKatmani extends StatefulWidget {
   final ValueChanged<OyunKoluDurumu> onChanged;
@@ -76,7 +76,7 @@ class _BasiliTus extends StatelessWidget {
         onPointerCancel: (_) => onChanged(name, false),
         child: Container(
           width: size, height: size, alignment: Alignment.center,
-          decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.48), shape: BoxShape.circle, border: Border.all(color: Colors.white.withValues(alpha: 0.75), width: 2)),
+          decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.56), shape: BoxShape.circle, border: Border.all(color: Renk.altinYumusak.withValues(alpha: 0.65), width: 2)),
           child: icon == null ? Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)) : Icon(icon, size: 22, color: Colors.white),
         ),
       );
@@ -110,8 +110,8 @@ class _AnalogCubukState extends State<_AnalogCubuk> {
         onPointerUp: (e) { if (e.pointer == _pointer) { _pointer = null; _value = Offset.zero; widget.onMove(Offset.zero); setState(() {}); } },
         onPointerCancel: (_) { _pointer = null; _value = Offset.zero; widget.onMove(Offset.zero); setState(() {}); },
         child: SizedBox(width: 126, height: 126, child: DecoratedBox(
-          decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black.withValues(alpha: 0.38), border: Border.all(color: Colors.white.withValues(alpha: 0.65), width: 2)),
-          child: Center(child: Transform.translate(offset: Offset(_value.dx * 34, _value.dy * 34), child: Container(width: 50, height: 50, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.58), border: Border.all(color: Colors.white, width: 2))))),
+          decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black.withValues(alpha: 0.44), border: Border.all(color: Renk.altinYumusak.withValues(alpha: 0.55), width: 2)),
+          child: Center(child: Transform.translate(offset: Offset(_value.dx * 34, _value.dy * 34), child: Container(width: 50, height: 50, decoration: BoxDecoration(shape: BoxShape.circle, color: Renk.altinAcik.withValues(alpha: 0.65), border: Border.all(color: Renk.altinYumusak, width: 2))))),
         )),
       );
 }

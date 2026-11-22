@@ -6,7 +6,7 @@ import '../aktif_sayac.dart';
 
 import '../guncelleme.dart';
 import '../hesap/hesap_servisi.dart';
-
+import '../tema.dart';
 class AyarlarSayfasi extends StatefulWidget {
   const AyarlarSayfasi({super.key, this.servis, this.hesapServisi});
   final Guncelleyici? servis;
@@ -228,11 +228,12 @@ class _AyarlarSayfasiDurum extends State<AyarlarSayfasi> {
       canPop: !_mesgul && !_cikiliyor,
       child: Scaffold(
         appBar: AppBar(title: const Text('Ayarlar')),
-        body: SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 600),
-              child: ListView(
+        body: GoldGlassZemin(
+          child: SafeArea(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: ListView(
                 padding: const EdgeInsets.all(24),
                 children: [
                   _kart('Güncelleme', [
@@ -292,6 +293,7 @@ class _AyarlarSayfasiDurum extends State<AyarlarSayfasi> {
                   ],
                   if (_hesapHatasi != null) Text(_hesapHatasi!),
                 ],
+                ),
               ),
             ),
           ),
@@ -300,11 +302,18 @@ class _AyarlarSayfasiDurum extends State<AyarlarSayfasi> {
     );
   }
 
-  Widget _kart(String baslik, List<Widget> children) => Card(
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+  Widget _kart(String baslik, List<Widget> children) => GoldGlassKart(
     margin: const EdgeInsets.only(bottom: 16),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Padding(padding: const EdgeInsets.fromLTRB(16, 14, 16, 0), child: Text(baslik, style: Theme.of(context).textTheme.labelLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant))),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+        child: Text(
+          baslik,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: GoldGlassPalet.of(context).soluk,
+          ),
+        ),
+      ),
       ...children,
     ]),
   );

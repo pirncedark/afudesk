@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../guncelleme.dart';
 import '../aktif_sayac.dart';
-
+import '../tema.dart';
 /// Açılışta, uygulamaya dönüşte ve günde bir denetler; kurulum Ayarlar'dan yapılır.
 class GuncelleKarti extends StatefulWidget {
   const GuncelleKarti({
@@ -125,14 +125,15 @@ class _GuncelleKartiDurum extends State<GuncelleKarti>
         );
       }
       if (_servis.yayin == null) return const SizedBox.shrink();
-      return Card(
+      return GoldGlassKart(
         key: const Key('guncelle_karti'),
-        child: ListTile(
+        margin: const EdgeInsets.only(bottom: 14),
+        onTap: ac,
+        child: const ListTile(
           dense: true,
-          leading: const Icon(Icons.system_update),
-          title: const Text('Yeni sürüm hazır — dokun'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: ac,
+          leading: Icon(Icons.system_update),
+          title: Text('Yeni sürüm hazır — dokun'),
+          trailing: Icon(Icons.chevron_right),
         ),
       );
     },

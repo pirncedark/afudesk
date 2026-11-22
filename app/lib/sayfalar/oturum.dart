@@ -662,7 +662,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
                       ? 'Görsel gönderilemedi. Yeniden dene.'
                       : '${o.ad} gönderilemedi: ${o.metin}'),
           ),
-          backgroundColor: basarili ? null : Renk.tehlike,
+          backgroundColor: basarili ? null : GoldGlassPalet.of(context).tehlike,
           duration: Duration(seconds: basarili ? 3 : 6),
         ),
       );
@@ -670,6 +670,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   }
 
   Widget _dosyaCubugu(_Aktarim a) {
+    final p = GoldGlassPalet.of(context);
     final oran = a.toplam > 0
         ? (a.gonderilen / a.toplam).clamp(0.0, 1.0)
         : null;
@@ -677,7 +678,8 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
         ? '${a.ad} hazırlanıyor…'
         : '${a.ad} — %${(oran * 100).floor()} (${boyutMetni(a.gonderilen)} / ${boyutMetni(a.toplam)})';
     return Material(
-      color: Renk.yuzey,
+      color: p.katiYuzey,
+      shape: Border(top: BorderSide(color: p.camKenar)),
       child: SafeArea(
         top: false,
         child: Padding(
@@ -688,12 +690,11 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
             children: [
               Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.upload_file_rounded,
                     size: 18,
-                    color: Renk.soluk,
+                    color: p.soluk,
                   ),
-                  const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       metin,
@@ -880,8 +881,9 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
         child: simge != null ? Icon(simge, size: 18) : Text(etiket),
       ),
     );
+    const p = GoldGlassPalet.koyu;
     return Container(
-      color: Renk.yuzey,
+      color: p.katiYuzey,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: Row(
         children: [
@@ -915,7 +917,8 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
               style: FilledButton.styleFrom(
                 minimumSize: Size(dar ? 56 : 0, 56),
                 padding: EdgeInsets.symmetric(horizontal: dar ? 8 : 16),
-                backgroundColor: _kolAcik ? Renk.vurgu : null,
+                backgroundColor: _kolAcik ? p.vurgu : null,
+                foregroundColor: _kolAcik ? p.vurguMetin : null,
               ),
               onPressed: _oyunKoluIzni
                   ? () => setState(() => _kolAcik = !_kolAcik)
@@ -931,7 +934,8 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
             style: FilledButton.styleFrom(
               minimumSize: Size(dar ? 56 : 0, 56),
               padding: EdgeInsets.symmetric(horizontal: dar ? 8 : 16),
-              backgroundColor: _konusmaModu ? Renk.vurgu : null,
+              backgroundColor: _konusmaModu ? p.vurgu : null,
+              foregroundColor: _konusmaModu ? p.vurguMetin : null,
             ),
             onPressed: _konusmaModuDegistir,
             child: dar
@@ -1110,7 +1114,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
                                             color: Colors.white,
                                             width: 2,
                                           ),
-                                          color: Renk.vurgu.withValues(
+                                          color: Renk.altinAcik.withValues(
                                             alpha: 0.5,
                                           ),
                                         ),
@@ -1154,9 +1158,12 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
               bottom: 0,
               child: SafeArea(
                 top: false,
-                child: Container(
-                  color: Renk.zemin.withValues(alpha: 0.85),
-                  child: _dokunmatikCubuk(),
+                child: Theme(
+                  data: afuKoyuTema(),
+                  child: Container(
+                    color: GoldGlassPalet.koyu.zemin.withValues(alpha: 0.85),
+                    child: _dokunmatikCubuk(),
+                  ),
                 ),
               ),
             ),
@@ -1356,16 +1363,23 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
       );
     }
     // Dar ekranda (telefon dikey) çip ve düğme yalnız simge: başlık sığsın.
+    final p = GoldGlassPalet.of(context);
+    final koyuOverlay = widget.motor.dokunmatik && _asama == _Asama.bagli;
+    final op = koyuOverlay ? GoldGlassPalet.koyu : p;
     final dar = MediaQuery.sizeOf(context).width < 520;
     final izinMetni = _kontrol ? 'Kontrol açık' : 'Yalnız izleme';
     final izinSimge = Icon(_kontrol ? Icons.mouse : Icons.visibility, size: 16);
     return Scaffold(
-      extendBodyBehindAppBar: widget.motor.dokunmatik && _asama == _Asama.bagli,
+      extendBodyBehindAppBar: koyuOverlay,
       appBar: AppBar(
-        backgroundColor: widget.motor.dokunmatik && _asama == _Asama.bagli
-            ? Colors.black.withValues(alpha: 0.6)
+        backgroundColor: koyuOverlay
+            ? GoldGlassPalet.koyu.zemin.withValues(alpha: 0.72)
             : null,
-        toolbarHeight: widget.motor.dokunmatik ? 40 : null,
+        foregroundColor: koyuOverlay ? GoldGlassPalet.koyu.metin : null,
+        iconTheme: koyuOverlay
+            ? IconThemeData(color: GoldGlassPalet.koyu.metin)
+            : null,
+        toolbarHeight: widget.motor.dokunmatik ? 48 : null,
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1412,7 +1426,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
                 child: Text(
                   _yeniden!,
                   key: const Key('oturum_yeniden'),
-                  style: const TextStyle(fontSize: 12, color: Renk.tehlike),
+                  style: TextStyle(fontSize: 12, color: op.tehlike),
                 ),
               ),
             )
@@ -1431,11 +1445,11 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
                     fontFeatures: const [FontFeature.tabularFigures()],
                     color: _gecikme > 0
                         ? (_gecikme < 100
-                              ? Renk.basari
-                              : (_gecikme < 250 ? Renk.soluk : Renk.tehlike))
+                              ? op.basari
+                              : (_gecikme < 250 ? op.soluk : op.tehlike))
                         : (_rtt < 80
-                              ? Renk.basari
-                              : (_rtt < 200 ? Renk.soluk : Renk.tehlike)),
+                              ? op.basari
+                              : (_rtt < 200 ? op.soluk : op.tehlike)),
                   ),
                 ),
               ),
@@ -1460,7 +1474,7 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
                     : OutlinedButton.icon(
                         key: const Key('oturum_dosya_gonder'),
                         style: OutlinedButton.styleFrom(
-                          minimumSize: const Size(0, 38),
+                          minimumSize: const Size(48, 48),
                         ),
                         onPressed: _dosyaIzni && _aktarim == null
                             ? _dosyaGonder
@@ -1495,7 +1509,8 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
                       key: const Key('oturum_kes'),
                       tooltip: 'Bağlantıyı kes',
                       style: IconButton.styleFrom(
-                        backgroundColor: Renk.tehlike,
+                        backgroundColor: op.tehlike,
+                        foregroundColor: Colors.white,
                       ),
                       onPressed: () => Navigator.pop(context),
                       icon: const Icon(Icons.link_off, size: 18),
@@ -1503,11 +1518,11 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
                   : FilledButton.icon(
                       key: const Key('oturum_kes'),
                       style: FilledButton.styleFrom(
-                        backgroundColor: Renk.tehlike,
-                        minimumSize: const Size(0, 38),
+                        backgroundColor: op.tehlike,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(48, 48),
                       ),
                       onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.link_off, size: 18),
                       label: const Text('Kes'),
                     ),
             ),
@@ -1523,39 +1538,45 @@ class _OturumDurum extends State<OturumSayfasi> with WidgetsBindingObserver {
   Widget _govde() {
     switch (_asama) {
       case _Asama.baglaniyor:
-        return const _Bilgi(
-          anahtar: Key('oturum_baglaniyor'),
-          yukleniyor: true,
-          metin: 'Bağlanılıyor…',
+        return const GoldGlassZemin(
+          child: _Bilgi(
+            anahtar: Key('oturum_baglaniyor'),
+            yukleniyor: true,
+            metin: 'Bağlanılıyor…',
+          ),
         );
       case _Asama.onayBekleniyor:
-        return _Bilgi(
-          anahtar: const Key('oturum_onay'),
-          yukleniyor: true,
-          metin:
-              '$_karsiAd onayı bekleniyor…\nKarşı tarafın ekranında “Kabul et”e basması gerekiyor.',
+        return GoldGlassZemin(
+          child: _Bilgi(
+            anahtar: const Key('oturum_onay'),
+            yukleniyor: true,
+            metin:
+                '$_karsiAd onayı bekleniyor…\nKarşı tarafın ekranında “Kabul et”e basması gerekiyor.',
+          ),
         );
       case _Asama.bitti:
-        return Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.link_off, size: 40, color: Renk.soluk),
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Text(
-                  _mesaj,
-                  key: const Key('oturum_mesaj'),
-                  textAlign: TextAlign.center,
+        return GoldGlassZemin(
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.link_off, size: 40, color: GoldGlassPalet.of(context).soluk),
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(
+                    _mesaj,
+                    key: const Key('oturum_mesaj'),
+                    textAlign: TextAlign.center,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Geri dön'),
-              ),
-            ],
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Geri dön'),
+                ),
+              ],
+            ),
           ),
         );
       case _Asama.bagli:
@@ -1646,7 +1667,7 @@ class _Bilgi extends StatelessWidget {
         Text(
           metin,
           textAlign: TextAlign.center,
-          style: const TextStyle(color: Renk.soluk),
+          style: TextStyle(color: GoldGlassPalet.of(context).soluk),
         ),
       ],
     ),
@@ -1771,7 +1792,7 @@ class _PencereSecimDiyaloguState extends State<_PencereSecimDiyalogu> {
                         _tumPencereler
                             ? 'Açık pencere bulunamadı.'
                             : 'Açık terminal bulunamadı.',
-                        style: const TextStyle(color: Colors.grey),
+                        style: TextStyle(color: GoldGlassPalet.of(context).soluk),
                       ),
                     )
                   : ListView.builder(

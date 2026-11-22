@@ -301,6 +301,8 @@ class MainActivity : FlutterActivity() {
             } else if (call.method == "veriKlasoru") {
                 // Kalıcı cihaz kimliği ve kayıtlı cihazlar (uygulamaya özel klasör).
                 result.success(filesDir.absolutePath)
+            } else if (call.method == "sdkInt") {
+                result.success(Build.VERSION.SDK_INT)
             } else result.notImplemented()
         }
     }
